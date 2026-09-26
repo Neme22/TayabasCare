@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TayabasCare - Prescriptive Establishment Violations System</title>
+    <link rel="icon" type="image/png" href="Logo.png">
+    <meta name="description" content="TayabasCare: A digital system for prescriptive establishment violations using historical inspection data for City Health Office of Tayabas City.">
+    <meta name="keywords" content="TayabasCare, sanitary inspection, risk assessment, Tayabas City, health monitoring, establishment inspection">
+    <meta name="author" content="City Health Office - Tayabas City">
+
+    <!-- Open Graph / Social Media -->
+    <meta property="og:title" content="TayabasCare - Sanitary Inspection & Risk Assessment System">
+    <meta property="og:description" content="A digital system for prescriptive establishment violations using historical inspection data for City Health Office of Tayabas City.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="">
+    <meta property="og:image" content="Logo.png">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="Logo.png">
+
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- ============================================
+         Header
+         ============================================ -->
+    <header class="header" id="header">
+        <a href="#" class="logo">TayabasCare</a>
+        <nav class="nav">
+            <div class="nav-links" id="navLinks">
+                <a href="#hero" class="nav-link active">Home</a>
+                <a href="#about" class="nav-link">About</a>
+                <a href="#features" class="nav-link">Features</a>
+                <a href="#contact" class="nav-link">Contact</a>
+            </div>
+            <button class="btn-login-nav" id="openLogin">Log In</button>
+            <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </nav>
+    </header>
+
+    <!-- ============================================
+         Hero Section
+         ============================================ -->
+    <section class="hero" id="hero">
+        <div class="hero-container">
+            <div class="hero-content">
+                <div class="hero-badge">City Health Office</div>
+                <h1>Protecting Tayabas, <span>One Inspection at a Time</span></h1>
+                <p class="hero-subtitle">
+                    A digital system for prescriptive establishment violations using 
+                    historical inspection data for the City Health Office of Tayabas City. 
+                    Ensuring public health and safety through technology.
+                </p>
+                <div class="hero-actions">
+                    <button class="btn-primary" id="openLoginBtn">
+                        Access System
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path d="M4 10H16M16 10L10 4M16 10L10 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                    <a href="#about" class="btn-secondary">
+                        Learn More
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path d="M10 4V16M10 16L4 10M10 16L16 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </a>
+                </div>
+                <div class="hero-stats">
+                    <div class="stat">
+                        <div class="stat-number" id="liveEstabCount">--</div>
+                        <div class="stat-label">Establishments Monitored</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number" id="liveInspCount">--</div>
+                        <div class="stat-label">Inspections Completed</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">24/7</div>
+                        <div class="stat-label">System Availability</div>
+                    </div>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <img src="Logo.png" alt="TayabasCare Logo" class="hero-image">
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================
+         About Section
+         ============================================ -->
+    <section class="section about" id="about">
+        <div class="section-container">
+            <div class="section-header">
+                <span class="section-label">About</span>
+                <h2 class="section-title">Ensuring Public Health & Safety</h2>
+                <p class="section-subtitle">
+                    TayabasCare is committed to protecting the health and well-being of 
+                    Tayabas City residents through systematic sanitary inspection and risk assessment.
+                </p>
+            </div>
+            <div class="about-grid">
+                <div class="about-card">
+                    <div class="about-icon">🏥</div>
+                    <h3>Public Health Protection</h3>
+                    <p>
+                        Safeguarding the health of Tayabas City residents by ensuring all 
+                        establishments meet sanitary standards and regulations.
+                    </p>
+                </div>
+                <div class="about-card">
+                    <div class="about-icon">📊</div>
+                    <h3>Data-Driven Decisions</h3>
+                    <p>
+                        Utilizing historical inspection data to prescribe establishment 
+                        violations and identify potential health risks before they become critical.
+                    </p>
+                </div>
+                <div class="about-card">
+                    <div class="about-icon">🤝</div>
+                    <h3>Community Partnership</h3>
+                    <p>
+                        Working together with establishment owners and the community to 
+                        maintain high standards of hygiene and safety.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================
+         Features Section
+         ============================================ -->
+    <section class="section features" id="features">
+        <div class="section-container">
+            <div class="section-header">
+                <span class="section-label">Features</span>
+                <h2 class="section-title">Powerful Tools for Inspection</h2>
+                <p class="section-subtitle">
+                    Our system provides comprehensive tools to streamline the inspection 
+                    process and ensure thorough monitoring of all establishments.
+                </p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">📋</div>
+                    <h3>Digital Sanitary Inspection Records</h3>
+                    <p>
+                        Replace paper-based inspections with digital records that are easy to 
+                        access, search, and analyze. All inspection data is securely stored 
+                        and readily available.
+                    </p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚠️</div>
+                    <h3>Risk-Based Establishment Monitoring</h3>
+                    <p>
+                        Prioritize inspections based on risk levels. Our system categorizes 
+                        establishments and schedules inspections accordingly for maximum efficiency.
+                    </p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔐</div>
+                    <h3>Secure Role-Based Access</h3>
+                    <p>
+                        Different access levels for administrators, inspectors, and other 
+                        stakeholders. Each user sees only what they need, ensuring data security.
+                    </p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🤖</div>
+                    <h3>Prescriptive Establishment Violations</h3>
+                    <p>
+                        Leverage historical inspection data to prescribe establishment violations, 
+                        enabling proactive intervention and compliance enforcement.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================
+         How It Works Section
+         ============================================ -->
+    <section class="section how-it-works" id="how-it-works">
+        <div class="section-container">
+            <div class="section-header">
+                <span class="section-label">Process</span>
+                <h2 class="section-title">How It Works</h2>
+                <p class="section-subtitle">
+                    Get started with TayabasCare in three simple steps. Our streamlined 
+                    process makes inspections efficient and effective.
+                </p>
+            </div>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">01</div>
+                    <h3>Login to the System</h3>
+                    <p>
+                        Access the system with your credentials. Different roles provide 
+                        different levels of access and functionality.
+                    </p>
+                </div>
+                <div class="step">
+                    <div class="step-number">02</div>
+                    <h3>Select Establishment</h3>
+                    <p>
+                        Choose the establishment you want to inspect from the database. 
+                        View history and risk assessment data.
+                    </p>
+                </div>
+                <div class="step">
+                    <div class="step-number">03</div>
+                    <h3>Complete Inspection</h3>
+                    <p>
+                        Conduct the inspection using our digital checklist. Generate 
+                        reports and submit findings instantly.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================
+         Contact Section
+         ============================================ -->
+    <section class="section contact" id="contact">
+        <div class="section-container">
+            <div class="section-header">
+                <span class="section-label">Contact</span>
+                <h2 class="section-title">Get in Touch</h2>
+                <p class="section-subtitle">
+                    Have questions about TayabasCare? Contact the City Health Office 
+                    for assistance and inquiries.
+                </p>
+            </div>
+            <div class="contact-info">
+                <div class="contact-item">
+                    <div class="contact-icon">📍</div>
+                    <div class="contact-details">
+                        <h4>Office Address</h4>
+                        <p>City Health Office<br>Tayabas City Hall, Tayabas, Quezon</p>
+                    </div>
+                </div>
+                <div class="contact-item">
+                    <div class="contact-icon">📞</div>
+                    <div class="contact-details">
+                        <h4>Phone Number</h4>
+                        <p>(042) XXX-XXXX<br>Mon-Fri, 8:00 AM - 5:00 PM</p>
+                    </div>
+                </div>
+                <div class="contact-item">
+                    <div class="contact-icon">✉️</div>
+                    <div class="contact-details">
+                        <h4>Email Address</h4>
+                        <p>health@tayabascity.gov.ph<br>support@tayabascare.gov.ph</p>
+                    </div>
+                </div>
+                <div class="contact-item">
+                    <div class="contact-icon">🕐</div>
+                    <div class="contact-details">
+                        <h4>Office Hours</h4>
+                        <p>Monday - Friday: 8:00 AM - 5:00 PM<br>Saturday - Sunday: Closed</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================
+         Footer
+         ============================================ -->
+    <footer class="footer">
+        <div class="footer-container">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <h3>TayabasCare</h3>
+                    <p>
+                        A digital system for prescriptive establishment violations using 
+                        historical inspection data for the City Health Office of Tayabas City.
+                    </p>
+                </div>
+                <div class="footer-links">
+                    <h4>Quick Links</h4>
+                    <ul>
+                        <li><a href="#hero">Home</a></li>
+                        <li><a href="#about">About</a></li>
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="#contact">Contact</a></li>
+                    </ul>
+                </div>
+                <div class="footer-links">
+                    <h4>Legal</h4>
+                    <ul>
+                        <li><a href="#" onclick="showLegalModal('privacy'); return false;">Privacy Policy</a></li>
+                        <li><a href="#" onclick="showLegalModal('terms'); return false;">Terms of Service</a></li>
+                        <li><a href="#" onclick="showLegalModal('data'); return false;">Data Protection</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p class="footer-copyright">&copy; 2026 City Health Office - Tayabas City. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ============================================
+         Login Modal
+         ============================================ -->
+    <div class="modal" id="loginModal">
+        <div class="login-box">
+            <button class="close-btn" id="closeLogin">&times;</button>
+
+            <div class="login-header">
+                <h2 class="system-title">TayabasCare</h2>
+                <p class="system-desc">System Login</p>
+            </div>
+
+            <form id="loginForm" class="login-form">
+                <div class="form-field">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" required placeholder="Enter your username">
+                </div>
+
+                <div class="form-field">
+                    <label for="password">Password</label>
+                    <div class="password-wrapper">
+                        <input type="password" id="password" required placeholder="Enter your password">
+                        <button type="button" class="toggle-eye" id="togglePassword">👁</button>
+                    </div>
+                </div>
+
+                <div class="form-options">
+                    <a href="#" id="forgotPasswordLink" class="forgot-link">Forgot Password?</a>
+                </div>
+
+                <button type="submit" class="btn-login">Login</button>
+            </form>
+
+            <div class="login-footer">
+                &copy; 2026 City Health Office - Tayabas City
+            </div>
+        </div>
+    </div>
+
+    <!-- Legal Modals -->
+    <dialog id="legal-modal" style="border:none;border-radius:12px;padding:0;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;">
+        <div style="padding:32px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h2 id="legal-modal-title" style="font-size:20px;font-weight:700;color:#1e40af;margin:0;"></h2>
+                <button onclick="document.getElementById('legal-modal').close()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#6b7280;">&times;</button>
+            </div>
+            <div id="legal-modal-body" style="font-size:14px;color:#374151;line-height:1.8;"></div>
+            <div style="text-align:right;margin-top:24px;">
+                <button onclick="document.getElementById('legal-modal').close()" style="background:#1e40af;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-weight:600;cursor:pointer;">Close</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Scripts -->
+    <script src="js/login.js"></script>
+    <script>
+    function showLegalModal(type) {
+        const modal = document.getElementById('legal-modal');
+        const title = document.getElementById('legal-modal-title');
+        const body = document.getElementById('legal-modal-body');
+        const content = {
+            privacy: {
+                title: 'Privacy Policy',
+                body: `<p><strong>Effective Date:</strong> January 2026</p>
+                    <p>The City Health Office of Tayabas City is committed to protecting the privacy and personal data of individuals and establishments using the TayabasCare system.</p>
+                    <h3 style="margin-top:16px;font-weight:700;">Information We Collect</h3>
+                    <ul style="padding-left:20px;margin:8px 0;">
+                        <li>Establishment information (business name, address, owner details)</li>
+                        <li>Inspection records and compliance history</li>
+                        <li>User account data (username, email, role)</li>
+                        <li>System activity logs for audit purposes</li>
+                    </ul>
+                    <h3 style="margin-top:16px;font-weight:700;">How We Use Your Information</h3>
+                    <ul style="padding-left:20px;margin:8px 0;">
+                        <li>To conduct and record sanitary inspections</li>
+                        <li>To assess compliance risk and prioritize inspections</li>
+                        <li>To generate reports for the City Health Office</li>
+                        <li>To maintain audit trails of system activities</li>
+                    </ul>
+                    <h3 style="margin-top:16px;font-weight:700;">Data Retention</h3>
+                    <p>Inspection records and establishment data are retained indefinitely for public health monitoring purposes. Archived records are automatically purged after 30 days.</p>`
+            },
+            terms: {
+                title: 'Terms of Service',
+                body: `<p><strong>Effective Date:</strong> January 2026</p>
+                    <p>By accessing and using the TayabasCare system, you agree to the following terms:</p>
+                    <h3 style="margin-top:16px;font-weight:700;">Authorized Use</h3>
+                    <p>This system is exclusively for use by authorized personnel of the City Health Office of Tayabas City, including administrators and field inspectors.</p>
+                    <h3 style="margin-top:16px;font-weight:700;">User Responsibilities</h3>
+                    <ul style="padding-left:20px;margin:8px 0;">
+                        <li>Maintain the confidentiality of your login credentials</li>
+                        <li>Enter accurate and truthful inspection data</li>
+                        <li>Use the system only for official health inspection purposes</li>
+                        <li>Report any security concerns to the system administrator</li>
+                    </ul>
+                    <h3 style="margin-top:16px;font-weight:700;">System Availability</h3>
+                    <p>The City Health Office strives to maintain system availability but does not guarantee uninterrupted access. Scheduled maintenance will be communicated in advance.</p>`
+            },
+            data: {
+                title: 'Data Protection',
+                body: `<p><strong>In compliance with Republic Act No. 10173</strong> (Data Privacy Act of 2012)</p>
+                    <h3 style="margin-top:16px;font-weight:700;">Security Measures</h3>
+                    <ul style="padding-left:20px;margin:8px 0;">
+                        <li>Passwords are encrypted using industry-standard bcrypt hashing</li>
+                        <li>Session-based authentication with role-based access controls</li>
+                        <li>Rate limiting on login attempts to prevent unauthorized access</li>
+                        <li>Complete audit trails of all system activities</li>
+                        <li>Secure file upload validation (type, size, and MIME checking)</li>
+                    </ul>
+                    <h3 style="margin-top:16px;font-weight:700;">Data Access</h3>
+                    <p>Only authorized City Health Office personnel have access to inspection data. Administrators have full access while inspectors have limited access based on their assigned roles.</p>
+                    <h3 style="margin-top:16px;font-weight:700;">Contact</h3>
+                    <p>For data privacy concerns, please contact the City Health Office of Tayabas City.</p>`
+            }
+        };
+        const c = content[type] || content.privacy;
+        title.textContent = c.title;
+        body.innerHTML = c.body;
+        modal.showModal();
+    }
+    </script>
+</body>
+</html>

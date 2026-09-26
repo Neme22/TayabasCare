@@ -1,0 +1,107 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Segoe UI", Arial, sans-serif;
+}
+
+/* LAYOUT */
+.layout {
+    display: flex;
+    min-height: 100vh;
+    background-color: #f4f6f5;
+}
+
+/* SIDEBAR */
+.sidebar {
+    width: 260px;
+    background-color: #0f766e;
+    color: white;
+    padding: 30px 20px;
+}
+
+.logo {
+    margin-bottom: 40px;
+    font-size: 22px;
+}
+
+.sidebar ul {
+    list-style: none;
+}
+
+.sidebar li {
+    padding: 14px 10px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: 15px;
+}
+
+.sidebar li:hover,
+.sidebar .active {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* MAIN AREA */
+.main {
+    flex: 1;
+    padding: 30px 40px;
+}
+
+/* TOP BAR */
+.topbar {
+    background-color: white;
+    padding: 20px 25px;
+    border-radius: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 35px;
+}
+
+.topbar h1 {
+    font-size: 22px;
+    color: #0f766e;
+}
+
+.logout {
+    background-color: #0f766e;
+    color: white;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 20px;
+    cursor: pointer;
+}
+
+/* CARDS */
+.cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 25px;
+}
+
+.card {
+    background-color: white;
+    padding: 30px;
+    border-radius: 14px;
+    border-left: 6px solid #0f766e;
+}
+
+.card h2 {
+    font-size: 34px;
+    color: #0f766e;
+    margin-bottom: 5px;
+}
+
+.card p {
+    color: #555;
+    font-size: 14px;
+}
+
+/* FOOTER */
+.footer {
+    margin-top: 50px;
+    text-align: center;
+    font-size: 13px;
+    color: #666;
+}

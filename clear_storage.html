@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Browser Storage</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #16A34A;
+        }
+        button {
+            background: #DC2626;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #B91C1C;
+        }
+        .success {
+            background: #16A34A;
+        }
+        .success:hover {
+            background: #15803D;
+        }
+        #message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+        .success-msg {
+            background: #DCFCE7;
+            color: #166534;
+            border: 1px solid #16A34A;
+        }
+        .info {
+            background: #DBEAFE;
+            color: #1E40AF;
+            border: 1px solid #2563EB;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗑️ Clear Browser Storage</h1>
+        <div class="info">
+            <strong>Why clear storage?</strong><br>
+            Your old data is stored in browser's localStorage. Clearing it will force the system to load fresh data from phpMyAdmin database.
+        </div>
+        
+        <h3>Current Storage Status:</h3>
+        <div id="storageInfo" style="background: #F3F4F6; padding: 15px; border-radius: 5px; margin: 15px 0;">
+            Loading...
+        </div>
+        
+        <button onclick="clearStorage()">Clear All Storage</button>
+        <button class="success" onclick="window.location.href='admin.html'">Go to Admin Dashboard</button>
+        
+        <div id="message"></div>
+    </div>
+
+    <script>
+        function displayStorageInfo() {
+            const info = {
+                inspectorAccounts: localStorage.getItem('inspectorAccounts'),
+                sanitaryRecords: localStorage.getItem('sanitaryRecords'),
+                burialRecords: localStorage.getItem('burialRecords'),
+                archiveData: localStorage.getItem('archiveData')
+            };
+            
+            let html = '<ul style="list-style: none; padding: 0;">';
+            for (let key in info) {
+                const data = info[key];
+                if (data) {
+                    try {
+                        const parsed = JSON.parse(data);
+                        const count = Array.isArray(parsed) ? parsed.length : (typeof parsed === 'object' ? Object.keys(parsed).length : 0);
+                        html += `<li>✓ <strong>${key}:</strong> ${count} items stored</li>`;
+                    } catch(e) {
+                        html += `<li>✓ <strong>${key}:</strong> Data exists</li>`;
+                    }
+                } else {
+                    html += `<li>✗ <strong>${key}:</strong> Empty</li>`;
+                }
+            }
+            html += '</ul>';
+            
+            document.getElementById('storageInfo').innerHTML = html;
+        }
+        
+        function clearStorage() {
+            if (confirm('This will clear all locally stored data. The system will then load fresh data from the database. Continue?')) {
+                localStorage.removeItem('inspectorAccounts');
+                localStorage.removeItem('sanitaryRecords');
+                localStorage.removeItem('burialRecords');
+                localStorage.removeItem('archiveData');
+                localStorage.removeItem('inspectionReports');
+                
+                const msg = document.getElementById('message');
+                msg.className = 'success-msg';
+                msg.style.display = 'block';
+                msg.innerHTML = '<strong>✓ Success!</strong> Browser storage cleared. Now refresh your admin page or click "Go to Admin Dashboard".';
+                
+                displayStorageInfo();
+            }
+        }
+        
+        // Display storage info on load
+        displayStorageInfo();
+    </script>
+</body>
+</html>

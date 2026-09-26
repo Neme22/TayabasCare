@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+.mimocode/
+
+# Secrets
+php/secrets.php
+php/.env
+
+# Playwright
+.playwright-cli/
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
