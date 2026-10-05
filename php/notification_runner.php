@@ -4,6 +4,7 @@ require_once 'risk_utils.php';
 require_once __DIR__ . '/PHPMailer/Exception.php';
 require_once __DIR__ . '/PHPMailer/PHPMailer.php';
 require_once __DIR__ . '/PHPMailer/SMTP.php';
+require_once __DIR__ . '/email_template.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -135,16 +136,28 @@ try {
                 $mail->addAddress($s['email'], $s['inspector_name']);
 
                 $formattedDate = date('F j, Y', strtotime($s['schedDate']));
-                $estabInfo = $s['establishment'] ? "\n   Establishment: {$s['establishment']}" : '';
+
+                $content = '<p style="margin:0 0 16px 0;">Dear <strong>' . htmlspecialchars($s['inspector_name']) . '</strong>,</p>'
+                    . '<p style="margin:0 0 20px 0;">This is a reminder that you have an inspection scheduled <strong>tomorrow</strong>:</p>'
+                    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#eff6ff;border-radius:8px;border-left:4px solid #3b82f6;">'
+                    . '<tr><td style="padding:16px 20px;">'
+                    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">'
+                    . emailInfoRow('Date', $formattedDate)
+                    . ($s['establishment'] ? emailInfoRow('Establishment', $s['establishment']) : '')
+                    . ($s['notes'] ? emailInfoRow('Note', $s['notes']) : '')
+                    . '</table>'
+                    . '</td></tr></table>'
+                    . '<p style="margin:20px 0 0 0;">Please prepare accordingly and review the establishment details before your visit.</p>';
+
+                $altBody = "Dear {$s['inspector_name']},\n\nThis is a reminder that you have an inspection scheduled TOMORROW:\n\n   Date: $formattedDate"
+                    . ($s['establishment'] ? "\n   Establishment: {$s['establishment']}" : '')
+                    . ($s['notes'] ? "\n   Note: {$s['notes']}" : '')
+                    . "\n\nPlease prepare accordingly.\n\n– TayabasCare System";
 
                 $mail->Subject = 'TayabasCare – Inspection Reminder for ' . $formattedDate;
-                $mail->Body    =
-                    "Dear {$s['inspector_name']},\n\n" .
-                    "This is a reminder that you have an inspection scheduled TOMORROW:\n\n" .
-                    "   Date: $formattedDate" . $estabInfo . "\n" .
-                    ($s['notes'] ? "   Note: {$s['notes']}\n" : '') .
-                    "\nPlease prepare accordingly.\n\n" .
-                    "– TayabasCare System";
+                $mail->isHTML(true);
+                $mail->Body = renderEmailTemplate('Inspection Reminder', $content, '#3b82f6');
+                $mail->AltBody = $altBody;
 
                 $mail->send();
                 $sent++;
@@ -254,23 +267,56 @@ try {
             $mail->addAddress($admin['email']);
             $mail->Subject = 'TayabasCare – Daily Compliance Alert (' . date('M j, Y') . ')';
 
-            $body = "Dear City Health Officer,\n\n";
-            $body .= "This is the daily compliance alert from TayabasCare.\n\n";
+            $content = '<p style="margin:0 0 16px 0;">Dear <strong>City Health Officer</strong>,</p>'
+                . '<p style="margin:0 0 20px 0;">This is your daily compliance alert from TayabasCare.</p>';
 
             if (!empty($highRiskItems)) {
-                $body .= "=== HIGH-RISK ESTABLISHMENTS (" . count($highRiskItems) . ") ===\n";
-                foreach ($highRiskItems as $item) $body .= "  • {$item}\n";
-                $body .= "\nThese establishments require priority inspection.\n\n";
+                $content .= '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px 0;">'
+                    . '<tr><td style="background-color:#fef2f2;border-left:4px solid #dc2626;padding:12px 16px;border-radius:0 6px 6px 0;">'
+                    . '<span style="font-size:15px;font-weight:700;color:#991b1b;">&#9888; High-Risk Establishments (' . count($highRiskItems) . ')</span>'
+                    . '</td></tr></table>'
+                    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px 0;">';
+                foreach ($highRiskItems as $item) {
+                    $content .= emailListItem($item);
+                }
+                $content .= '</table>'
+                    . '<p style="margin:0 0 20px 0;font-size:14px;color:#dc2626;font-weight:600;">These establishments require priority inspection.</p>';
             }
 
             if (!empty($violationThresholdItems)) {
-                $body .= "=== VIOLATION THRESHOLD ALERTS (" . count($violationThresholdItems) . ") ===\n";
-                foreach ($violationThresholdItems as $item) $body .= "  • {$item}\n";
-                $body .= "\nThese establishments have 3+ violations and need corrective action.\n\n";
+                $content .= '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px 0;">'
+                    . '<tr><td style="background-color:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;border-radius:0 6px 6px 0;">'
+                    . '<span style="font-size:15px;font-weight:700;color:#92400e;">&#9888; Violation Threshold Alerts (' . count($violationThresholdItems) . ')</span>'
+                    . '</td></tr></table>'
+                    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px 0;">';
+                foreach ($violationThresholdItems as $item) {
+                    $content .= emailListItem($item);
+                }
+                $content .= '</table>'
+                    . '<p style="margin:0 0 20px 0;font-size:14px;color:#92400e;font-weight:600;">These establishments have 3+ violations and need corrective action.</p>';
             }
 
-            $body .= "Please review these in the TayabasCare dashboard.\n\n– TayabasCare System";
-            $mail->Body = $body;
+            $content .= '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0;">'
+                . '<tr><td style="background-color:#eff6ff;border-radius:8px;padding:14px 18px;font-size:14px;color:#1e40af;">'
+                . '&#128200; Please review these in the <strong>TayabasCare Dashboard</strong> for full details and action items.'
+                . '</td></tr></table>';
+
+            $altBody = "Dear City Health Officer,\n\nThis is the daily compliance alert from TayabasCare.\n\n";
+            if (!empty($highRiskItems)) {
+                $altBody .= "=== HIGH-RISK ESTABLISHMENTS (" . count($highRiskItems) . ") ===\n";
+                foreach ($highRiskItems as $item) $altBody .= "  - {$item}\n";
+                $altBody .= "\nThese establishments require priority inspection.\n\n";
+            }
+            if (!empty($violationThresholdItems)) {
+                $altBody .= "=== VIOLATION THRESHOLD ALERTS (" . count($violationThresholdItems) . ") ===\n";
+                foreach ($violationThresholdItems as $item) $altBody .= "  - {$item}\n";
+                $altBody .= "\nThese establishments have 3+ violations and need corrective action.\n\n";
+            }
+            $altBody .= "Please review these in the TayabasCare dashboard.\n\n– TayabasCare System";
+
+            $mail->isHTML(true);
+            $mail->Body = renderEmailTemplate('Daily Compliance Alert', $content, '#dc2626');
+            $mail->AltBody = $altBody;
             $mail->send();
 
             $logStmt = $db->prepare("INSERT INTO notification_log (inspector_name, email, status, notification_type) VALUES ('Admin', ?, 'sent', 'compliance_alert')");
@@ -328,14 +374,31 @@ try {
                 $mail->setFrom(MAIL_FROM, MAIL_FROMNAME);
                 $mail->addAddress($item['email'], $item['inspector_name']);
                 $mail->Subject = 'TayabasCare – Overdue Compliance Follow-up';
-                $mail->Body =
-                    "Dear {$item['inspector_name']},\n\n" .
-                    "The compliance deadline for the following establishment has passed:\n\n" .
-                    "   Establishment: {$item['establishment']}\n" .
-                    "   Deadline: " . date('F j, Y', strtotime($item['compliance_deadline'])) . "\n" .
-                    "   Days Overdue: {$daysOverdue}\n\n" .
-                    "Please follow up with the establishment and update the compliance status in TayabasCare.\n\n" .
-                    "– TayabasCare System";
+
+                $content = '<p style="margin:0 0 16px 0;">Dear <strong>' . htmlspecialchars($item['inspector_name']) . '</strong>,</p>'
+                    . '<p style="margin:0 0 20px 0;">The compliance deadline for the following establishment has passed:</p>'
+                    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef2f2;border-radius:8px;border-left:4px solid #dc2626;">'
+                    . '<tr><td style="padding:16px 20px;">'
+                    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">'
+                    . emailInfoRow('Establishment', $item['establishment'])
+                    . emailInfoRow('Deadline', date('F j, Y', strtotime($item['compliance_deadline'])))
+                    . emailInfoRow('Days Overdue', $daysOverdue . ($daysOverdue === 1 ? ' day' : ' days'))
+                    . '</table>'
+                    . '</td></tr></table>'
+                    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 0 0;">'
+                    . '<tr><td style="background-color:#fef3c7;border-radius:8px;padding:14px 18px;font-size:14px;color:#92400e;">'
+                    . '&#9888; Please follow up with the establishment and update the compliance status in TayabasCare as soon as possible.'
+                    . '</td></tr></table>';
+
+                $altBody = "Dear {$item['inspector_name']},\n\nThe compliance deadline for the following establishment has passed:\n\n"
+                    . "   Establishment: {$item['establishment']}\n"
+                    . "   Deadline: " . date('F j, Y', strtotime($item['compliance_deadline'])) . "\n"
+                    . "   Days Overdue: {$daysOverdue}\n\n"
+                    . "Please follow up with the establishment and update the compliance status in TayabasCare.\n\n– TayabasCare System";
+
+                $mail->isHTML(true);
+                $mail->Body = renderEmailTemplate('Overdue Compliance Follow-up', $content, '#dc2626');
+                $mail->AltBody = $altBody;
                 $mail->send();
                 $sent++;
 

@@ -1,4 +1,8 @@
 <?php
+// Session configuration: 35-minute server-side lifetime (frontend auto-logout at 30 min)
+ini_set('session.gc_maxlifetime', 2100);
+ini_set('session.cookie_lifetime', 0); // browser session cookie
+
 // Start session before any output (must be before headers)
 if (session_status() === PHP_SESSION_NONE) {
     session_start();

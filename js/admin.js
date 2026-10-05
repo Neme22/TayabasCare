@@ -3343,6 +3343,110 @@ function handleLogout() {
     }
 }
 
+// ============================================================
+// Idle Auto-Logout (30 minutes)
+// Tracks user activity and shows a 60-second warning modal
+// before automatically logging the user out.
+// ============================================================
+(function() {
+    const IDLE_TIMEOUT = 30 * 60 * 1000;   // 30 minutes
+    const WARNING_DURATION = 60;            // 60 seconds countdown
+    const CHECK_INTERVAL = 30 * 1000;       // check every 30 seconds
+
+    let lastActivityTime = Date.now();
+    let warningShown = false;
+    let countdownTimer = null;
+    let countdownSeconds = WARNING_DURATION;
+
+    // Track user activity
+    function resetActivity() {
+        lastActivityTime = Date.now();
+    }
+
+    ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'].forEach(event => {
+        document.addEventListener(event, resetActivity, { passive: true });
+    });
+
+    // Inject warning modal HTML
+    function injectModal() {
+        if (document.getElementById('idle-timeout-modal')) return;
+        const modal = document.createElement('div');
+        modal.id = 'idle-timeout-modal';
+        modal.innerHTML = `
+            <div id="idle-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;backdrop-filter:blur(4px);">
+                <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#ffffff;border-radius:16px;padding:32px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center;">
+                    <div style="width:56px;height:56px;background:#fef3c7;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;">
+                        <span style="font-size:28px;">&#9200;</span>
+                    </div>
+                    <h2 style="margin:0 0 8px 0;font-size:20px;font-weight:700;color:#1e293b;">Session Timeout</h2>
+                    <p style="margin:0 0 8px 0;font-size:14px;color:#64748b;">You have been inactive for 30 minutes.</p>
+                    <p style="margin:0 0 24px 0;font-size:14px;color:#64748b;">You will be logged out in <strong id="idle-countdown" style="color:#dc2626;font-size:18px;">60</strong> seconds.</p>
+                    <div style="display:flex;gap:12px;justify-content:center;">
+                        <button id="idle-stay-btn" style="padding:10px 28px;background:#1e40af;color:#ffffff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Stay Logged In</button>
+                        <button id="idle-logout-btn" style="padding:10px 28px;background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;cursor:pointer;">Logout Now</button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+
+        document.getElementById('idle-stay-btn').addEventListener('click', dismissWarning);
+        document.getElementById('idle-logout-btn').addEventListener('click', performAutoLogout);
+    }
+
+    // Show the warning modal
+    function showWarning() {
+        if (warningShown) return;
+        warningShown = true;
+        countdownSeconds = WARNING_DURATION;
+
+        injectModal();
+        const overlay = document.getElementById('idle-overlay');
+        const counter = document.getElementById('idle-countdown');
+        overlay.style.display = 'block';
+        counter.textContent = countdownSeconds;
+
+        countdownTimer = setInterval(() => {
+            countdownSeconds--;
+            counter.textContent = countdownSeconds;
+            if (countdownSeconds <= 0) {
+                clearInterval(countdownTimer);
+                performAutoLogout();
+            }
+        }, 1000);
+    }
+
+    // Dismiss warning and reset timer
+    function dismissWarning() {
+        warningShown = false;
+        clearInterval(countdownTimer);
+        lastActivityTime = Date.now();
+        const overlay = document.getElementById('idle-overlay');
+        if (overlay) overlay.style.display = 'none';
+    }
+
+    // Perform the actual logout
+    function performAutoLogout() {
+        warningShown = false;
+        clearInterval(countdownTimer);
+        fetch(`${API_BASE_URL}/auth.php`, {
+            method: 'DELETE',
+            credentials: 'include'
+        }).finally(() => {
+            localStorage.clear();
+            window.location.href = 'index.html?reason=idle';
+        });
+    }
+
+    // Periodic check for idle timeout
+    setInterval(() => {
+        if (warningShown) return;
+        const idleTime = Date.now() - lastActivityTime;
+        if (idleTime >= IDLE_TIMEOUT) {
+            showWarning();
+        }
+    }, CHECK_INTERVAL);
+})();
+
 // Profile Modal Functions
 async function openProfileModal() {
     const modal = document.getElementById('profile-modal');

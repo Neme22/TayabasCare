@@ -14,6 +14,332 @@ const API_BASE_URL = 'php';
     }
 })();
 
+// ============================================================
+// Form Drafts — auto-saves in-progress form data so it survives
+// auto-logout. Drafts persist in localStorage until the form is
+// successfully submitted (then they're cleared).
+// ============================================================
+const FormDrafts = {
+    KEYS: {
+        inspection: 'draft_inspection',
+        sanitary: 'draft_sanitary',
+        burial: 'draft_burial',
+        accomplishment: 'draft_accomplishment'
+    },
+
+    hasDrafts() {
+        return Object.values(this.KEYS).some(k => localStorage.getItem(k));
+    },
+
+    // Save all open modal forms to localStorage
+    saveAll() {
+        try { this.saveInspection(); } catch(e) {}
+        try { this.saveSanitary(); } catch(e) {}
+        try { this.saveBurial(); } catch(e) {}
+        try { this.saveAccomplishment(); } catch(e) {}
+    },
+
+    // Clear all draft keys
+    clearAll() {
+        Object.values(this.KEYS).forEach(k => localStorage.removeItem(k));
+    },
+
+    // ── Inspection Report ──
+    saveInspection() {
+        const modal = document.getElementById('inspection-modal');
+        if (!modal || !modal.open) return;
+        const draft = {
+            establishment: (document.getElementById('inspection-establishment') || {}).value || '',
+            remarksText: (document.getElementById('inspection-remarks') || {}).value || '',
+            recommendationText: (document.getElementById('inspection-recommendation') || {}).value || '',
+            deadline: (document.getElementById('inspection-deadline') || {}).value || '',
+            checkedViolations: [...document.querySelectorAll('.violation-check:checked')].map(cb => cb.value),
+            checkedRecommendations: [...document.querySelectorAll('.recommendation-check:checked')].map(cb => cb.value)
+        };
+        localStorage.setItem(this.KEYS.inspection, JSON.stringify(draft));
+    },
+
+    // ── Sanitary Record ──
+    saveSanitary() {
+        const modal = document.getElementById('sanitary-modal');
+        if (!modal || !modal.open) return;
+        const draft = {
+            mode: (document.getElementById('sanitary-mode') || {}).value || '',
+            editId: (document.getElementById('sanitary-id') || {}).value || '',
+            permit3: (document.getElementById('sanitary-permit-3') || {}).value || '',
+            business: (document.getElementById('sanitary-business') || {}).value || '',
+            barangay: (document.getElementById('sanitary-barangay') || {}).value || '',
+            buildingStreet: (document.getElementById('sanitary-building-street') || {}).value || '',
+            corporation: (document.getElementById('sanitary-corporation') || {}).value || '',
+            ownerFirst: (document.getElementById('owner-first') || {}).value || '',
+            ownerMiddle: (document.getElementById('owner-middle') || {}).value || '',
+            ownerLast: (document.getElementById('owner-last') || {}).value || '',
+            sex: document.querySelector('input[name="sex"]:checked')?.value || '',
+            resultXray: (document.getElementById('result-xray') || {}).checked || false,
+            resultStool: (document.getElementById('result-stool') || {}).checked || false,
+            personnelNo: (document.getElementById('sanitary-personnel-no') || {}).value || '',
+            remarks: (document.getElementById('sanitary-remarks') || {}).value || '',
+            personnel: []
+        };
+        document.querySelectorAll('.personnel-row').forEach(row => {
+            draft.personnel.push({
+                first: (row.querySelector('.first-name') || {}).value || '',
+                middle: (row.querySelector('.middle-name') || {}).value || '',
+                last: (row.querySelector('.last-name') || {}).value || '',
+                sex: row.querySelector('.personnel-sex:checked')?.value || '',
+                xray: (row.querySelector('.personnel-xray') || {}).checked || false,
+                stool: (row.querySelector('.personnel-stool') || {}).checked || false
+            });
+        });
+        localStorage.setItem(this.KEYS.sanitary, JSON.stringify(draft));
+    },
+
+    // ── Burial Record ──
+    saveBurial() {
+        const modal = document.getElementById('burial-modal');
+        if (!modal || !modal.open) return;
+        const draft = {
+            mode: (document.getElementById('burial-mode') || {}).value || '',
+            type: (document.getElementById('burial-type') || {}).value || '',
+            editId: (document.getElementById('burial-id') || {}).value || '',
+            deceased: (document.getElementById('burial-deceased') || {}).value || '',
+            deathDate: (document.getElementById('burial-death-date') || {}).value || '',
+            deathPlace: (document.getElementById('burial-death-place') || {}).value || '',
+            informant: (document.getElementById('burial-informant') || {}).value || '',
+            inspector: (document.getElementById('burial-inspector') || {}).value || '',
+            originMunicipality: (document.getElementById('burial-origin-municipality') || {}).value || '',
+            transferProvince: (document.getElementById('burial-transfer-province') || {}).value || '',
+            transferMunicipality: (document.getElementById('burial-transfer-municipality') || {}).value || '',
+            funeral: ((document.getElementById('burial-funeral') || document.getElementById('burial-funeral-skeletal')) || {}).value || '',
+            orNumber: ((document.getElementById('burial-or') || document.getElementById('burial-or-skeletal')) || {}).value || ''
+        };
+        localStorage.setItem(this.KEYS.burial, JSON.stringify(draft));
+    },
+
+    // ── Accomplishment ──
+    saveAccomplishment() {
+        const modal = document.getElementById('accomplishment-modal');
+        if (!modal || !modal.open) return;
+        const fields = {};
+        for (let i = 1; i <= 24; i++) {
+            const el = document.getElementById('acc-f' + i);
+            if (el) fields['f' + i] = el.value;
+        }
+        const draft = {
+            editId: (document.getElementById('acc-record-id') || {}).value || '',
+            month: (document.getElementById('acc-month') || {}).value || '',
+            monthDisplay: (document.getElementById('acc-month-display') || {}).value || '',
+            year: (document.getElementById('acc-year') || {}).value || '',
+            fields: fields
+        };
+        localStorage.setItem(this.KEYS.accomplishment, JSON.stringify(draft));
+    },
+
+    // ── Restore: open modals and repopulate fields ──
+    restoreInspection() {
+        const raw = localStorage.getItem(this.KEYS.inspection);
+        if (!raw) return;
+        const d = JSON.parse(raw);
+        if (!d.establishment) { localStorage.removeItem(this.KEYS.inspection); return; }
+
+        openInspectionModal();
+
+        // Restore text fields
+        const estab = document.getElementById('inspection-establishment');
+        if (estab) { estab.value = d.establishment; estab.dispatchEvent(new Event('input', {bubbles:true})); }
+        if (d.remarksText) document.getElementById('inspection-remarks').value = d.remarksText;
+        if (d.recommendationText) document.getElementById('inspection-recommendation').value = d.recommendationText;
+        if (d.deadline) { document.getElementById('inspection-deadline').value = d.deadline; document.getElementById('inspection-deadline').dispatchEvent(new Event('input')); }
+
+        // Wait for dynamic violation/recommendation lists to load after establishment auto-detect, then restore checkboxes
+        if (d.checkedViolations.length > 0 || d.checkedRecommendations.length > 0) {
+            const violList = document.getElementById('violation-radio-list');
+            const restoreChecks = () => {
+                if (d.checkedViolations) d.checkedViolations.forEach(val => {
+                    const cb = document.querySelector('.violation-check[value="' + CSS.escape(val) + '"]');
+                    if (cb) cb.checked = true;
+                });
+                if (d.checkedRecommendations) d.checkedRecommendations.forEach(val => {
+                    const cb = document.querySelector('.recommendation-check[value="' + CSS.escape(val) + '"]');
+                    if (cb) cb.checked = true;
+                });
+                localStorage.removeItem(FormDrafts.KEYS.inspection);
+            };
+            if (violList) {
+                const observer = new MutationObserver((mutations, obs) => {
+                    if (violList.querySelectorAll('.violation-check').length > 0) {
+                        obs.disconnect();
+                        restoreChecks();
+                    }
+                });
+                observer.observe(violList, { childList: true });
+                // Fallback timeout in case observer misses
+                setTimeout(() => { observer.disconnect(); restoreChecks(); }, 3000);
+            } else {
+                localStorage.removeItem(this.KEYS.inspection);
+            }
+        } else {
+            localStorage.removeItem(this.KEYS.inspection);
+        }
+
+        showNotification('Inspection draft restored. File attachment was not saved — please re-upload if needed.', 'info');
+    },
+
+    restoreSanitary() {
+        const raw = localStorage.getItem(this.KEYS.sanitary);
+        if (!raw) return;
+        const d = JSON.parse(raw);
+        if (!d.business) { localStorage.removeItem(this.KEYS.sanitary); return; }
+
+        openSanitaryModal(d.mode === 'edit' ? 'edit' : 'add', d.editId || undefined);
+
+        setTimeout(() => {
+            if (d.permit3) document.getElementById('sanitary-permit-3').value = d.permit3;
+            if (d.business) document.getElementById('sanitary-business').value = d.business;
+            if (d.barangay) document.getElementById('sanitary-barangay').value = d.barangay;
+            if (d.buildingStreet) document.getElementById('sanitary-building-street').value = d.buildingStreet;
+            if (d.corporation) document.getElementById('sanitary-corporation').value = d.corporation;
+            if (d.ownerFirst) document.getElementById('owner-first').value = d.ownerFirst;
+            if (d.ownerMiddle) document.getElementById('owner-middle').value = d.ownerMiddle;
+            if (d.ownerLast) document.getElementById('owner-last').value = d.ownerLast;
+            if (d.sex) { const r = document.querySelector('input[name="sex"][value="' + d.sex + '"]'); if (r) r.checked = true; }
+            if (d.resultXray) document.getElementById('result-xray').checked = true;
+            if (d.resultStool) document.getElementById('result-stool').checked = true;
+            if (d.remarks) document.getElementById('sanitary-remarks').value = d.remarks;
+
+            // Restore personnel
+            if (d.personnelNo) {
+                const noInput = document.getElementById('sanitary-personnel-no');
+                noInput.value = d.personnelNo;
+                noInput.dispatchEvent(new Event('input', {bubbles:true}));
+                setTimeout(() => {
+                    const rows = document.querySelectorAll('.personnel-row');
+                    (d.personnel || []).forEach((p, i) => {
+                        if (!rows[i]) return;
+                        if (p.first) rows[i].querySelector('.first-name').value = p.first;
+                        if (p.middle) rows[i].querySelector('.middle-name').value = p.middle;
+                        if (p.last) rows[i].querySelector('.last-name').value = p.last;
+                        if (p.sex) { const sr = rows[i].querySelector('.personnel-sex[value="' + p.sex + '"]'); if (sr) sr.checked = true; }
+                        if (p.xray) rows[i].querySelector('.personnel-xray').checked = true;
+                        if (p.stool) rows[i].querySelector('.personnel-stool').checked = true;
+                    });
+                }, 500);
+            }
+        }, 300);
+
+        localStorage.removeItem(this.KEYS.sanitary);
+        showNotification('Sanitary record draft restored.', 'info');
+    },
+
+    restoreBurial() {
+        const raw = localStorage.getItem(this.KEYS.burial);
+        if (!raw) return;
+        const d = JSON.parse(raw);
+        if (!d.deceased) { localStorage.removeItem(this.KEYS.burial); return; }
+
+        openBurialModal(d.type || 'cadaver', d.mode === 'edit' ? 'edit' : 'add', d.editId || undefined);
+
+        setTimeout(() => {
+            if (d.deceased) document.getElementById('burial-deceased').value = d.deceased;
+            if (d.deathDate) document.getElementById('burial-death-date').value = d.deathDate;
+            if (d.deathPlace) document.getElementById('burial-death-place').value = d.deathPlace;
+            if (d.informant) document.getElementById('burial-informant').value = d.informant;
+            if (d.inspector) document.getElementById('burial-inspector').value = d.inspector;
+            if (d.originMunicipality) { const el = document.getElementById('burial-origin-municipality'); if (el) el.value = d.originMunicipality; }
+            if (d.transferProvince) { const el = document.getElementById('burial-transfer-province'); if (el) el.value = d.transferProvince; }
+            if (d.transferMunicipality) { const el = document.getElementById('burial-transfer-municipality'); if (el) el.value = d.transferMunicipality; }
+            if (d.funeral) { const el = document.getElementById('burial-funeral') || document.getElementById('burial-funeral-skeletal'); if (el) el.value = d.funeral; }
+            if (d.orNumber) { const el = document.getElementById('burial-or') || document.getElementById('burial-or-skeletal'); if (el) el.value = d.orNumber; }
+        }, 300);
+
+        localStorage.removeItem(this.KEYS.burial);
+        showNotification('Burial record draft restored. Death certificate was not saved — please re-upload if needed.', 'info');
+    },
+
+    restoreAccomplishment() {
+        const raw = localStorage.getItem(this.KEYS.accomplishment);
+        if (!raw) return;
+        const d = JSON.parse(raw);
+
+        openAccomplishmentModal(d.editId || undefined);
+
+        setTimeout(() => {
+            if (d.monthDisplay) document.getElementById('acc-month-display').value = d.monthDisplay;
+            if (d.month) document.getElementById('acc-month').value = d.month;
+            if (d.year) document.getElementById('acc-year').value = d.year;
+            if (d.fields) {
+                for (let i = 1; i <= 24; i++) {
+                    const el = document.getElementById('acc-f' + i);
+                    if (el && d.fields['f' + i] !== undefined) el.value = d.fields['f' + i];
+                }
+            }
+        }, 300);
+
+        localStorage.removeItem(this.KEYS.accomplishment);
+        showNotification('Accomplishment draft restored.', 'info');
+    },
+
+    // Prompt user to restore all saved drafts (called on page load)
+    promptRestore() {
+        if (!this.hasDrafts()) return;
+        setTimeout(() => {
+            const toast = document.createElement('div');
+            toast.id = 'draft-restore-toast';
+            toast.className = 'fixed bottom-4 right-4 bg-amber-500 text-white px-6 py-4 rounded-lg shadow-2xl z-[9999] transition-all transform';
+            toast.style.animation = 'slideInRight 0.3s ease-out';
+            toast.style.maxWidth = '420px';
+            toast.innerHTML = `
+                <div style="display:flex;align-items:flex-start;gap:12px;">
+                    <i class="fas fa-save" style="font-size:20px;margin-top:2px;"></i>
+                    <div style="flex:1;">
+                        <p style="margin:0 0 10px 0;font-weight:600;">You have unsaved form drafts from your previous session.</p>
+                        <div style="display:flex;gap:8px;">
+                            <button id="draft-restore-btn" style="padding:4px 14px;background:#ffffff;color:#92400e;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">Restore Drafts</button>
+                            <button id="draft-discard-btn" style="padding:4px 14px;background:rgba(255,255,255,0.2);color:#ffffff;border:1px solid rgba(255,255,255,0.4);border-radius:6px;cursor:pointer;font-size:13px;">Discard</button>
+                        </div>
+                    </div>
+                </div>`;
+            document.body.appendChild(toast);
+
+            document.getElementById('draft-restore-btn').addEventListener('click', () => {
+                FormDrafts.restoreAll();
+                toast.style.animation = 'slideOutRight 0.3s ease-in';
+                setTimeout(() => toast.remove(), 300);
+            });
+            document.getElementById('draft-discard-btn').addEventListener('click', () => {
+                FormDrafts.clearAll();
+                toast.style.animation = 'slideOutRight 0.3s ease-in';
+                setTimeout(() => toast.remove(), 300);
+            });
+        }, 1500);
+    },
+
+    restoreAll() {
+        this.restoreInspection();
+        this.restoreSanitary();
+        this.restoreBurial();
+        this.restoreAccomplishment();
+        showNotification('All available drafts have been restored.', 'success');
+    },
+
+    // Auto-save listeners (debounced, attached once)
+    _attached: false,
+    attachAutoSave() {
+        if (this._attached) return;
+        this._attached = true;
+        let timer = null;
+        const debounced = () => { clearTimeout(timer); timer = setTimeout(() => FormDrafts.saveAll(), 2000); };
+
+        ['inspection-form', 'sanitary-form', 'burial-form', 'accomplishment-form'].forEach(id => {
+            const form = document.getElementById(id);
+            if (form) form.addEventListener('input', debounced);
+        });
+        // Personnel count generates dynamic rows
+        const pNo = document.getElementById('sanitary-personnel-no');
+        if (pNo) pNo.addEventListener('change', () => setTimeout(debounced, 600));
+    }
+};
+
 // Data Storage Keys
 const STORAGE_KEYS = {
     sanitary: 'sanitaryRecords',
@@ -1314,6 +1640,7 @@ async function saveAccomplishmentRecord() {
     }
 
     closeAccomplishmentModal();
+    localStorage.removeItem(FormDrafts.KEYS.accomplishment);
     loadAccomplishmentRecords();
 }
 
@@ -1330,7 +1657,7 @@ async function deleteAccomplishmentRecord(recordId) {
     }
 }
 
-function loadAccomplishmentRecords() {
+async function loadAccomplishmentRecords() {
     const tbody = document.getElementById('accomplishment-table-body');
     if (!tbody) return;
 
@@ -1650,15 +1977,131 @@ function updateReportPeriod() {
 
 function handleLogout() {
     if (confirm('Are you sure you want to logout?')) {
+        FormDrafts.saveAll();
+        const draftKeys = Object.values(FormDrafts.KEYS);
+        const savedDrafts = {};
+        draftKeys.forEach(k => { const v = localStorage.getItem(k); if (v) savedDrafts[k] = v; });
         fetch(`${API_BASE_URL}/auth.php`, {
             method: 'DELETE',
             credentials: 'include'
         }).finally(() => {
             localStorage.clear();
+            Object.entries(savedDrafts).forEach(([k, v]) => localStorage.setItem(k, v));
             window.location.href = 'index.html';
         });
     }
 }
+
+// ============================================================
+// Idle Auto-Logout (30 minutes)
+// Tracks user activity and shows a 60-second warning modal
+// before automatically logging the user out.
+// ============================================================
+(function() {
+    const IDLE_TIMEOUT = 30 * 60 * 1000;   // 30 minutes
+    const WARNING_DURATION = 60;            // 60 seconds countdown
+    const CHECK_INTERVAL = 30 * 1000;       // check every 30 seconds
+
+    let lastActivityTime = Date.now();
+    let warningShown = false;
+    let countdownTimer = null;
+    let countdownSeconds = WARNING_DURATION;
+
+    // Track user activity
+    function resetActivity() {
+        lastActivityTime = Date.now();
+    }
+
+    ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'].forEach(event => {
+        document.addEventListener(event, resetActivity, { passive: true });
+    });
+
+    // Inject warning modal HTML
+    function injectModal() {
+        if (document.getElementById('idle-timeout-modal')) return;
+        const modal = document.createElement('div');
+        modal.id = 'idle-timeout-modal';
+        modal.innerHTML = `
+            <div id="idle-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;backdrop-filter:blur(4px);">
+                <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#ffffff;border-radius:16px;padding:32px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center;">
+                    <div style="width:56px;height:56px;background:#fef3c7;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;">
+                        <span style="font-size:28px;">&#9200;</span>
+                    </div>
+                    <h2 style="margin:0 0 8px 0;font-size:20px;font-weight:700;color:#1e293b;">Session Timeout</h2>
+                    <p style="margin:0 0 8px 0;font-size:14px;color:#64748b;">You have been inactive for 30 minutes.</p>
+                    <p style="margin:0 0 24px 0;font-size:14px;color:#64748b;">You will be logged out in <strong id="idle-countdown" style="color:#dc2626;font-size:18px;">60</strong> seconds.</p>
+                    <div style="display:flex;gap:12px;justify-content:center;">
+                        <button id="idle-stay-btn" style="padding:10px 28px;background:#1e40af;color:#ffffff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Stay Logged In</button>
+                        <button id="idle-logout-btn" style="padding:10px 28px;background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;cursor:pointer;">Logout Now</button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+
+        document.getElementById('idle-stay-btn').addEventListener('click', dismissWarning);
+        document.getElementById('idle-logout-btn').addEventListener('click', performAutoLogout);
+    }
+
+    // Show the warning modal
+    function showWarning() {
+        if (warningShown) return;
+        warningShown = true;
+        countdownSeconds = WARNING_DURATION;
+
+        injectModal();
+        const overlay = document.getElementById('idle-overlay');
+        const counter = document.getElementById('idle-countdown');
+        overlay.style.display = 'block';
+        counter.textContent = countdownSeconds;
+
+        countdownTimer = setInterval(() => {
+            countdownSeconds--;
+            counter.textContent = countdownSeconds;
+            if (countdownSeconds <= 0) {
+                clearInterval(countdownTimer);
+                performAutoLogout();
+            }
+        }, 1000);
+    }
+
+    // Dismiss warning and reset timer
+    function dismissWarning() {
+        warningShown = false;
+        clearInterval(countdownTimer);
+        lastActivityTime = Date.now();
+        const overlay = document.getElementById('idle-overlay');
+        if (overlay) overlay.style.display = 'none';
+    }
+
+    // Perform the actual logout
+    function performAutoLogout() {
+        warningShown = false;
+        clearInterval(countdownTimer);
+        // Save any in-progress form data before logout
+        FormDrafts.saveAll();
+        fetch(`${API_BASE_URL}/auth.php`, {
+            method: 'DELETE',
+            credentials: 'include'
+        }).finally(() => {
+            // Clear all localStorage EXCEPT draft keys
+            const draftKeys = Object.values(FormDrafts.KEYS);
+            const savedDrafts = {};
+            draftKeys.forEach(k => { const v = localStorage.getItem(k); if (v) savedDrafts[k] = v; });
+            localStorage.clear();
+            Object.entries(savedDrafts).forEach(([k, v]) => localStorage.setItem(k, v));
+            window.location.href = 'index.html?reason=idle';
+        });
+    }
+
+    // Periodic check for idle timeout
+    setInterval(() => {
+        if (warningShown) return;
+        const idleTime = Date.now() - lastActivityTime;
+        if (idleTime >= IDLE_TIMEOUT) {
+            showWarning();
+        }
+    }, CHECK_INTERVAL);
+})();
 
 // Look up AI risk data for a business name from prediction engine results
 let _cachedPredictions = null;
@@ -2291,6 +2734,7 @@ async function handleSanitarySubmit(e) {
             await loadSanitaryRecords();
             updateSanitaryStatistics();
             showNotification(mode === 'edit' ? 'Record updated successfully!' : 'Record added successfully!', 'success');
+            localStorage.removeItem(FormDrafts.KEYS.sanitary);
         } else {
             alert('Error: ' + (result.message || 'Failed to save record'));
         }
@@ -2547,6 +2991,7 @@ async function handleInspectionSubmit(e) {
             ? 'Inspection report updated successfully!'
             : 'Inspection report saved successfully!';
         showNotification(message, 'success');
+        localStorage.removeItem(FormDrafts.KEYS.inspection);
 
         // AUTO-SCHEDULE: push to admin calendar if a deadline was set
         if (report.compliance_deadline) {
@@ -3658,6 +4103,7 @@ async function handleBurialSubmit(e) {
             updateBurialStatistics();
 
             showNotification(`${type.charAt(0).toUpperCase() + type.slice(1)} record saved!`, 'success');
+            localStorage.removeItem(FormDrafts.KEYS.burial);
         } else {
             alert('Server Error: ' + result.message);
         }
@@ -5363,3 +5809,9 @@ async function autoScheduleToAdminCalendar(inspectorName, deadlineDate, establis
     }
 }
 // ==================== END AUTO-SCHEDULE ====================
+
+// ==================== FORM DRAFTS INIT ====================
+document.addEventListener('DOMContentLoaded', () => {
+    FormDrafts.attachAutoSave();
+    FormDrafts.promptRestore();
+});

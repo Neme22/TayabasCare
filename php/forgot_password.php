@@ -9,6 +9,7 @@ ob_clean();
 require_once __DIR__ . '/PHPMailer/Exception.php';
 require_once __DIR__ . '/PHPMailer/PHPMailer.php';
 require_once __DIR__ . '/PHPMailer/SMTP.php';
+require_once __DIR__ . '/email_template.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 
@@ -96,13 +97,25 @@ function sendOTP($input) {
 
             $mail->setFrom(MAIL_FROM, MAIL_FROMNAME);
             $mail->addAddress($userEmail, $user['username']);
-            $mail->Subject = 'TayabasCare - Password Reset OTP';
-            $mail->Body    = "Hello {$user['username']},\n\n"
-                           . "Your One-Time Password (OTP) for resetting your TayabasCare password is:\n\n"
-                           . "  {$otp}\n\n"
-                           . "This OTP is valid for 10 minutes.\n\n"
-                           . "If you did not request this, please ignore this email.\n\n"
-                           . "- TayabasCare System";
+            $mail->Subject = 'TayabasCare – Password Reset OTP';
+            $mail->isHTML(true);
+
+            $content = '<p style="margin:0 0 16px 0;">Hello <strong>' . htmlspecialchars($user['username']) . '</strong>,</p>'
+                . '<p style="margin:0 0 24px 0;">We received a request to reset your TayabasCare password. Use the One-Time Password below to proceed:</p>'
+                . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px 0;">'
+                . '<tr><td align="center" style="padding:20px 0;">'
+                . '<div style="display:inline-block;background-color:#f1f5f9;border:2px dashed #3b82f6;border-radius:10px;padding:16px 40px;">'
+                . '<span style="font-size:32px;font-weight:700;color:#1e40af;letter-spacing:6px;font-family:Consolas,\'Courier New\',monospace;">' . $otp . '</span>'
+                . '</div>'
+                . '</td></tr></table>'
+                . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px 0;">'
+                . '<tr><td style="background-color:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;border-radius:0 6px 6px 0;font-size:14px;color:#92400e;">'
+                . '&#9200; This OTP is valid for <strong>10 minutes</strong>. Do not share it with anyone.'
+                . '</td></tr></table>'
+                . '<p style="margin:0;font-size:13px;color:#94a3b8;">If you did not request a password reset, you can safely ignore this email. Your password will remain unchanged.</p>';
+
+            $mail->Body = renderEmailTemplate('Password Reset OTP', $content, '#3b82f6');
+            $mail->AltBody = "Hello {$user['username']},\n\nYour One-Time Password (OTP) for resetting your TayabasCare password is:\n\n  {$otp}\n\nThis OTP is valid for 10 minutes.\nIf you did not request this, please ignore this email.\n\n- TayabasCare System";
             $mail->send();
         } catch (Exception $e) {
             errorResponse('Failed to send email: ' . $mail->ErrorInfo, 500);
