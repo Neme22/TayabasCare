@@ -167,10 +167,20 @@ function deleteRecord() {
     $id = $_GET['id'] ?? null;
     $reason = $_GET['reason'] ?? '';
 
+    if (!$id) {
+        errorResponse('Record ID is required.', 400);
+        return;
+    }
+
     try {
         $stmt = $db->prepare("SELECT * FROM sanitary_records WHERE id = ?");
         $stmt->execute([$id]);
         $record = $stmt->fetch();
+
+        if (!$record) {
+            errorResponse('Record not found.', 404);
+            return;
+        }
 
         $archiveStmt = $db->prepare("
             INSERT INTO archive_data (archive_type, data_json, reason, expiry_date)

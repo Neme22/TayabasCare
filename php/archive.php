@@ -47,7 +47,12 @@ function restoreItem() {
         $stmt = $db->prepare("SELECT * FROM archive_data WHERE id = ?");
         $stmt->execute([$id]);
         $item = $stmt->fetch();
-        
+
+        if (!$item) {
+            errorResponse('Archive item not found.', 404);
+            return;
+        }
+
         $data = json_decode($item['data_json'], true);
         $type = $item['archive_type'];
         $subType = $item['sub_type'] ?? '';

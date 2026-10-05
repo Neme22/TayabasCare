@@ -237,7 +237,7 @@ const FormDrafts = {
         const d = JSON.parse(raw);
         if (!d.deceased) { localStorage.removeItem(this.KEYS.burial); return; }
 
-        openBurialModal(d.type || 'cadaver', d.mode === 'edit' ? 'edit' : 'add', d.editId || undefined);
+        openBurialModal(d.mode === 'edit' ? 'edit' : 'add', d.type || 'cadaver', d.editId || undefined);
 
         setTimeout(() => {
             if (d.deceased) document.getElementById('burial-deceased').value = d.deceased;
@@ -1392,7 +1392,7 @@ function getCollectedRecommendations() {
     return [...checked, ...(manual ? [manual] : [])].join('; ');
 }
 
-function showBurialTab(type) {
+function showBurialTab(type, tabEl) {
     // Hide all burial sections
     document.querySelectorAll('.burial-section').forEach(section => {
         section.classList.add('hidden');
@@ -1405,7 +1405,14 @@ function showBurialTab(type) {
     document.querySelectorAll('.tabs .tab').forEach(tab => {
         tab.classList.remove('tab-active');
     });
-    event.target.classList.add('tab-active');
+    if (tabEl) {
+        tabEl.classList.add('tab-active');
+    } else {
+        // Fallback: find the matching tab by text
+        document.querySelectorAll('.tabs .tab').forEach(tab => {
+            if (tab.onclick && tab.getAttribute('onclick')?.includes(type)) tab.classList.add('tab-active');
+        });
+    }
     
     // Load data
     loadBurialRecords(type);
@@ -3946,7 +3953,7 @@ function loadBurialData(type, index) {
                 year: 'numeric', month: 'long', day: 'numeric',
                 hour: '2-digit', minute: '2-digit'
             });
-            datetimeInput.setAttribute('data-datetime', date.toISOString());
+            datetimeInput.setAttribute('data-db-value', date.toISOString());
         } else {
             datetimeInput.value = record.datetime;
         }
@@ -4004,7 +4011,7 @@ function loadBurialData(type, index) {
                 document.getElementById('burial-cemetery-transfer-municipality').value = savedCemTransferMunicipality;
             }, 800);
         }
-        document.getElementById('burial-funeral').value = record.funeral || '';
+        document.getElementById('burial-funeral-skeletal').value = record.funeral || '';
         document.getElementById('burial-or-skeletal').value = record.orNumberSkeletal || record.orNumber || '';
     }
 
@@ -4053,7 +4060,7 @@ async function handleBurialSubmit(e) {
             const muni = (document.getElementById('burial-transfer-municipality') || {value: ''}).value.trim();
             return prov && muni ? `${prov} | ${muni}` : (prov || muni);
         })(),
-        funeral: ((document.getElementById('burial-funeral') || document.getElementById('burial-funeral-skeletal')) || {value: ''}).value.trim(),
+        funeral: (document.getElementById(type === 'cadaver' ? 'burial-funeral' : 'burial-funeral-skeletal') || {value: ''}).value.trim(),
         cemeteryOrigin: (() => {
             const muni = (document.getElementById('burial-cemetery-origin-municipality') || {value: ''}).value.trim();
             return muni;
@@ -4063,7 +4070,7 @@ async function handleBurialSubmit(e) {
             const muni = (document.getElementById('burial-cemetery-transfer-municipality') || {value: ''}).value.trim();
             return prov && muni ? `${prov} | ${muni}` : (prov || muni);
         })(),
-        orNumber: (document.getElementById('burial-or') || document.getElementById('burial-or-skeletal') || {value: ''}).value.trim()
+        orNumber: (document.getElementById(type === 'cadaver' ? 'burial-or' : 'burial-or-skeletal') || {value: ''}).value.trim()
     };
 
     try {
@@ -5790,19 +5797,6 @@ async function autoScheduleToAdminCalendar(inspectorName, deadlineDate, establis
             }
         })
         .catch(err => console.warn('Email send error:', err));
-
-        // Save to DB so notify_scheduler.php can send a day-before reminder too
-        fetch(API_BASE_URL + '/inspection_schedules.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                inspector:    inspectorName.trim(),
-                establishment: establishmentName || '',
-                riskLevel:    '',
-                schedDate:    deadlineDate,
-                notes:        'Compliance deadline re-inspection for: ' + (establishmentName || 'Unknown Establishment')
-            })
-        }).catch(err => console.warn('Schedule DB save error:', err));
 
     } catch (err) {
         console.error('autoScheduleToAdminCalendar error:', err);

@@ -61,7 +61,9 @@ const Utils = {
         return d.innerHTML;
     },
     formatDate: (dateString) => {
+        if (!dateString) return 'N/A';
         const date = new Date(dateString);
+        if (isNaN(date)) return 'N/A';
         return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     },
 
@@ -1026,6 +1028,7 @@ const InspectorManager = {
             }
             
             InspectorManager._allInspectors = result.data || [];
+            DataStore.inspectors = InspectorManager._allInspectors;
             InspectorManager._renderList(InspectorManager._allInspectors);
         } catch (error) {
             console.error('Error loading inspectors:', error);
@@ -1326,7 +1329,7 @@ const VHModal = {
         } catch (_) {}
 
         const merged = [...dbReports];
-        allReports.forEach(r => {
+        (DataStore.inspectionReports || []).forEach(r => {
             if (!merged.find(m => String(m.id) === String(r.id))) merged.push(r);
         });
 
@@ -1394,13 +1397,13 @@ const VHModal = {
                             <p style="font-size:11px; font-weight:700; color:#f59e0b; text-transform:uppercase; letter-spacing:0.06em; margin:0 0 8px 0;">
                                 <i class="fas fa-exclamation-triangle" style="margin-right:5px;"></i>Remarks / Violations Found
                             </p>
-                            <p style="font-size:14px; color:#1f2937; line-height:1.6; margin:0;">${remarks}</p>
+                            <p style="font-size:14px; color:#1f2937; line-height:1.6; margin:0;">${Utils.esc(remarks)}</p>
                         </div>
                         <div style="background:#fff; border-radius:8px; padding:14px; border:1px solid #dbeafe;">
                             <p style="font-size:11px; font-weight:700; color:#3b82f6; text-transform:uppercase; letter-spacing:0.06em; margin:0 0 8px 0;">
                                 <i class="fas fa-clipboard-check" style="margin-right:5px;"></i>Recommendation
                             </p>
-                            <p style="font-size:14px; color:#1f2937; line-height:1.6; margin:0;">${recommendation}</p>
+                            <p style="font-size:14px; color:#1f2937; line-height:1.6; margin:0;">${Utils.esc(recommendation)}</p>
                         </div>
                     </div>
                 </div>`;
@@ -1651,7 +1654,7 @@ const SanitaryManager = {
     },
 
     printPermit: (index) => {
-        const record = SanitaryManager.records[index];
+        const record = (SanitaryManager._displayed || SanitaryManager.records)[index];
         if (!record) return;
 
         const ownerName = record.owner
@@ -2216,7 +2219,7 @@ const ReportsManager = {
                 );
                 const result = await response.json();
                 if (result.success) {
-                    await ReportsManager.render();
+                    await ReportsManager.loadAndRender();
                     Dashboard.updateStats();
                     Dashboard.renderActivity();
                     Utils.showToast('Report archived successfully');
@@ -2834,9 +2837,10 @@ function populateInspectorColumns() {
 // Initialize App
 async function initApp() {
     // --- Role guard: admin only ---
+    let sessData = null;
     try {
         const sessResp = await fetch(`${API_BASE_URL}/auth.php`);
-        const sessData = await sessResp.json();
+        sessData = await sessResp.json();
         if (!sessData.success || (sessData.data && sessData.data.role !== 'admin')) {
             window.location.href = 'index.html';
             return;
@@ -2848,7 +2852,7 @@ async function initApp() {
 
     // Update header with actual username
     const usernameDisplay = document.getElementById('admin-username-display');
-    if (usernameDisplay && sessData.data) {
+    if (usernameDisplay && sessData && sessData.data) {
         usernameDisplay.textContent = sessData.data.fullName || sessData.data.username || 'Admin';
     }
 
@@ -2910,12 +2914,12 @@ async function initApp() {
     }
 
     // Initial render — now using real DB data
+    await InspectorManager.render();
     Dashboard.updateStats();
     Dashboard.renderActivity();
-    InspectorManager.render();
     SanitaryManager.render();
     BurialManager.render();
-    ReportsManager.render();
+    ReportsManager.loadAndRender();
 
     // Initialize Archive
     if (typeof ArchiveManager !== 'undefined') ArchiveManager.init();
@@ -3739,6 +3743,24 @@ const NotifManager = {
         NotifManager.render();
     },
 
+    dismissAll: async () => {
+        const alerts = NotifManager.alerts;
+        // Dismiss each on server
+        for (const alert of alerts) {
+            if (alert.serverId) {
+                try {
+                    await fetch(`${API_BASE_URL}/alerts.php`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: alert.serverId, action: 'dismiss' })
+                    });
+                } catch (e) { /* ignore */ }
+            }
+        }
+        NotifManager.alerts = [];
+        NotifManager.render();
+    },
+
     dismiss: async (id) => {
         const alert = NotifManager.alerts.find(a => String(a.id) === String(id));
         if (alert && alert.serverId) {
@@ -3794,7 +3816,7 @@ const NotifManager = {
                     <p style="font-size:12px;color:#374151;margin:0 0 4px;line-height:1.4;">${alert.message}</p>
                     ${alert.time ? `<p style="font-size:11px;color:#9ca3af;margin:0;">${new Date(alert.time).toLocaleDateString('en-PH', {year:'numeric',month:'short',day:'numeric'})}</p>` : ''}
                 </div>
-                ${!alert.read ? `<button onclick="event.stopPropagation();NotifManager.dismiss('${alert.id}')" style="flex-shrink:0;font-size:11px;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:6px;padding:2px 8px;cursor:pointer;">Dismiss</button>` : ''}
+                ${!alert.read ? `<button onclick="event.stopPropagation();NotifManager.dismiss('${alert.id}')" style="flex-shrink:0;font-size:11px;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:6px;padding:2px 8px;cursor:pointer;">Dismiss</button>` : `<button onclick="event.stopPropagation();NotifManager.dismiss('${alert.id}')" style="flex-shrink:0;font-size:11px;color:#9ca3af;background:none;border:1px solid #f3f4f6;border-radius:6px;padding:2px 8px;cursor:pointer;">Dismiss</button>`}
             </div>`;
         }).join('');
     },
@@ -4493,18 +4515,6 @@ const PredictionEngine = {
         URL.revokeObjectURL(url);
     },
 };
-
-// Auto-run when prescription view is opened
-document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('.sidebar-item').forEach(item => {
-        item.addEventListener('click', () => {
-            if (item.dataset.page === 'prediction') {
-                setTimeout(() => PredictionEngine.run(), 100);
-            }
-        });
-    });
-});
-
 
 // ==================== CSV EXPORT FUNCTIONS ====================
 function exportReportsCSV() {
@@ -5330,7 +5340,7 @@ async function adminOpenIHDetail(establishmentName) {
     combined.sort((a, b) => new Date(b.date || b.archived_at || 0) - new Date(a.date || a.archived_at || 0));
 
     if (combined.length === 0) {
-        document.getElementById('admin-ih-tbody').innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:#9ca3af;">No inspection history found.</td></tr>`;
+        document.getElementById('admin-ih-tbody').innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:#9ca3af;">No inspection history found.</td></tr>`;
         return;
     }
 
@@ -5670,5 +5680,4 @@ const EstablishmentTrend = {
 // ==================== INIT NEW MODULES ====================
 document.addEventListener('DOMContentLoaded', () => {
     YoYComparison.init();
-    NotificationRunner.init();
 });

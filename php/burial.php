@@ -215,6 +215,11 @@ function deleteRecord() {
         $stmt->execute([$id]);
         $record = $stmt->fetch();
 
+        if (!$record) {
+            errorResponse('Record not found.', 404);
+            return;
+        }
+
         $archiveStmt = $db->prepare("
             INSERT INTO archive_data (archive_type, sub_type, data_json, reason, expiry_date)
             VALUES ('burial', ?, ?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))

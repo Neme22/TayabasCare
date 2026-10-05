@@ -1782,3 +1782,18 @@ dialog.modal::backdrop {
     display: none;
 }
 /* ===== END SCHEDULE INSPECTOR DROPDOWN ===== */
+
+/* ===== ADMIN ACCOMPLISHMENT REPORT INPUTS ===== */
+.admin-report-input {
+    width: 100%;
+    text-align: center;
+    border: none;
+    padding: 4px 2px;
+    font-size: 11px;
+    background: transparent;
+    outline: none;
+    -moz-appearance: textfield;
+}
+.admin-report-input::-webkit-outer-spin-button,
+.admin-report-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.admin-report-input:focus { background: #ecfdf5; }

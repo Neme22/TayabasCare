@@ -100,7 +100,7 @@ errorResponse('Method not allowed', 405);
 // ============================================================
 function generateAlerts($db) {
     // Only regenerate if last generation was > 2 minutes ago
-    $stmt = $db->query("SELECT MAX(created_at) as last_gen FROM alerts WHERE dismissed = 0");
+    $stmt = $db->query("SELECT MAX(created_at) as last_gen FROM alerts");
     $lastGen = $stmt->fetch()['last_gen'];
     if ($lastGen) {
         $minutesSince = (time() - strtotime($lastGen)) / 60;
@@ -113,11 +113,12 @@ function generateAlerts($db) {
     } catch (PDOException $e) {
         // Column already exists — continue
     }
-    try {
-        $db->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_fingerprint ON alerts (fingerprint)");
-    } catch (PDOException $e) {
-        // Index may already exist or MySQL version doesn't support IF NOT EXISTS
-        try { $db->exec("CREATE UNIQUE INDEX idx_fingerprint ON alerts (fingerprint)"); } catch (PDOException $e2) {}
+    // MySQL doesn't support CREATE INDEX IF NOT EXISTS — check information_schema first
+    $idxCheck = $db->query("SELECT COUNT(*) as cnt FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'alerts' AND INDEX_NAME = 'idx_fingerprint'");
+    if ((int)$idxCheck->fetch()['cnt'] === 0) {
+        // Clean up duplicate fingerprints before creating unique index
+        $db->exec("DELETE a1 FROM alerts a1 INNER JOIN alerts a2 WHERE a1.id > a2.id AND a1.fingerprint = a2.fingerprint AND a1.fingerprint IS NOT NULL");
+        try { $db->exec("CREATE UNIQUE INDEX idx_fingerprint ON alerts (fingerprint)"); } catch (PDOException $e) {}
     }
 
     // Get fingerprints of dismissed alerts so we don't recreate them

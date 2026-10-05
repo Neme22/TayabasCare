@@ -492,8 +492,8 @@ function updateReportWithFile() {
 
         $hist = $db->prepare("
             INSERT INTO inspection_history
-            (inspection_id, establishment, location, inspector_name, file_name, file_path, remarks, recommendation, complied, status, report_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (inspection_id, establishment, location, inspector_name, file_name, file_path, remarks, recommendation, complied, status, report_date, violation_codes, establishment_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         $hist->execute([
             $current['id'],
@@ -506,7 +506,9 @@ function updateReportWithFile() {
             $current['recommendation'],
             $current['complied'],
             $current['status'],
-            $current['report_date']
+            $current['report_date'],
+            $current['violation_codes'] ?? null,
+            $current['establishment_id'] ?? null
         ]);
 
         $stmt = $db->prepare("
