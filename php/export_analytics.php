@@ -231,4 +231,3 @@ try {
     error_log('export_analytics.php error: ' . $e->getMessage());
     errorResponse('Database error. Please try again.', 500);
 }
-?>

@@ -358,4 +358,3 @@ function generateScheduleReminderAlerts($db, &$alerts) {
         // Table may not exist or have different schema
     }
 }
-?>

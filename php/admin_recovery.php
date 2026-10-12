@@ -150,4 +150,3 @@ function handleUpdateEmail($input = []) {
 
     jsonResponse(true, ['email' => $email], 'Email updated successfully.');
 }
-?>

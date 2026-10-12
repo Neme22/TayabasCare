@@ -425,4 +425,3 @@ try {
     error_log('notification_runner.php error: ' . $e->getMessage());
     errorResponse('Database error. Please try again.', 500);
 }
-?>

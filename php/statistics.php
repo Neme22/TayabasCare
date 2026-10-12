@@ -232,4 +232,3 @@ try {
     error_log('statistics.php error: ' . $e->getMessage());
     errorResponse('Database error. Please try again.', 500);
 }
-?>

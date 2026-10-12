@@ -159,4 +159,3 @@ try {
 }
 
 echo json_encode(['success' => true, 'data' => $analysis, 'message' => ''], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE);
-?>

@@ -138,4 +138,3 @@ try {
     echo json_encode(['success' => false, 'data' => null, 'message' => 'Prediction engine error. Please try again.']);
 }
 exit();
-?>

@@ -121,4 +121,3 @@ try {
     error_log('admin_recovery_redeem error: ' . $e->getMessage());
     errorResponse('Server error. Please try again later.', 500);
 }
-?>

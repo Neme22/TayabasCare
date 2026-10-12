@@ -28,6 +28,44 @@ window.fetch = async function(url, opts = {}) {
     return _origFetch(url, opts);
 };
 
+// Shared table "Load more" paging (mirrors admin.js)
+const TablePaging = {
+    _limits: {},
+    getLimit(key, def = 10) {
+        return this._limits[key] ?? def;
+    },
+    showMore(key, def = 10, by = 10) {
+        this._limits[key] = this.getLimit(key, def) + by;
+    },
+    reset(key) {
+        delete this._limits[key];
+    },
+    slice(list, key, def = 10) {
+        const limit = this.getLimit(key, def);
+        return {
+            displayed: list.slice(0, limit),
+            hasMore: list.length > limit,
+            remaining: Math.max(0, list.length - limit)
+        };
+    },
+    moreRow(key, remaining, colSpan, def = 10) {
+        return `<tr class="load-more-row"><td colspan="${colSpan}" style="text-align:center;padding:10px;border-top:1px solid #e5e7eb;">
+            <button type="button" class="btn btn-sm btn-outline" data-testid="load-more-${key}"
+                onclick="TablePaging.showMore('${key}', ${def}); TablePaging._rerender('${key}')">
+                Load more (${remaining} more)
+            </button>
+        </td></tr>`;
+    },
+    _handlers: {},
+    register(key, fn) {
+        this._handlers[key] = fn;
+    },
+    _rerender(key) {
+        const fn = this._handlers[key];
+        if (typeof fn === 'function') fn();
+    }
+};
+
 // --- Role guard: inspector only ---
 (async function() {
     try {
@@ -365,13 +403,6 @@ const FormDrafts = {
         const pNo = document.getElementById('sanitary-personnel-no');
         if (pNo) pNo.addEventListener('change', () => setTimeout(debounced, 600));
     }
-};
-
-// Data Storage Keys
-const STORAGE_KEYS = {
-    sanitary: 'sanitaryRecords',
-    inspection: 'inspectionReports',
-    burial: 'burialRecords'
 };
 
 // Fetch Tayabas City barangays through PHP proxy
@@ -2270,13 +2301,14 @@ function filterSanitaryRecords() {
         }
     });
     
-    // Show latest 10 when no filter active
-    const displayed = hasFilter ? filtered : filtered.slice(0, 10);
+    // Show latest N when no filter active
+    const page = hasFilter ? { displayed: filtered, hasMore: false, remaining: 0 } : TablePaging.slice(filtered, 'insp-sanitary', 10);
+    const displayed = page.displayed;
     if (countEl) countEl.textContent = hasFilter ? `${displayed.length} matching records` : `Showing ${displayed.length} of ${records.length} records`;
-    
+
     const tbody = document.getElementById('sanitary-table-body');
     if (!tbody) return;
-    
+
     if (displayed.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-500">No matching records found.</td></tr>';
         return;
@@ -2309,7 +2341,7 @@ function filterSanitaryRecords() {
                 </td>
             </tr>
         `;
-    }).join('');
+    }).join('') + (page.hasMore ? TablePaging.moreRow('insp-sanitary', page.remaining, 7, 10) : '');
 }
 
 // Update Sanitary Statistics
@@ -2413,10 +2445,15 @@ function filterBurialRecords(type) {
         }
     });
 
-    const displayed = hasFilter ? filtered : filtered.slice(0, 10);
+    const page = hasFilter ? { displayed: filtered, hasMore: false, remaining: 0 } : TablePaging.slice(filtered, `insp-burial-${type}`, 10);
+    const displayed = page.displayed;
     if (countEl) countEl.textContent = hasFilter ? `${displayed.length} matching records` : `Showing ${displayed.length} of ${records.length} records`;
-    
+
     displayBurialRecords(type, displayed);
+    if (page.hasMore) {
+        const tbody = document.getElementById(`${type}-table-body`);
+        if (tbody) tbody.insertAdjacentHTML('beforeend', TablePaging.moreRow(`insp-burial-${type}`, page.remaining, type === 'cadaver' ? 5 : 6, 10));
+    }
 }
 
 // Display Burial Records (helper function)
@@ -3218,7 +3255,8 @@ function filterInspectionReports() {
         }
     });
 
-    const displayed = hasFilter ? filtered : filtered.slice(0, 10);
+    const page = hasFilter ? { displayed: filtered, hasMore: false, remaining: 0 } : TablePaging.slice(filtered, 'insp-reports', 10);
+    const displayed = page.displayed;
     if (countEl) countEl.textContent = hasFilter ? `${displayed.length} matching reports` : `Showing ${displayed.length} of ${reports.length} reports`;
 
     if (displayed.length === 0) {
@@ -3271,7 +3309,7 @@ function filterInspectionReports() {
             </td>
         </tr>
         `;
-    }).join('');
+    }).join('') + (page.hasMore ? TablePaging.moreRow('insp-reports', page.remaining, 8, 10) : '');
 }
 
 // View inspection report by DB id — includes checkbox to mark complied
@@ -5664,8 +5702,17 @@ function filterIHEstablishments() {
     const sortBy = document.getElementById('ih-sort')?.value || 'recent';
     let filtered = q ? _ihEstablishments.filter(e => e.name.toLowerCase().includes(q) || e.barangay.toLowerCase().includes(q)) : _ihEstablishments;
     filtered = sortIHList(filtered, sortBy);
-    const displayed = q ? filtered : filtered.slice(0, 12);
-    renderIHEstablishments(displayed);
+    const page = q ? { displayed: filtered, hasMore: false, remaining: 0 } : TablePaging.slice(filtered, 'insp-ih', 12);
+    renderIHEstablishments(page.displayed);
+    if (page.hasMore) {
+        const container = document.getElementById('ih-establishment-list');
+        if (container && !container.querySelector('.load-more-ih')) {
+            container.insertAdjacentHTML('beforeend',
+                `<div class="load-more-ih" style="text-align:center;padding:12px;">
+                    <button type="button" class="btn btn-sm btn-outline" onclick="TablePaging.showMore('insp-ih', 12); filterIHEstablishments();">Load more (${page.remaining} more)</button>
+                </div>`);
+        }
+    }
 }
 
 function sortIHEstablishments() {
@@ -5685,16 +5732,21 @@ function sortIHList(list, sortBy) {
 }
 
 async function openIHDetail(establishmentName) {
-    document.getElementById('ih-establishment-list').classList.add('hidden');
+    const listEl = document.getElementById('ih-establishment-list');
     const detail = document.getElementById('ih-history-detail');
-    detail.classList.remove('hidden');
-    document.getElementById('ih-detail-title').textContent = establishmentName;
-    document.getElementById('ih-detail-tbody').innerHTML = `<tr><td colspan="6" class="text-center py-6"><i class="fas fa-spinner fa-spin mr-2"></i>Loading history...</td></tr>`;
-    document.getElementById('ih-detail-stats').innerHTML = '';
+    const titleEl = document.getElementById('ih-detail-title');
+    const tbodyEl = document.getElementById('ih-detail-tbody');
+    const statsEl = document.getElementById('ih-detail-stats');
+    const barangayEl = document.getElementById('ih-detail-barangay');
+    if (listEl) listEl.classList.add('hidden');
+    if (detail) detail.classList.remove('hidden');
+    if (titleEl) titleEl.textContent = establishmentName;
+    if (tbodyEl) tbodyEl.innerHTML = `<tr><td colspan="6" class="text-center py-6"><i class="fas fa-spinner fa-spin mr-2"></i>Loading history...</td></tr>`;
+    if (statsEl) statsEl.innerHTML = '';
 
     const name = establishmentName.trim().toLowerCase();
     const estab = _ihEstablishments.find(e => e.name.toLowerCase() === name);
-    document.getElementById('ih-detail-barangay').innerHTML = estab ? `<i class="fas fa-map-marker-alt mr-1 text-emerald-500"></i>${esc(estab.barangay)}` : '';
+    if (barangayEl) barangayEl.innerHTML = estab ? `<i class="fas fa-map-marker-alt mr-1 text-emerald-500"></i>${esc(estab.barangay)}` : '';
 
     // Fetch archived/history records for this establishment
     let historyRows = [];
@@ -5846,6 +5898,14 @@ async function autoScheduleToAdminCalendar(inspectorName, deadlineDate, establis
     }
 }
 // ==================== END AUTO-SCHEDULE ====================
+
+// Load-more re-render hooks for main inspector tables
+TablePaging.register('insp-sanitary', () => filterSanitaryRecords());
+TablePaging.register('insp-reports', () => filterInspectionReports());
+TablePaging.register('insp-ih', () => filterIHEstablishments());
+['cadaver', 'skeletal', 'exhumation'].forEach((t) => {
+    TablePaging.register(`insp-burial-${t}`, () => filterBurialRecords(t));
+});
 
 // ==================== FORM DRAFTS INIT ====================
 document.addEventListener('DOMContentLoaded', () => {

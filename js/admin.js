@@ -28,14 +28,47 @@ window.fetch = async function(url, opts = {}) {
     return _origFetch(url, opts);
 };
 
-// Data Store — in-memory cache populated from API (no localStorage)
-const STORAGE_KEYS = {
-    sanitary: 'sanitaryRecords',
-    inspection: 'inspectionReports',
-    burial: 'burialRecords',
-    archive: 'archiveData'
+// Shared table "Load more" paging for list views that default to a short slice
+const TablePaging = {
+    _limits: {},
+    getLimit(key, def = 10) {
+        return this._limits[key] ?? def;
+    },
+    showMore(key, def = 10, by = 10) {
+        this._limits[key] = this.getLimit(key, def) + by;
+    },
+    reset(key) {
+        delete this._limits[key];
+    },
+    // Use when no search filter is active. When filtering, callers show all matches.
+    slice(list, key, def = 10) {
+        const limit = this.getLimit(key, def);
+        return {
+            displayed: list.slice(0, limit),
+            hasMore: list.length > limit,
+            remaining: Math.max(0, list.length - limit)
+        };
+    },
+    moreRow(key, remaining, colSpan, def = 10) {
+        return `<tr class="load-more-row"><td colspan="${colSpan}" style="text-align:center;padding:10px;border-top:1px solid #e5e7eb;">
+            <button type="button" class="btn btn-sm btn-outline" data-testid="load-more-${key}"
+                onclick="TablePaging.showMore('${key}', ${def}); TablePaging._rerender('${key}')">
+                Load more (${remaining} more)
+            </button>
+        </td></tr>`;
+    },
+    // Maps paging keys to their re-render entry points
+    _handlers: {},
+    register(key, fn) {
+        this._handlers[key] = fn;
+    },
+    _rerender(key) {
+        const fn = this._handlers[key];
+        if (typeof fn === 'function') fn();
+    }
 };
 
+// Data Store — in-memory cache populated from API (no localStorage)
 let _cacheInspectors = [];
 let _cacheSanitaryRecords = [];
 let _cacheInspectionReports = [];
@@ -1523,8 +1556,9 @@ const SanitaryManager = {
             }
         });
 
-        // Show latest 10 when no search active
-        const displayed = q ? sorted : sorted.slice(0, 10);
+        // Show latest N when no search active (Load more expands the window)
+        const page = q ? { displayed: sorted, hasMore: false, remaining: 0 } : TablePaging.slice(sorted, 'sanitary', 10);
+        const displayed = page.displayed;
         SanitaryManager._displayed = displayed;
         if (countEl) countEl.textContent = q ? `${displayed.length} matching records` : `Showing ${displayed.length} of ${records.length} records`;
 
@@ -1553,7 +1587,7 @@ const SanitaryManager = {
                     </div>
                 </td>
             </tr>
-        `}).join('');
+        `}).join('') + (page.hasMore ? TablePaging.moreRow('sanitary', page.remaining, 5, 10) : '');
     },
 
     openViewModal: (index) => {
@@ -1892,7 +1926,8 @@ const BurialManager = {
             }
         });
 
-        const displayed = q ? sorted : sorted.slice(0, 10);
+        const page = q ? { displayed: sorted, hasMore: false, remaining: 0 } : TablePaging.slice(sorted, 'burial', 10);
+        const displayed = page.displayed;
         if (countEl) countEl.textContent = q ? `${displayed.length} matching records` : `Showing ${displayed.length} of ${BurialManager._allRecords.length} records`;
 
         if (displayed.length === 0) {
@@ -1917,7 +1952,7 @@ const BurialManager = {
                     </div>
                 </td>
             </tr>
-        `).join('');
+        `).join('') + (page.hasMore ? TablePaging.moreRow('burial', page.remaining, 5, 10) : '');
     },
 
     openViewModal: (categoryType, recordId) => {
@@ -2136,7 +2171,8 @@ const ReportsManager = {
             }
         });
 
-        const displayed = q ? sorted : sorted.slice(0, 10);
+        const page = q ? { displayed: sorted, hasMore: false, remaining: 0 } : TablePaging.slice(sorted, 'reports', 10);
+        const displayed = page.displayed;
         if (countEl) countEl.textContent = q ? `${displayed.length} matching reports` : `Showing ${displayed.length} of ${allReports.length} reports`;
 
         tbody.innerHTML = displayed.map(report => `
@@ -2158,7 +2194,7 @@ const ReportsManager = {
                     </div>
                 </td>
             </tr>
-        `).join('');
+        `).join('') + (page.hasMore ? TablePaging.moreRow('reports', page.remaining, 7, 10) : '');
     },
 
     openViewModal: (id) => {
@@ -2950,9 +2986,12 @@ async function initApp() {
     }
 
     // Modal overlay click to close
-    document.getElementById('modalOverlay').addEventListener('click', () => {
-        Utils.closeModal();
-    });
+    const modalOverlay = document.getElementById('modalOverlay');
+    if (modalOverlay) {
+        modalOverlay.addEventListener('click', () => {
+            Utils.closeModal();
+        });
+    }
 
     // Add button handlers
     document.getElementById('addInspectorBtn').addEventListener('click', InspectorManager.openAddModal);
@@ -3014,6 +3053,11 @@ async function initApp() {
     if (archiveSortFilter) archiveSortFilter.addEventListener('change', () => ArchiveManager.renderFiltered());
 
     // Build dynamic inspector column map and populate report headers
+    TablePaging.register('sanitary', () => SanitaryManager.render());
+    TablePaging.register('burial', () => BurialManager.render());
+    TablePaging.register('reports', () => ReportsManager.loadAndRender());
+    TablePaging.register('prediction', () => PredictionEngine.filter());
+
     buildAdminInspectorColumnMap().then((ok) => {
         populateInspectorColumns();
         if (!ok) {
@@ -4618,9 +4662,14 @@ const PredictionEngine = {
         });
 
         const hasFilter = risk || search;
-        const displayed = hasFilter ? filtered : filtered.slice(0, 15);
+        const page = hasFilter ? { displayed: filtered, hasMore: false, remaining: 0 } : TablePaging.slice(filtered, 'prediction', 15);
+        const displayed = page.displayed;
         if (countEl) countEl.textContent = hasFilter ? `${displayed.length} matching` : `Showing ${displayed.length} of ${allResults.length} establishments`;
         PredictionEngine.renderTable(displayed);
+        if (page.hasMore) {
+            const tbody = document.getElementById('predTableBody');
+            if (tbody) tbody.insertAdjacentHTML('beforeend', TablePaging.moreRow('prediction', page.remaining, 8, 15));
+        }
     },
 
     renderTable: (results) => {
@@ -5564,8 +5613,17 @@ function adminFilterIHEstablishments() {
     // Re-apply current sort
     const sortBy = document.getElementById('admin-ih-sort')?.value || 'recent';
     filtered = adminSortIHList(filtered, sortBy);
-    const displayed = q ? filtered : filtered.slice(0, 12);
-    adminRenderIHEstablishments(displayed);
+    const page = q ? { displayed: filtered, hasMore: false, remaining: 0 } : TablePaging.slice(filtered, 'admin-ih', 12);
+    adminRenderIHEstablishments(page.displayed);
+    if (page.hasMore) {
+        const container = document.getElementById('admin-ih-list');
+        if (container && !container.querySelector('.load-more-ih')) {
+            container.insertAdjacentHTML('beforeend',
+                `<div class="load-more-ih" style="text-align:center;padding:12px;">
+                    <button type="button" class="btn btn-sm btn-outline" onclick="TablePaging.showMore('admin-ih', 12); adminFilterIHEstablishments();">Load more (${page.remaining} more)</button>
+                </div>`);
+        }
+    }
 }
 
 function adminSortIHEstablishments() {
@@ -5573,8 +5631,17 @@ function adminSortIHEstablishments() {
     const q = (document.getElementById('admin-ih-search')?.value || '').trim().toLowerCase();
     let list = q ? _adminIHEstablishments.filter(e => e.name.toLowerCase().includes(q) || e.barangay.toLowerCase().includes(q)) : _adminIHEstablishments;
     list = adminSortIHList(list, sortBy);
-    const displayed = q ? list : list.slice(0, 12);
-    adminRenderIHEstablishments(displayed);
+    const page = q ? { displayed: list, hasMore: false, remaining: 0 } : TablePaging.slice(list, 'admin-ih', 12);
+    adminRenderIHEstablishments(page.displayed);
+    if (page.hasMore) {
+        const container = document.getElementById('admin-ih-list');
+        if (container && !container.querySelector('.load-more-ih')) {
+            container.insertAdjacentHTML('beforeend',
+                `<div class="load-more-ih" style="text-align:center;padding:12px;">
+                    <button type="button" class="btn btn-sm btn-outline" onclick="TablePaging.showMore('admin-ih', 12); adminSortIHEstablishments();">Load more (${page.remaining} more)</button>
+                </div>`);
+        }
+    }
 }
 
 function adminSortIHList(list, sortBy) {

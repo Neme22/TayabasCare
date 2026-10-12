@@ -341,4 +341,3 @@ try {
     error_log('pattern_analysis.php error: ' . $e->getMessage());
     errorResponse('Database error. Please try again.', 500);
 }
-?>

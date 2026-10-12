@@ -192,4 +192,3 @@ function getRiskBasedRecommendations($db) {
 
     return $recommendations;
 }
-?>

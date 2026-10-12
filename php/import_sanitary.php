@@ -113,14 +113,10 @@ foreach ($rows as $i => $row) {
     }
 }
 
-if (empty($failed)) {
-    $db->commit();
-} else {
-    // Commit what succeeded, report failures
-    $db->commit();
-}
+// Commit all successfully imported rows; failures are reported in the response
+$db->commit();
 
 $msg = "$imported record(s) imported.";
 if ($skipped > 0) $msg .= " $skipped duplicate(s) skipped.";
 jsonResponse(true, ['imported' => $imported, 'skipped' => $skipped, 'failed' => $failed], $msg);
-?>
+

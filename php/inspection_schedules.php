@@ -119,4 +119,3 @@ if ($method === 'DELETE') {
 }
 
 errorResponse('Method not allowed', 405);
-?>

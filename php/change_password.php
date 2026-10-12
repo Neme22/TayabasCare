@@ -81,4 +81,3 @@ try {
     error_log('change_password.php error: ' . $e->getMessage());
     errorResponse('Failed to change password. Please try again.', 500);
 }
-?>

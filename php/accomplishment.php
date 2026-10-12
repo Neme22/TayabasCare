@@ -187,4 +187,3 @@ function deleteRecord() {
         errorResponse('Failed to delete record.', 500);
     }
 }
-?>

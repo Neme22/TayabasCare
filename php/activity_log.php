@@ -133,4 +133,3 @@ if ($isDirectAccess) {
         errorResponse('Database error. Please try again.', 500);
     }
 }
-?>

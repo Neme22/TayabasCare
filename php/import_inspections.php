@@ -119,11 +119,8 @@ foreach ($rows as $i => $row) {
     }
 }
 
-if (empty($failed)) {
-    $db->commit();
-} else {
-    $db->commit();
-}
+// Commit all successfully imported rows; failures are reported in the response
+$db->commit();
 
 try {
     require_once 'activity_log.php';
@@ -132,4 +129,4 @@ try {
 
 $msg = "$imported inspection report(s) imported.";
 jsonResponse(true, ['imported' => $imported, 'failed' => $failed], $msg);
-?>
+

@@ -36,11 +36,9 @@ function validateFileUpload() {
 
     if (!in_array($ext, $allowedExts)) {
         errorResponse('File type not allowed. Allowed: ' . implode(', ', $allowedExts), 400);
-        return false;
     }
     if ($_FILES['attachment']['size'] > $maxSize) {
         errorResponse('File too large. Maximum size is 10MB.', 400);
-        return false;
     }
 
     $finfo = finfo_open(FILEINFO_MIME_TYPE);
@@ -49,7 +47,6 @@ function validateFileUpload() {
     $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'];
     if (!in_array($mime, $allowedMimes)) {
         errorResponse('Invalid file type detected.', 400);
-        return false;
     }
 
     $uploadDir = __DIR__ . '/../uploads/burial/';
@@ -243,4 +240,3 @@ function deleteRecord() {
         errorResponse('An error occurred. Please try again.', 500);
     }
 }
-?>

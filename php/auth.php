@@ -170,4 +170,3 @@ function logout() {
     session_destroy();
     jsonResponse(true, null, 'Logged out successfully');
 }
-?>

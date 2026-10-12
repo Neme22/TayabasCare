@@ -211,4 +211,3 @@ function deleteInspector() {
         errorResponse('An error occurred. Please try again.', 500);
     }
 }
-?>

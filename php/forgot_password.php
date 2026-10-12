@@ -283,4 +283,3 @@ function resetPassword($input) {
         errorResponse('Server error. Please try again later.', 500);
     }
 }
-?>
