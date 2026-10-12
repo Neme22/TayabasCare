@@ -3945,7 +3945,7 @@ const NotifManager = {
             let json;
             try { json = JSON.parse(text); } catch (e) { json = { success: false }; }
             if (json.success) {
-                NotifManager.alerts = json.data || [];
+                NotifManager.alerts = (json.data || []).map(a => ({ ...a, serverId: a.id }));
             } else {
                 // Fall back to local generation
                 NotifManager.alerts = NotifManager.generateLocal();
