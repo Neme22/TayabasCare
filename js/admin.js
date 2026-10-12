@@ -785,7 +785,7 @@ const Dashboard = {
                                 { label: 'Not Complied', data: nonComplied, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)', tension: 0.4, fill: true, pointBackgroundColor: '#ef4444', pointRadius: 4 }
                             ]
                         },
-                        options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
                     });
                     return;
                 }
