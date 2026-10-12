@@ -904,6 +904,17 @@ a {
     margin-bottom: 12px;
 }
 
+.fp-alt-link {
+    margin-top: 14px;
+    text-align: center;
+    font-size: 12px;
+}
+
+.fp-alt-link a {
+    color: var(--blue-mid);
+    text-decoration: underline;
+}
+
 .fp-actions {
     display: flex;
     gap: 10px;

@@ -1633,7 +1633,10 @@
                         <label class="label">
                             <span class="label-text font-semibold">Email</span>
                         </label>
-                        <input type="email" id="profile-email" value="" class="input input-bordered input-success" readonly />
+                        <input type="email" id="profile-email" value="" class="input input-bordered input-success" placeholder="admin@office.gov.ph" />
+                        <label class="label">
+                            <span class="label-text-alt text-gray-500">Used for password-reset OTP. Prefer a shared office mailbox.</span>
+                        </label>
                     </div>
 
                     <div class="form-control">
@@ -1653,6 +1656,9 @@
 
                 <!-- Action Buttons -->
                 <div class="flex gap-3 mt-6">
+                    <button type="button" class="btn btn-success text-white" onclick="handleSaveProfileEmail()">
+                        <i class="bi bi-save mr-2"></i>Save Email
+                    </button>
                     <button type="button" class="btn btn-success text-white" onclick="closeProfileModal()">
                         <i class="bi bi-x-lg mr-2"></i>Close
                     </button>
@@ -1691,6 +1697,25 @@
                 </div>
 
                 <!-- Additional Settings Options (Placeholder) -->
+                <!-- Admin Recovery Codes -->
+                <div class="card bg-white border border-emerald-200 hover:border-emerald-400 transition-all cursor-pointer" onclick="openRecoveryCodesModal()">
+                    <div class="card-body p-4 flex flex-row items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="avatar placeholder">
+                                <div class="bg-amber-100 text-amber-700 rounded-full w-12">
+                                    <i class="bi bi-shield-lock text-xl"></i>
+                                </div>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-lg">Admin Recovery Codes</h4>
+                                <p class="text-sm text-gray-500">Break-glass codes held by the Sanitary Head Officer</p>
+                            </div>
+                        </div>
+                        <i class="bi bi-chevron-right text-emerald-600"></i>
+                    </div>
+                </div>
+
+                <!-- Notifications -->
                 <div class="card bg-white border border-gray-200">
                     <div class="card-body p-4 flex flex-row items-center justify-between">
                         <div class="flex items-center gap-3">
@@ -1730,6 +1755,61 @@
                 <button type="button" class="btn btn-ghost" onclick="closeSettingsModal()">
                     <i class="bi bi-x-lg mr-2"></i>Close
                 </button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
+
+    <!-- Admin Recovery Codes Modal -->
+    <dialog id="recovery-codes-modal" class="modal">
+        <div class="modal-box max-w-2xl">
+            <h3 class="font-bold text-2xl text-emerald-700 mb-2">
+                <i class="bi bi-shield-lock mr-2"></i>Admin Recovery Codes
+            </h3>
+            <p class="text-sm text-gray-500 mb-4">
+                One-time break-glass codes. Print and store the sealed envelope with the Sanitary Head Officer.
+            </p>
+
+            <!-- Idle / status -->
+            <div id="recovery-status-panel" class="space-y-4">
+                <div class="alert alert-warning text-sm">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <span id="recovery-status-text">Loading status…</span>
+                </div>
+                <div class="flex gap-3">
+                    <button type="button" class="btn btn-warning text-white" onclick="handleGenerateRecoveryCodes()">
+                        <i class="bi bi-arrow-repeat mr-2"></i>Generate New Codes
+                    </button>
+                    <button type="button" class="btn btn-ghost" onclick="closeRecoveryCodesModal()">
+                        <i class="bi bi-x-lg mr-2"></i>Close
+                    </button>
+                </div>
+            </div>
+
+            <!-- Display-once codes -->
+            <div id="recovery-codes-display" class="space-y-4 hidden">
+                <div class="alert alert-error text-sm">
+                    <i class="bi bi-shield-exclamation"></i>
+                    <span>Copy or print these codes now. They will not be shown again. Storing them digitally is unsafe.</span>
+                </div>
+                <div id="recovery-codes-list" class="grid grid-cols-2 gap-2 font-mono text-sm"></div>
+                <label class="label cursor-pointer justify-start gap-3">
+                    <input type="checkbox" id="recovery-stored-check" class="checkbox checkbox-success" onchange="toggleRecoveryClose()" />
+                    <span class="label-text">I stored these securely (sealed envelope with the Sanitary Head Officer)</span>
+                </label>
+                <div class="flex gap-3">
+                    <button type="button" class="btn btn-success text-white" onclick="printRecoveryCodes()">
+                        <i class="bi bi-printer mr-2"></i>Print
+                    </button>
+                    <button type="button" class="btn btn-info text-white" onclick="downloadRecoveryCodes()">
+                        <i class="bi bi-download mr-2"></i>Download .txt
+                    </button>
+                    <button type="button" id="recovery-close-btn" class="btn btn-ghost" disabled onclick="closeRecoveryCodesModal()">
+                        <i class="bi bi-x-lg mr-2"></i>Close
+                    </button>
+                </div>
             </div>
         </div>
         <form method="dialog" class="modal-backdrop">

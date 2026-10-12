@@ -701,6 +701,25 @@ dialog.modal[open] {
     body {
         background-color: #FFFFFF;
     }
+
+    /* Recovery codes print sheet (when printing the modal) */
+    #recovery-codes-modal .modal-box {
+        box-shadow: none;
+        max-width: 100%;
+    }
+
+    #recovery-codes-modal .btn,
+    #recovery-codes-modal .fp-close,
+    #recovery-codes-modal label {
+        display: none !important;
+    }
+
+    .recovery-print-code {
+        font-family: Consolas, monospace;
+        font-size: 16px;
+        padding: 6px 0;
+        border-bottom: 1px dotted #ccc;
+    }
 }
 
 /* Responsive Styles */

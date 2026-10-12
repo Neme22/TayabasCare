@@ -998,7 +998,7 @@ const Dashboard = {
         liveSanitaryRecords.slice(-2).reverse().forEach(record => {
             activities.push({
                 icon: 'fa-clipboard-check',
-                text: `Sanitary record added: ${record.businessName} - ${record.barangay}`,
+                text: `Sanitary record added: ${Utils.esc(record.businessName)} - ${Utils.esc(record.barangay)}`,
                 time: Utils.formatDate(record.date)
             });
         });
@@ -1012,7 +1012,7 @@ const Dashboard = {
         allBurialRecords.slice(0, 2).forEach(record => {
             activities.push({
                 icon: 'fa-cross',
-                text: `${record.type} record added: ${record.deceased}`,
+                text: `${Utils.esc(record.type)} record added: ${Utils.esc(record.deceased)}`,
                 time: Utils.formatDate(record.datetime || record.date)
             });
         });
@@ -2970,7 +2970,7 @@ async function initApp() {
     if (archiveSortFilter) archiveSortFilter.addEventListener('change', () => ArchiveManager.renderFiltered());
 
     // Build dynamic inspector column map and populate report headers
-    buildAdminInspectorColumnMap().then(() => {
+    buildAdminInspectorColumnMap().catch(() => {}).then(() => {
         populateInspectorColumns();
     });
 
@@ -2992,7 +2992,7 @@ async function initApp() {
                 });
             }
             localStorage.removeItem('accomplishmentRecords');
-            console.log(`Migrated ${localRecords.length} accomplishment record(s) to server.`);
+
         } catch (e) {
             console.warn('Accomplishment migration failed:', e);
         }
@@ -3503,20 +3503,16 @@ async function openProfileModal() {
             const fullnameEl = document.getElementById('profile-fullname');
             const usernameEl = document.getElementById('profile-username');
             const roleEl     = document.getElementById('profile-role');
+            const emailEl    = document.getElementById('profile-email');
             const avatarEl   = document.getElementById('profile-avatar');
             if (fullnameEl) fullnameEl.value = d.fullName || d.username || 'Admin';
             if (usernameEl) usernameEl.value = d.username || 'admin';
             if (roleEl)     roleEl.value = d.role === 'admin' ? 'System Administrator' : d.role;
+            if (emailEl)    emailEl.value = d.email || '';
             if (avatarEl) {
                 const name = encodeURIComponent(d.fullName || d.username || 'Admin');
                 avatarEl.src = `https://ui-avatars.com/api/?name=${name}&background=1e40af&color=fff&size=200`;
             }
-            // Try to get email from users table
-            try {
-                const inspResp = await fetch(`${API_BASE_URL}/inspector.php`);
-                const inspJson = await inspResp.json();
-                // For admin, we don't have email in inspector_accounts, so leave blank or use session
-            } catch (e2) {}
         }
     } catch (e) {
         // Show defaults if fetch fails
@@ -3529,6 +3525,30 @@ function closeProfileModal() {
     modal.close();
 }
 
+async function handleSaveProfileEmail() {
+    const emailEl = document.getElementById('profile-email');
+    const email = (emailEl?.value || '').trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        Utils.showToast('Please enter a valid email address.', 'error');
+        return;
+    }
+    try {
+        const resp = await fetch(`${API_BASE_URL}/admin_recovery.php`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'update_email', email })
+        });
+        const json = await resp.json();
+        if (json.success) {
+            Utils.showToast('Email updated successfully.', 'success');
+        } else {
+            Utils.showToast(json.message || 'Failed to update email.', 'error');
+        }
+    } catch (e) {
+        Utils.showToast('Failed to update email.', 'error');
+    }
+}
+
 // Settings Modal Functions
 function openSettingsModal() {
     const modal = document.getElementById('settings-modal');
@@ -3538,6 +3558,160 @@ function openSettingsModal() {
 function closeSettingsModal() {
     const modal = document.getElementById('settings-modal');
     modal.close();
+}
+
+// Admin Recovery Codes
+let _recoveryPlaintextCodes = [];
+let _recoveryExpiresAt = null;
+
+function openRecoveryCodesModal() {
+    closeSettingsModal();
+    const modal = document.getElementById('recovery-codes-modal');
+    const statusPanel = document.getElementById('recovery-status-panel');
+    const displayPanel = document.getElementById('recovery-codes-display');
+    const statusText = document.getElementById('recovery-status-text');
+    const storedCheck = document.getElementById('recovery-stored-check');
+    const closeBtn = document.getElementById('recovery-close-btn');
+
+    if (statusPanel) statusPanel.classList.remove('hidden');
+    if (displayPanel) displayPanel.classList.add('hidden');
+    if (storedCheck) storedCheck.checked = false;
+    if (closeBtn) closeBtn.disabled = true;
+    if (statusText) statusText.textContent = 'Loading status…';
+    _recoveryPlaintextCodes = [];
+    _recoveryExpiresAt = null;
+
+    fetch(`${API_BASE_URL}/admin_recovery.php?action=status`)
+        .then(r => r.json())
+        .then(json => {
+            if (json.success && json.data) {
+                const d = json.data;
+                if (!d.generated) {
+                    statusText.textContent = 'No recovery codes generated yet. Generate a batch and hand the sealed printout to the Sanitary Head Officer.';
+                } else {
+                    const exp = d.expires_at ? new Date(d.expires_at).toLocaleDateString() : '—';
+                    statusText.textContent = `${d.remaining} of ${d.total} unused · expires ${exp}. Generating new codes invalidates all previously printed codes.`;
+                }
+            } else {
+                statusText.textContent = json.message || 'Could not load recovery status.';
+            }
+        })
+        .catch(() => {
+            if (statusText) statusText.textContent = 'Could not load recovery status.';
+        });
+
+    modal.showModal();
+}
+
+function closeRecoveryCodesModal() {
+    // Clear plaintext from memory and DOM
+    _recoveryPlaintextCodes = [];
+    _recoveryExpiresAt = null;
+    const list = document.getElementById('recovery-codes-list');
+    if (list) list.innerHTML = '';
+    const modal = document.getElementById('recovery-codes-modal');
+    if (modal) modal.close();
+}
+
+async function handleGenerateRecoveryCodes() {
+    const confirmed = confirm('Generate new recovery codes? This invalidates all previously printed codes.');
+    if (!confirmed) return;
+
+    try {
+        const resp = await fetch(`${API_BASE_URL}/admin_recovery.php`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'generate', confirm: true })
+        });
+        const json = await resp.json();
+        if (!json.success || !json.data || !Array.isArray(json.data.codes)) {
+            Utils.showToast(json.message || 'Failed to generate recovery codes.', 'error');
+            return;
+        }
+
+        _recoveryPlaintextCodes = json.data.codes;
+        _recoveryExpiresAt = json.data.expires_at;
+
+        const statusPanel = document.getElementById('recovery-status-panel');
+        const displayPanel = document.getElementById('recovery-codes-display');
+        const list = document.getElementById('recovery-codes-list');
+        const storedCheck = document.getElementById('recovery-stored-check');
+        const closeBtn = document.getElementById('recovery-close-btn');
+
+        if (list) {
+            list.innerHTML = _recoveryPlaintextCodes
+                .map(c => `<div class="bg-gray-100 rounded px-3 py-2 text-center select-all">${Utils.esc(c)}</div>`)
+                .join('');
+        }
+        if (statusPanel) statusPanel.classList.add('hidden');
+        if (displayPanel) displayPanel.classList.remove('hidden');
+        if (storedCheck) storedCheck.checked = false;
+        if (closeBtn) closeBtn.disabled = true;
+    } catch (e) {
+        Utils.showToast('Failed to generate recovery codes.', 'error');
+    }
+}
+
+function toggleRecoveryClose() {
+    const storedCheck = document.getElementById('recovery-stored-check');
+    const closeBtn = document.getElementById('recovery-close-btn');
+    if (closeBtn) closeBtn.disabled = !storedCheck?.checked;
+}
+
+function _recoverySheetText() {
+    const exp = _recoveryExpiresAt ? new Date(_recoveryExpiresAt).toLocaleString() : 'N/A';
+    return [
+        'TayabasCare — Admin Recovery Codes',
+        'Generated: ' + new Date().toLocaleString(),
+        'Expires: ' + exp,
+        '',
+        ..._recoveryPlaintextCodes.map((c, i) => `${String(i + 1).padStart(2, '0')}. ${c}`),
+        '',
+        'WARNING: Store this sheet in a sealed envelope with the Sanitary Head Officer.',
+        'Do not photograph, copy, or email these codes. Each code is single-use.',
+        'A successful redeem burns the entire batch.'
+    ].join('\n');
+}
+
+function printRecoveryCodes() {
+    const exp = _recoveryExpiresAt ? new Date(_recoveryExpiresAt).toLocaleString() : 'N/A';
+    const codesHtml = _recoveryPlaintextCodes
+        .map((c, i) => `<div class="recovery-print-code">${i + 1}. ${Utils.esc(c)}</div>`)
+        .join('');
+    const w = window.open('', '_blank');
+    if (!w) {
+        Utils.showToast('Allow pop-ups to print recovery codes.', 'error');
+        return;
+    }
+    w.document.write(`<!DOCTYPE html><html><head><title>TayabasCare Recovery Codes</title>
+        <style>
+            body { font-family: 'Segoe UI', sans-serif; padding: 32px; color: #111; }
+            h1 { font-size: 18px; margin-bottom: 4px; }
+            .meta { font-size: 12px; color: #444; margin-bottom: 16px; }
+            .recovery-print-code { font-family: Consolas, monospace; font-size: 16px; padding: 6px 0; border-bottom: 1px dotted #ccc; }
+            .warn { margin-top: 20px; font-size: 12px; color: #b45309; border: 1px solid #f59e0b; padding: 12px; border-radius: 6px; }
+        </style></head><body>
+        <h1>TayabasCare — Admin Recovery Codes</h1>
+        <div class="meta">Generated: ${Utils.esc(new Date().toLocaleString())} · Expires: ${Utils.esc(exp)}</div>
+        ${codesHtml}
+        <div class="warn"><strong>WARNING:</strong> Store this sheet in a sealed envelope with the Sanitary Head Officer.
+        Do not photograph, copy, or email these codes. Each code is single-use. A successful redeem burns the entire batch.</div>
+        </body></html>`);
+    w.document.close();
+    w.focus();
+    w.print();
+}
+
+function downloadRecoveryCodes() {
+    const blob = new Blob([_recoverySheetText()], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tayabascare-recovery-codes-${new Date().toISOString().slice(0, 10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 // Change Password Modal Functions
@@ -3701,7 +3875,7 @@ const NotifManager = {
                     type:    'danger',
                     icon:    'bi-exclamation-octagon-fill',
                     title:   'Repeated Violations Detected',
-                    message: `"${r.businessName}" has ${count} unresolved sanitary violations requiring corrective action and re-inspection.`,
+                    message: `"${Utils.esc(r.businessName)}" has ${count} unresolved sanitary violations requiring corrective action and re-inspection.`,
                     time:    null,
                     read:    false
                 });
@@ -5317,7 +5491,7 @@ function adminRenderIHEstablishments(list) {
                 const lastInspected = e.lastDate ? e.lastDate.toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' }) : 'N/A';
                 return `<tr>
                     <td style="font-weight:600;">${Utils.esc(e.name)}</td>
-                    <td>${e.barangay}</td>
+                    <td>${Utils.esc(e.barangay)}</td>
                     <td style="text-align:center;">${e.count}</td>
                     <td style="text-align:center;">
                         <span style="background:${e.violations > 0 ? '#fee2e2' : '#d1fae5'};color:${e.violations > 0 ? '#dc2626' : '#059669'};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">${e.violations}</span>

@@ -221,35 +221,6 @@ try {
     $count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
     $steps[count($steps)-1] = ['status' => 'success', 'title' => 'Step 4: Inspector Accounts Table', 'message' => "Table created/verified. Current records: $count"];
 
-    // Step 5: Create sanitary_permits table
-    $steps[] = ['status' => 'processing', 'title' => 'Step 5: Creating sanitary_permits table...', 'message' => ''];
-    $sql_sanitary = "CREATE TABLE IF NOT EXISTS sanitary_permits (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        no VARCHAR(50),
-        date VARCHAR(100),
-        permit_no VARCHAR(50),
-        personnel_no VARCHAR(50),
-        business_name VARCHAR(255),
-        owner_first VARCHAR(100),
-        owner_middle VARCHAR(100),
-        owner_last VARCHAR(100),
-        personnel JSON,
-        sex VARCHAR(10),
-        result_xray BOOLEAN DEFAULT 0,
-        result_stool BOOLEAN DEFAULT 0,
-        barangay VARCHAR(100),
-        corporation_name VARCHAR(255),
-        remarks TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_business (business_name),
-        INDEX idx_barangay (barangay)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
-    $pdo->exec($sql_sanitary);
-    
-    $stmt = $pdo->query("SELECT COUNT(*) as count FROM sanitary_permits");
-    $count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
-    $steps[count($steps)-1] = ['status' => 'success', 'title' => 'Step 5: Sanitary Permits Table', 'message' => "Table created/verified. Current records: $count"];
-
     // Step 6: Create burial_records table
     $steps[] = ['status' => 'processing', 'title' => 'Step 6: Creating burial_records table...', 'message' => ''];
     $sql_burial = "CREATE TABLE IF NOT EXISTS burial_records (
@@ -730,8 +701,37 @@ try {
     $count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
     $steps[count($steps)-1] = ['status' => 'success', 'title' => 'Step 29: Accomplishment Records Table', 'message' => "Table created/verified. Current records: $count"];
 
+    // Step 30: Create admin_recovery_codes table
+    $steps[] = ['status' => 'processing', 'title' => 'Step 30: Creating admin recovery codes table...', 'message' => ''];
+    $pdo->exec("CREATE TABLE IF NOT EXISTS admin_recovery_codes (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        code_hash CHAR(64) NOT NULL,
+        used_at DATETIME NULL,
+        expires_at DATETIME NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_code_hash (code_hash),
+        INDEX idx_user_unused (user_id, used_at),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $stmt = $pdo->query("SELECT COUNT(*) as count FROM admin_recovery_codes");
+    $count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+    $steps[count($steps)-1] = ['status' => 'success', 'title' => 'Step 30: Admin Recovery Codes Table', 'message' => "Table created/verified. Current codes: $count"];
+
+    // Step 30b: Extend activity_log.action enum so recovery/OTP audit rows are queryable
+    $steps[] = ['status' => 'processing', 'title' => 'Step 30b: Extending activity log actions...', 'message' => ''];
+    try {
+        $pdo->exec("ALTER TABLE activity_log MODIFY action ENUM(
+            'CREATE','UPDATE','DELETE','LOGIN','LOGOUT','EXPORT','IMPORT','RESTORE',
+            'ADMIN_RECOVERY','ADMIN_RECOVERY_GENERATE','ADMIN_RECOVERY_EMAIL','OTP_VERIFY'
+        ) NOT NULL");
+        $steps[count($steps)-1] = ['status' => 'success', 'title' => 'Step 30b: Activity Log Actions', 'message' => 'action enum includes ADMIN_RECOVERY* and OTP_VERIFY'];
+    } catch (PDOException $e) {
+        $steps[count($steps)-1] = ['status' => 'error', 'title' => 'Step 30b: Activity Log Actions', 'message' => 'FAILED: ' . $e->getMessage()];
+    }
+
     // Final verification
-    $steps[] = ['status' => 'success', 'title' => '✅ Setup Complete!', 'message' => 'All 29 database tables created + missing columns added. Default admin: username=admin, password=admin123'];
+    $steps[] = ['status' => 'success', 'title' => '✅ Setup Complete!', 'message' => 'All 30 database tables created + missing columns added. Default admin: username=admin, password=admin123. Generate recovery codes and hand the printout to the Sanitary Head Officer.'];
 
 } catch(PDOException $e) {
     $steps[] = ['status' => 'error', 'title' => '❌ Error Occurred', 'message' => $e->getMessage()];
@@ -767,8 +767,9 @@ foreach ($steps as $step) {
             <strong>📌 Next Steps:</strong><br>
             1. Go to Admin Dashboard to add inspectors<br>
             2. Check PHPMyAdmin to verify tables were created<br>
-            3. Try adding an inspector and check the database<br>
-            4. If you still have issues, check browser console for errors (F12)
+            3. Generate Admin Recovery Codes (Settings → Admin Recovery Codes) and hand the sealed printout to the Sanitary Head Officer<br>
+            4. Try adding an inspector and check the database<br>
+            5. If you still have issues, check browser console for errors (F12)
         </div>
     </div>
 </body>

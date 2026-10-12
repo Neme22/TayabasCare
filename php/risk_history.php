@@ -17,23 +17,6 @@ if (csrfNeeded()) {
 }
 
 try {
-    // Ensure table exists
-    $db->exec("CREATE TABLE IF NOT EXISTS risk_scores (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        establishment VARCHAR(255) NOT NULL,
-        barangay VARCHAR(100),
-        total_score INT NOT NULL,
-        risk_level VARCHAR(20) NOT NULL,
-        factor_violations INT DEFAULT 0,
-        factor_time INT DEFAULT 0,
-        factor_category INT DEFAULT 0,
-        factor_compliance INT DEFAULT 0,
-        factor_followup INT DEFAULT 0,
-        recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_establishment (establishment),
-        INDEX idx_recorded (recorded_at)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
     $action = $_GET['action'] ?? 'latest';
 
     if ($action === 'latest') {

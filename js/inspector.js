@@ -1510,7 +1510,7 @@ async function migrateAccomplishmentToServer() {
             });
         }
         localStorage.removeItem('accomplishmentRecords');
-        console.log(`Migrated ${localRecords.length} accomplishment record(s) to server.`);
+
     } catch (e) {
         console.warn('Accomplishment migration failed:', e);
     }
@@ -4383,7 +4383,7 @@ async function runDeathCertOCR() {
             }
         });
 
-        console.log('=== RAW TESSERACT OUTPUT ===\n' + text + '\n============================');
+
 
         const raw   = text.replace(/[ \t]+/g, ' ');
         const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
@@ -4582,7 +4582,7 @@ async function runDeathCertOCR() {
         if (deathPlace) document.getElementById('burial-death-place').value = deathPlace;
         if (informant)  document.getElementById('burial-informant').value   = informant;
 
-        console.log('Extracted → Deceased:', deceased, '| Date:', deathDate, '| Place:', deathPlace, '| Informant:', informant);
+
 
         statusDiv.style.display = 'none';
 

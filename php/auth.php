@@ -113,6 +113,7 @@ function login() {
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['username'] = $user['username'];
             $_SESSION['role'] = $user['role'];
+            $_SESSION['email'] = $user['email'] ?? '';
 
             $fullName = $user['username'];
             if ($user['role'] === 'inspector') {
@@ -130,6 +131,7 @@ function login() {
             jsonResponse(true, [
                 'user_id'  => $user['id'],
                 'username' => $user['username'],
+                'email'    => $user['email'] ?? '',
                 'role'     => $user['role'],
                 'fullName' => $fullName,
                 'redirect' => $user['role'] === 'admin' ? 'admin.html' : 'inspector.html',
@@ -153,6 +155,7 @@ function checkSession() {
         jsonResponse(true, [
             'user_id'  => $_SESSION['user_id'],
             'username' => $_SESSION['username'],
+            'email'    => $_SESSION['email'] ?? '',
             'role'     => $_SESSION['role'],
             'csrf_token' => csrfToken()
         ], 'Session active');

@@ -102,22 +102,6 @@ try {
     // CSRF required for this GET-side write — skip logging if token is absent
     if (validateCsrf()) {
     try {
-        $db->exec("CREATE TABLE IF NOT EXISTS risk_scores (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            establishment VARCHAR(255) NOT NULL,
-            barangay VARCHAR(100),
-            total_score INT NOT NULL,
-            risk_level VARCHAR(20) NOT NULL,
-            factor_violations INT DEFAULT 0,
-            factor_time INT DEFAULT 0,
-            factor_category INT DEFAULT 0,
-            factor_compliance INT DEFAULT 0,
-            factor_followup INT DEFAULT 0,
-            recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_establishment (establishment),
-            INDEX idx_recorded (recorded_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
         // Only log if last log was > 5 minutes ago (better trend granularity)
         $lastLog = $db->query("SELECT MAX(recorded_at) as last FROM risk_scores")->fetch();
         $shouldLog = !$lastLog['last'] || (time() - strtotime($lastLog['last'])) > 300;

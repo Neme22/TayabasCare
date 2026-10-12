@@ -201,6 +201,15 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // Admin Recovery Code link
+    const adminRecoveryLink = document.getElementById("adminRecoveryLink");
+    if (adminRecoveryLink) {
+        adminRecoveryLink.addEventListener("click", (e) => {
+            e.preventDefault();
+            showAdminRecoveryForm();
+        });
+    }
+
 });
 
 
@@ -323,6 +332,7 @@ function showForgotStep1() {
                 <button onclick="handleFPStep1()" class="btn-fp-primary">Send OTP</button>
                 <button onclick="removeFPModal()" class="btn-fp-secondary">Cancel</button>
             </div>
+            <p class="fp-alt-link"><a href="#" onclick="showAdminRecoveryForm(); return false;">No email access? Use an Admin Recovery Code</a></p>
         </div>
     `);
 }
@@ -528,4 +538,107 @@ function showSuccessModal() {
             <button onclick="removeFPModal()" class="btn-fp-primary">Back to Login</button>
         </div>
     `);
+}
+
+// ============================================
+// ADMIN RECOVERY CODE (break-glass)
+// ============================================
+function showAdminRecoveryForm() {
+    injectModal(`
+        <h2>Admin Recovery Code</h2>
+        <p>Enter the admin username, one recovery code from the sealed envelope, and a new password.</p>
+
+        <div class="fp-form">
+            <label>Admin Username</label>
+            <input type="text" id="ar_username" placeholder="Admin username" autocomplete="username">
+
+            <label>Recovery Code</label>
+            <input type="text" id="ar_code" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="one-time-code" style="font-family:monospace;letter-spacing:1px;">
+
+            <label>New Password</label>
+            <input type="password" id="ar_new_password" placeholder="At least 8 characters" autocomplete="new-password">
+
+            <label>Confirm Password</label>
+            <input type="password" id="ar_confirm_password" placeholder="Re-enter new password" autocomplete="new-password">
+
+            <p id="ar_error" class="fp-error"></p>
+
+            <div class="fp-actions">
+                <button onclick="handleAdminRecovery()" class="btn-fp-primary">Reset Admin Password</button>
+                <button onclick="removeFPModal()" class="btn-fp-secondary">Cancel</button>
+            </div>
+        </div>
+    `);
+}
+
+async function handleAdminRecovery() {
+    const username = (document.getElementById('ar_username')?.value || '').trim();
+    const code = (document.getElementById('ar_code')?.value || '').trim();
+    const newPassword = document.getElementById('ar_new_password')?.value || '';
+    const confirmPassword = document.getElementById('ar_confirm_password')?.value || '';
+    const errEl = document.getElementById('ar_error');
+    const btn = document.querySelector('.btn-fp-primary');
+
+    if (errEl) errEl.textContent = '';
+
+    if (!username || !code) {
+        if (errEl) errEl.textContent = 'Username and recovery code are required.';
+        return;
+    }
+    if (newPassword !== confirmPassword) {
+        if (errEl) errEl.textContent = 'Passwords do not match.';
+        return;
+    }
+    if (newPassword.length < 8) {
+        if (errEl) errEl.textContent = 'Password must be at least 8 characters long.';
+        return;
+    }
+    if (newPassword.length > 72) {
+        if (errEl) errEl.textContent = 'Password must be 72 characters or fewer.';
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Resetting…';
+    }
+
+    try {
+        const response = await fetch('php/admin_recovery_redeem.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                action: 'redeem',
+                username,
+                code,
+                new_password: newPassword,
+                confirm_password: confirmPassword
+            })
+        });
+        const data = await response.json();
+
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Reset Admin Password';
+        }
+
+        if (data.success) {
+            injectModal(`
+                <div class="fp-success">
+                    <h2>Password Reset</h2>
+                    <p>Admin password has been reset.<br>Log in as administrator with the new password.</p>
+                    <button onclick="removeFPModal()" class="btn-fp-primary">Back to Login</button>
+                </div>
+            `);
+        } else {
+            if (errEl) errEl.textContent = data.message || 'Invalid recovery code.';
+        }
+    } catch (err) {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Reset Admin Password';
+        }
+        if (errEl) errEl.textContent = 'Connection error. Please try again.';
+    }
 }
