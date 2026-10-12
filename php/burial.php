@@ -1,12 +1,17 @@
 <?php
 require_once 'auth_check.php';
 require_once 'activity_log.php';
+require_once 'csrf.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 
 // Write operations require admin role
 if (in_array($method, ['POST', 'PUT', 'DELETE'])) {
     requireRole('admin');
+}
+
+if (csrfNeeded()) {
+    requireCsrf();
 }
 
 switch($method) {
@@ -51,7 +56,9 @@ function validateFileUpload() {
     if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
     $safeName = uniqid('burial_', true) . '.' . $ext;
     if (move_uploaded_file($_FILES['attachment']['tmp_name'], $uploadDir . $safeName)) {
-        return [$_FILES['attachment']['name'], 'uploads/burial/' . $safeName];
+        // Sanitize original filename before storing
+        $originalName = preg_replace('/[\x00-\x1f\x7f<>"\'`]/', '', $_FILES['attachment']['name']);
+        return [$originalName, 'uploads/burial/' . $safeName];
     }
     return [null, null];
 }

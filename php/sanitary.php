@@ -1,12 +1,17 @@
 <?php
 require_once 'auth_check.php';
 require_once 'activity_log.php';
+require_once 'csrf.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 
 // Write operations require admin role
 if (in_array($method, ['POST', 'PUT', 'DELETE'])) {
     requireRole('admin');
+}
+
+if (csrfNeeded()) {
+    requireCsrf();
 }
 
 switch($method) {

@@ -38,13 +38,6 @@ foreach ($schedules as $s) {
         $mail->Password   = MAIL_PASSWORD;
         $mail->SMTPSecure = 'tls';
         $mail->Port       = MAIL_PORT;
-        $mail->SMTPOptions = [
-            'ssl' => [
-                'verify_peer'       => false,
-                'verify_peer_name'  => false,
-                'allow_self_signed' => true
-            ]
-        ];
         $mail->setFrom(MAIL_FROM, MAIL_FROMNAME);
         $mail->addAddress($s['email'], $s['inspector_name']);
         $mail->Subject = 'TayabasCare – Inspection Reminder for ' . date('F j, Y', strtotime($s['schedDate']));

@@ -1,5 +1,6 @@
 <?php
 require_once 'auth_check.php';
+require_once 'csrf.php';
 require_once 'activity_log.php';
 
 // ============================================================
@@ -12,11 +13,16 @@ $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method === 'OPTIONS') { http_response_code(200); exit(); }
 
+// CSRF validation for state-changing methods
+if (csrfNeeded()) {
+    requireCsrf();
+}
+
 switch ($method) {
     case 'GET':    getRecords();   break;
-    case 'POST':   createRecord(); break;
-    case 'PUT':    updateRecord(); break;
-    case 'DELETE': deleteRecord(); break;
+    case 'POST':   requireRole(['admin', 'inspector']); createRecord(); break;
+    case 'PUT':    requireRole(['admin', 'inspector']); updateRecord(); break;
+    case 'DELETE': requireRole('admin'); deleteRecord(); break;
     default: errorResponse('Method not allowed', 405);
 }
 
@@ -26,6 +32,11 @@ function getRecords() {
     $inspector = $_GET['inspector'] ?? '';
     $month     = $_GET['month'] ?? '';
     $year      = $_GET['year'] ?? '';
+
+    // Scope: inspectors can only see their own records
+    if (($_SESSION['role'] ?? '') === 'inspector') {
+        $inspector = $_SESSION['username'] ?? '';
+    }
 
     try {
         $where  = [];

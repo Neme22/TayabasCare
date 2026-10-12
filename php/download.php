@@ -2,14 +2,16 @@
 require_once 'config.php';
 if (!isset($_SESSION['user_id'])) {
     http_response_code(403);
-    exit('Not authorized.');
+    echo json_encode(['success' => false, 'data' => null, 'message' => 'Not authorized.']);
+    exit();
 }
 $path = $_GET['path'] ?? '';
 $realBase = realpath(__DIR__ . '/../uploads/');
 $realFile = realpath(__DIR__ . '/../' . $path);
-if (!$realFile || strpos($realFile, $realBase) !== 0 || !is_file($realFile)) {
+if (!$realFile || !str_starts_with($realFile, $realBase . DIRECTORY_SEPARATOR) || !is_file($realFile)) {
     http_response_code(404);
-    exit('File not found.');
+    echo json_encode(['success' => false, 'data' => null, 'message' => 'File not found.']);
+    exit();
 }
 $finfo = finfo_open(FILEINFO_MIME_TYPE);
 $mime = finfo_file($finfo, $realFile);

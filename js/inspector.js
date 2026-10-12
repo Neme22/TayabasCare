@@ -1,6 +1,33 @@
 // API Configuration — relative path works on localhost and any live server
 const API_BASE_URL = 'php';
 
+// CSRF token management — auto-attach to all mutating requests
+let _csrfToken = null;
+async function _fetchCsrfToken() {
+    if (_csrfToken) return _csrfToken;
+    try {
+        const r = await fetch(`${API_BASE_URL}/csrf_token.php`, { credentials: 'include' });
+        const j = await r.json();
+        _csrfToken = j?.data?.token || j?.csrf_token || null;
+        return _csrfToken;
+    } catch (e) { return null; }
+}
+// Initialize token on load
+_fetchCsrfToken();
+
+// Monkey-patch fetch to auto-attach CSRF header on POST/PUT/DELETE/PATCH
+const _origFetch = window.fetch.bind(window);
+window.fetch = async function(url, opts = {}) {
+    const method = (opts.method || 'GET').toUpperCase();
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+        const token = _csrfToken || await _fetchCsrfToken();
+        if (token) {
+            opts.headers = { ...opts.headers, 'X-CSRF-Token': token };
+        }
+    }
+    return _origFetch(url, opts);
+};
+
 // --- Role guard: inspector only ---
 (async function() {
     try {
@@ -905,7 +932,7 @@ function autoDetectBarangay(typedName) {
     suggestionsBox.innerHTML = `
         <div style="position:absolute;width:100%;background:#fff;border:1px solid #d1fae5;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.1);margin-top:4px;max-height:200px;overflow-y:auto;z-index:999;">
             ${uniqueMatches.map(r => `
-                <div onclick="selectEstablishment('${r.businessName.replace(/'/g,"\\'")}', '${(r.barangay||'').replace(/'/g,"\\'")}', '${(r.permitNo||'').split('-')[2]||''}' )"
+                <div onclick="selectEstablishment('${esc(r.businessName).replace(/'/g, "\\'")}', '${esc(r.barangay||'').replace(/'/g, "\\'")}', '${esc((r.permitNo||'').split('-')[2]||'').replace(/'/g, "\\'")}' )"
                      style="padding:10px 14px;cursor:pointer;font-size:14px;border-bottom:1px solid #f0fdf4;"
                      onmouseover="this.style.background='#f0fdf4'" onmouseout="this.style.background='#fff'">
                     <span style="font-weight:600;color:#065f46;">${esc(r.businessName)}</span>
@@ -2876,7 +2903,7 @@ function printSanitary(id) {
 </head>
 <body>
 <div class="permit-wrapper">
-  <img class="bg" src="${window.location.origin}/TayabasCare/images/Sanitary_Permit.jpg" />
+  <img class="bg" src="${window.location.origin}${window.location.pathname.replace(/\/[^/]*$/, '')}/images/Sanitary_Permit.jpg" />
 
   <div class="f-owner">${esc(ownerName)}</div>
   <div class="f-business">${esc(record.businessName) || 'N/A'}</div>
@@ -4580,9 +4607,13 @@ async function runDeathCertOCR() {
 
 function esc(str) {
     if (str == null) return '';
-    const d = document.createElement('div');
-    d.textContent = String(str);
-    return d.innerHTML;
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/`/g, '&#96;');
 }
 
 function formatDateTime(dateTimeString) {
@@ -5224,8 +5255,11 @@ const InspNotifManager = {
         const fullName = localStorage.getItem('inspectorFullName') || '';
         const username = localStorage.getItem('username') || '';
         const key = fullName ? 'inspectorNotifs_' + fullName : 'inspectorNotifs_' + username;
-        return JSON.parse(localStorage.getItem(key) || '[]');
-    },
+        try {
+            return JSON.parse(localStorage.getItem(key) || '[]');
+        } catch (e) {
+            return [];
+        }    },
 
     // --- Generate automatic system alerts for this inspector ---
     generateSystemAlerts: () => {
@@ -5258,7 +5292,7 @@ const InspNotifManager = {
                     icon: 'bi-alarm-fill',
                     iconClr: '#ef4444',
                     bg: '#fef2f2',
-                    message: `You have an inspection scheduled for today${s.establishment ? ' at ' + s.establishment : ''}. ${s.notes ? 'Note: ' + s.notes : 'Please prepare accordingly.'}`,
+                    message: `You have an inspection scheduled for today${s.establishment ? ' at ' + esc(s.establishment) : ''}. ${s.notes ? 'Note: ' + esc(s.notes) : 'Please prepare accordingly.'}`,
                     date: new Date().toISOString(),
                     schedDate: s.schedDate
                 });
@@ -5269,7 +5303,7 @@ const InspNotifManager = {
                     icon: 'bi-calendar-event-fill',
                     iconClr: '#f59e0b',
                     bg: '#fffbeb',
-                    message: `Reminder: You have an inspection scheduled for tomorrow${s.establishment ? ' at ' + s.establishment : ''}. ${s.notes ? 'Note: ' + s.notes : 'Please prepare accordingly.'}`,
+                    message: `Reminder: You have an inspection scheduled for tomorrow${s.establishment ? ' at ' + esc(s.establishment) : ''}. ${s.notes ? 'Note: ' + esc(s.notes) : 'Please prepare accordingly.'}`,
                     date: new Date().toISOString(),
                     schedDate: s.schedDate
                 });
@@ -5351,7 +5385,11 @@ const InspNotifManager = {
     },
 
     getReadIds: () => {
-        return JSON.parse(localStorage.getItem('inspNotifReadIds') || '[]');
+        try {
+            return JSON.parse(localStorage.getItem('inspNotifReadIds') || '[]');
+        } catch (e) {
+            return [];
+        }
     },
 
     markRead: (id) => {
@@ -5603,7 +5641,7 @@ function renderIHEstablishments(list) {
         const hasViolation = e.violations > 0;
         return `
         <div class="card bg-base-100 border border-base-200 hover:shadow-lg hover:border-emerald-400 cursor-pointer transition-all"
-             onclick="openIHDetail('${e.name.replace(/'/g, "\\'")}')">
+             onclick="openIHDetail('${esc(e.name).replace(/'/g, "\\'")}')">
             <div class="card-body p-4">
                 <div class="flex items-start justify-between">
                     <h4 class="font-bold text-base text-gray-800 leading-tight">${esc(e.name)}</h4>
@@ -5765,7 +5803,12 @@ async function autoScheduleToAdminCalendar(inspectorName, deadlineDate, establis
 
         // In-app bell notification
         const key  = 'inspectorNotifs_' + inspectorName.trim();
-        const list = JSON.parse(localStorage.getItem(key) || '[]');
+        let list = [];
+        try {
+            list = JSON.parse(localStorage.getItem(key) || '[]');
+        } catch (e) {
+            list = [];
+        }
         const dateFormatted = new Date(deadlineDate).toLocaleDateString('en-PH', {
             year: 'numeric', month: 'short', day: 'numeric'
         });

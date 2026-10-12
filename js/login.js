@@ -3,6 +3,32 @@ document.addEventListener("DOMContentLoaded", () => {
     // Load real statistics for landing page
     // ============================================
     const API_ORIGIN = 'php';
+
+    // CSRF token management
+    let _csrfToken = null;
+    async function _fetchCsrfToken() {
+        if (_csrfToken) return _csrfToken;
+        try {
+            const r = await fetch('php/csrf_token.php', { credentials: 'include' });
+            const j = await r.json();
+            _csrfToken = j?.data?.token || j?.csrf_token || null;
+            return _csrfToken;
+        } catch (e) { return null; }
+    }
+    _fetchCsrfToken();
+
+    // Monkey-patch fetch to auto-attach CSRF header on mutating requests
+    const _origFetch = window.fetch.bind(window);
+    window.fetch = async function(url, opts = {}) {
+        const method = (opts.method || 'GET').toUpperCase();
+        if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+            const token = _csrfToken || await _fetchCsrfToken();
+            if (token) {
+                opts.headers = { ...opts.headers, 'X-CSRF-Token': token };
+            }
+        }
+        return _origFetch(url, opts);
+    };
     fetch(`${API_ORIGIN}/sanitary.php`)
         .then(r => r.json())
         .then(result => {
@@ -200,7 +226,7 @@ async function login() {
     }
 
     try {
-        const response = await fetch(`${window.location.origin}/TayabasCare/php/auth.php`, {
+        const response = await fetch('php/auth.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
@@ -221,6 +247,10 @@ async function login() {
             localStorage.setItem("username", result.data.username);
             localStorage.setItem("user_id", result.data.user_id);
             localStorage.setItem("inspectorFullName", result.data.fullName || result.data.username);
+            // Update CSRF token from login response (session was regenerated)
+            if (result.data.csrf_token) {
+                _csrfToken = result.data.csrf_token;
+            }
 
             if (result.data.role === 'admin') {
                 localStorage.setItem("adminLoggedIn", "true");
@@ -228,7 +258,9 @@ async function login() {
                 localStorage.setItem("inspectorLoggedIn", "true");
             }
 
-            window.location.href = result.data.redirect;
+            // Map role to local page — never use server-supplied redirect URLs
+            const role = result.data.role;
+            window.location.href = role === 'admin' ? 'admin.html' : 'inspector.html';
         } else {
             alert(result.message || "Invalid username or password");
         }
@@ -312,7 +344,7 @@ async function handleFPStep1() {
     btn.disabled = true;
 
     try {
-        const res = await fetch(`${window.location.origin}/TayabasCare/php/forgot_password.php`, {
+        const res = await fetch('php/forgot_password.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
@@ -382,7 +414,7 @@ async function handleFPStep2() {
     btn.disabled = true;
 
     try {
-        const res = await fetch(`${window.location.origin}/TayabasCare/php/forgot_password.php`, {
+        const res = await fetch('php/forgot_password.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
@@ -459,7 +491,7 @@ async function handleFPStep3() {
     btn.disabled = true;
 
     try {
-        const res = await fetch(`${window.location.origin}/TayabasCare/php/forgot_password.php`, {
+        const res = await fetch('php/forgot_password.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',

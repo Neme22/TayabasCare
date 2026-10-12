@@ -1,0 +1,12 @@
+# Deny access to secrets and sensitive files
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+<FilesMatch "\.(env|example|log|bak|old|swp)$">
+    Require all denied
+</FilesMatch>
+
+# Deny direct access to .env in php/
+<Files ".env">
+    Require all denied
+</Files>

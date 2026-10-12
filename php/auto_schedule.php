@@ -2,6 +2,7 @@
 require_once 'auth_check.php';
 requireRole('admin');
 require_once 'risk_utils.php';
+require_once 'csrf.php';
 // matchEstablishment() is now defined in risk_utils.php
 
 // ============================================================
@@ -13,6 +14,10 @@ require_once 'risk_utils.php';
 $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method === 'OPTIONS') { http_response_code(200); exit(); }
+
+if (csrfNeeded()) {
+    requireCsrf();
+}
 
 // ---- GET: Preview auto-scheduling recommendations ----
 if ($method === 'GET') {

@@ -1,8 +1,13 @@
 <?php
 require_once 'auth_check.php';
+require_once 'csrf.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     errorResponse('Invalid request method', 405);
+}
+
+if (csrfNeeded()) {
+    requireCsrf();
 }
 
 $input = json_decode(file_get_contents('php://input'), true);
@@ -15,8 +20,12 @@ if (empty($currentPassword) || empty($newPassword)) {
     errorResponse('Current password and new password are required', 400);
 }
 
-if (strlen($newPassword) < 6) {
-    errorResponse('Password must be at least 6 characters long', 400);
+if (strlen($newPassword) < 8) {
+    errorResponse('Password must be at least 8 characters long', 400);
+}
+
+if (strlen($newPassword) > 72) {
+    errorResponse('Password must be 72 characters or fewer', 400);
 }
 
 try {
@@ -39,8 +48,15 @@ try {
         errorResponse('User not found', 404);
     }
     
-    // Verify current password
+    // Verify current password (support legacy MD5 and plaintext for migration)
     $isPasswordCorrect = password_verify($currentPassword, $user['password']);
+    if (!$isPasswordCorrect && strlen($user['password']) === 32 && ctype_xdigit($user['password'])) {
+        // Legacy MD5 hash
+        $isPasswordCorrect = (md5($currentPassword) === $user['password']);
+    } elseif (!$isPasswordCorrect && !password_get_info($user['password'])['algo']) {
+        // Legacy plaintext (no hash algo detected)
+        $isPasswordCorrect = hash_equals($user['password'], $currentPassword);
+    }
 
     if (!$isPasswordCorrect) {
         errorResponse('Current password is incorrect', 401);

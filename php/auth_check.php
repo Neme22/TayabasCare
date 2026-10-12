@@ -1,9 +1,18 @@
 <?php
 require_once 'config.php';
-// session_start() is now called in config.php before headers
-if (!isset($_SESSION['user_id'])) {
-    http_response_code(401);
-    die(json_encode(['success' => false, 'message' => 'Unauthorized. Please log in.']));
+
+// Allow CLI (cron) requests to bypass session auth
+if (php_sapi_name() === 'cli') {
+    // CLI is trusted — set a default admin session context for cron scripts
+    $_SESSION['user_id'] = $_SESSION['user_id'] ?? -1;
+    $_SESSION['username'] = $_SESSION['username'] ?? 'cron';
+    $_SESSION['role'] = $_SESSION['role'] ?? 'admin';
+} else {
+    // Web requests must have a valid session
+    if (!isset($_SESSION['user_id'])) {
+        http_response_code(401);
+        die(json_encode(['success' => false, 'message' => 'Unauthorized. Please log in.']));
+    }
 }
 
 /**

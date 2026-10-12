@@ -1,5 +1,6 @@
 <?php
 require_once 'config.php';
+require_once 'csrf.php';
 require_once 'activity_log.php';
 // session_start() is now called in config.php before headers
 
@@ -7,12 +8,14 @@ $method = $_SERVER['REQUEST_METHOD'];
 
 switch($method) {
     case 'POST':
+        requireCsrf();
         login();
         break;
     case 'GET':
         checkSession();
         break;
     case 'DELETE':
+        requireCsrf();
         logout();
         break;
     default:
@@ -105,6 +108,8 @@ function login() {
         }
 
         if ($passwordMatched && $user) {
+            // Prevent session fixation
+            session_regenerate_id(true);
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['username'] = $user['username'];
             $_SESSION['role'] = $user['role'];
@@ -119,12 +124,16 @@ function login() {
 
             logActivity($db, 'LOGIN', 'auth', $user['id'], $user['username'], "Role: {$user['role']}");
 
+            // Include CSRF token for the frontend to use in subsequent requests
+            require_once __DIR__ . '/csrf.php';
+
             jsonResponse(true, [
                 'user_id'  => $user['id'],
                 'username' => $user['username'],
                 'role'     => $user['role'],
                 'fullName' => $fullName,
-                'redirect' => $user['role'] === 'admin' ? 'admin.html' : 'inspector.html'
+                'redirect' => $user['role'] === 'admin' ? 'admin.html' : 'inspector.html',
+                'csrf_token' => csrfToken()
             ], 'Login successful');
         } else {
             // Log failed attempt for rate limiting
@@ -139,11 +148,13 @@ function login() {
 }
 
 function checkSession() {
+    require_once __DIR__ . '/csrf.php';
     if (isset($_SESSION['user_id'])) {
         jsonResponse(true, [
             'user_id'  => $_SESSION['user_id'],
             'username' => $_SESSION['username'],
-            'role'     => $_SESSION['role']
+            'role'     => $_SESSION['role'],
+            'csrf_token' => csrfToken()
         ], 'Session active');
     } else {
         errorResponse('No active session', 401);

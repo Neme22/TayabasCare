@@ -22,15 +22,29 @@ function calculateRiskScore($businessName, $inspections, $sanitaryRecord) {
 
     $today = new DateTime();
 
+    // Deduplicate: keep only the latest version per report_date
+    // (inspection_history rows are revisions of the same real-world inspection)
+    $byDate = [];
+    foreach ($inspections as $insp) {
+        $d = $insp['report_date'] ?? $insp['date'] ?? null;
+        $key = $d ?: 'no_date_' . ($insp['id'] ?? uniqid());
+        if (!isset($byDate[$key]) || ($insp['id'] ?? 0) > ($byDate[$key]['id'] ?? 0)) {
+            $byDate[$key] = $insp;
+        }
+    }
+    $inspections = array_values($byDate);
+
     // ---- FACTOR 1: Number of Previous Violations (0-25 pts) ----
     $violationKeywords = ['violation', 'failed', 'non-compliant', 'dirty', 'unsanitary',
                           'pest', 'contaminated', 'sewage', 'unsafe', 'expired', 'no permit',
-                          'improper', 'garbage', 'waste', 'polluted', 'infest'];
+                          'improper', 'garbage', 'waste', 'polluted', 'infest',
+                          'marumi', 'baho', 'basura', 'dumi', 'ipis', 'daga'];
     $violationPattern = '/\b(' . implode('|', array_map('preg_quote', $violationKeywords)) . ')\b/i';
 
     $violationCount = 0;
     foreach ($inspections as $insp) {
-        $complied   = isset($insp['complied']) ? (bool)$insp['complied'] : true;
+        $complied   = array_key_exists('complied', $insp) && $insp['complied'] !== null
+            ? (bool)$insp['complied'] : false;
         $remarks    = strtolower($insp['recommendation'] ?? '') . ' ' . strtolower($insp['status'] ?? '');
         $hasKeyword = preg_match($violationPattern, $remarks) === 1;
         if (!$complied || $hasKeyword) $violationCount++;
@@ -58,7 +72,13 @@ function calculateRiskScore($businessName, $inspections, $sanitaryRecord) {
     }
 
     if ($lastInspDate) {
-        $daysSince = (int)$today->diff($lastInspDate)->days;
+        $diff = $today->diff($lastInspDate);
+        // Future-dated reports should not score as "fresh" — treat as long overdue
+        $daysSince = $diff->invert ? (int)$diff->days : (int)$diff->days;
+        if ($diff->invert) {
+            // Date is in the future — data error, treat as never inspected (max risk)
+            $daysSince = 9999;
+        }
         if      ($daysSince <= 30)  $factor2 = 0;
         else if ($daysSince <= 60)  $factor2 = 5;
         else if ($daysSince <= 90)  $factor2 = 10;
@@ -128,7 +148,9 @@ function calculateRiskScore($businessName, $inspections, $sanitaryRecord) {
     $compliedCount = 0;
     if ($totalInsp > 0) {
         foreach ($inspections as $insp) {
-            if (isset($insp['complied']) ? (bool)$insp['complied'] : true) $compliedCount++;
+            $complied = array_key_exists('complied', $insp) && $insp['complied'] !== null
+                ? (bool)$insp['complied'] : false;
+            if ($complied) $compliedCount++;
         }
         $complianceRate = $compliedCount / $totalInsp;
         $factor4 = (int)round((1 - $complianceRate) * 20);

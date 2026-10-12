@@ -1,5 +1,6 @@
 <?php
 require_once 'auth_check.php';
+require_once 'csrf.php';
 
 // ============================================================
 // Risk Score History Endpoint
@@ -9,6 +10,10 @@ require_once 'auth_check.php';
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit(); }
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     errorResponse('Method not allowed. Use GET.', 405);
+}
+
+if (csrfNeeded()) {
+    requireCsrf();
 }
 
 try {

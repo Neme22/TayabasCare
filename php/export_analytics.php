@@ -15,8 +15,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 try {
     $period = $_GET['period'] ?? 'monthly';
     $year   = intval($_GET['year'] ?? date('Y'));
-    $month  = intval($_GET['month'] ?? date('n'));
-    $quarter = intval($_GET['quarter'] ?? ceil(date('n') / 3));
+    $month  = max(1, min(12, intval($_GET['month'] ?? date('n'))));
+    $quarter = max(1, min(4, intval($_GET['quarter'] ?? ceil(date('n') / 3))));
 
     // Date range based on period
     if ($period === 'monthly') {

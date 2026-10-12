@@ -18,13 +18,6 @@ function sendInspectionEmail($toEmail, $toName, $schedDate, $notes = '') {
         $mail->Password   = MAIL_PASSWORD;
         $mail->SMTPSecure = 'tls';
         $mail->Port       = MAIL_PORT;
-        $mail->SMTPOptions = [
-            'ssl' => [
-                'verify_peer'       => false,
-                'verify_peer_name'  => false,
-                'allow_self_signed' => true
-            ]
-        ];
 
         $mail->setFrom(MAIL_FROM, MAIL_FROMNAME);
         $mail->addAddress($toEmail, $toName);
@@ -117,13 +110,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $mail->Password   = MAIL_PASSWORD;
         $mail->SMTPSecure = 'tls';
         $mail->Port       = MAIL_PORT;
-        $mail->SMTPOptions = [
-            'ssl' => [
-                'verify_peer'       => false,
-                'verify_peer_name'  => false,
-                'allow_self_signed' => true
-            ]
-        ];
         $mail->setFrom(MAIL_FROM, MAIL_FROMNAME);
         $mail->addAddress($inspector['email'], $inspectorName);
         $mail->Subject = $subject;

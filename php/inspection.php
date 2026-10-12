@@ -1,12 +1,44 @@
 <?php
 require_once 'auth_check.php';
 require_once 'activity_log.php';
+require_once 'csrf.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 
 // DELETE requires admin role
 if ($method === 'DELETE') {
     requireRole('admin');
+}
+
+if (csrfNeeded()) {
+    requireCsrf();
+}
+
+/**
+ * Check if the current user can modify a given inspection report.
+ * Admin can modify any; inspectors can only modify their own.
+ */
+function requireReportOwnership($reportId): void {
+    global $db;
+    if (($_SESSION['role'] ?? '') === 'admin') return;
+
+    $stmt = $db->prepare("SELECT inspector_name FROM inspection_reports WHERE id = ?");
+    $stmt->execute([$reportId]);
+    $report = $stmt->fetch();
+
+    if (!$report) {
+        errorResponse('Report not found', 404);
+    }
+
+    // Match by username or full name (inspector_name may be full name)
+    $username = $_SESSION['username'] ?? '';
+    $stmtIA = $db->prepare("SELECT full_name FROM inspector_accounts WHERE username = ?");
+    $stmtIA->execute([$username]);
+    $fullName = $stmtIA->fetch()['full_name'] ?? '';
+
+    if ($report['inspector_name'] !== $username && $report['inspector_name'] !== $fullName) {
+        errorResponse('You can only modify your own inspection reports', 403);
+    }
 }
 
 switch($method) {
@@ -157,7 +189,8 @@ function createReport() {
         if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
         $safeName = uniqid('insp_', true) . '.' . $ext;
         if (move_uploaded_file($_FILES['attachment']['tmp_name'], $uploadDir . $safeName)) {
-            $fileName = $_FILES['attachment']['name'];
+            // Sanitize original filename before storing (strip control chars, HTML)
+            $fileName = preg_replace('/[\x00-\x1f\x7f<>"\'`]/', '', $_FILES['attachment']['name']);
             $filePath = 'uploads/inspections/' . $safeName;
         }
     }
@@ -187,8 +220,9 @@ function createReport() {
             if ($eidRow) $establishmentId = (int)$eidRow['id'];
         }
 
-        // Check if a record already exists for this establishment
-        $checkStmt = $db->prepare("SELECT * FROM inspection_reports WHERE establishment = ? LIMIT 1");
+        // Check if a record already exists for this establishment (in transaction to prevent race)
+        $db->beginTransaction();
+        $checkStmt = $db->prepare("SELECT * FROM inspection_reports WHERE establishment = ? LIMIT 1 FOR UPDATE");
         $checkStmt->execute([$establishment]);
         $existing = $checkStmt->fetch();
 
@@ -237,6 +271,7 @@ function createReport() {
                 $establishment
             ]);
             logActivity($db, 'UPDATE', 'inspection', $existing['id'], $establishment, 'Report updated (previous archived)');
+            $db->commit();
             jsonResponse(true, ['id' => $existing['id']], 'Report updated');
         } else {
             // INSERT new record (first time this establishment is inspected)
@@ -262,9 +297,13 @@ function createReport() {
             ]);
             $newId = $db->lastInsertId();
             logActivity($db, 'CREATE', 'inspection', $newId, $establishment, 'New inspection report');
+            $db->commit();
             jsonResponse(true, ['id' => $newId], 'Report created');
         }
     } catch(PDOException $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
         error_log('inspection.php error: ' . $e->getMessage());
         errorResponse('An error occurred. Please try again.', 500);
     }
@@ -278,6 +317,8 @@ function updateReportFromJson($input) {
         errorResponse('Missing report ID', 400);
         return;
     }
+
+    requireReportOwnership($id);
 
     try {
         // Step 1: Copy the current record into inspection_history before overwriting
@@ -367,6 +408,8 @@ function updateReport() {
         return;
     }
 
+    requireReportOwnership($id);
+
     try {
         // Step 1: Copy the current record into inspection_history before overwriting
         $old = $db->prepare("SELECT * FROM inspection_reports WHERE id = ?");
@@ -444,6 +487,8 @@ function updateReportWithFile() {
         return;
     }
 
+    requireReportOwnership($id);
+
     try {
         $old = $db->prepare("SELECT * FROM inspection_reports WHERE id = ?");
         $old->execute([$id]);
@@ -485,7 +530,7 @@ function updateReportWithFile() {
             if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
             $safeName = uniqid('insp_', true) . '.' . $ext;
             if (move_uploaded_file($_FILES['attachment']['tmp_name'], $uploadDir . $safeName)) {
-                $fileName = $_FILES['attachment']['name'];
+                $fileName = preg_replace('/[\x00-\x1f\x7f<>"\'`]/', '', $_FILES['attachment']['name']);
                 $filePath = 'uploads/inspections/' . $safeName;
             }
         }

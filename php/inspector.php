@@ -2,8 +2,13 @@
 require_once 'auth_check.php';
 requireRole('admin');
 require_once 'activity_log.php';
+require_once 'csrf.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
+
+if (csrfNeeded()) {
+    requireCsrf();
+}
 
 switch($method) {
     case 'GET':    getInspectors();    break;

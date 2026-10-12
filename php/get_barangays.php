@@ -1,6 +1,6 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Origin: http://localhost');
 
 // Tayabas City barangays (complete list per PSGC)
 $barangays = [
@@ -72,4 +72,4 @@ $barangays = [
     ['name' => 'Wakas'],
 ];
 
-echo json_encode(['success' => true, 'data' => $barangays]);
+echo json_encode(['success' => true, 'data' => $barangays, 'message' => '']);

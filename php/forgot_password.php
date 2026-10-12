@@ -10,11 +10,16 @@ require_once __DIR__ . '/PHPMailer/Exception.php';
 require_once __DIR__ . '/PHPMailer/PHPMailer.php';
 require_once __DIR__ . '/PHPMailer/SMTP.php';
 require_once __DIR__ . '/email_template.php';
+require_once 'csrf.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     errorResponse('Invalid request method', 405);
+}
+
+if (csrfNeeded()) {
+    requireCsrf();
 }
 
 $input = json_decode(file_get_contents('php://input'), true);
@@ -44,13 +49,30 @@ function sendOTP($input) {
         errorResponse('Username and email are required.', 400);
     }
 
+    // Rate limit: max 3 OTP requests per username within 1 hour
+    try {
+        $rateStmt = $db->prepare("
+            SELECT COUNT(*) as cnt FROM password_resets pr
+            INNER JOIN users u ON u.id = pr.user_id
+            WHERE u.username = ? AND pr.created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)
+        ");
+        $rateStmt->execute([$username]);
+        $otpCount = $rateStmt->fetch()['cnt'] ?? 0;
+        if ($otpCount >= 3) {
+            errorResponse('Too many password reset requests. Please try again later.', 429);
+        }
+    } catch (PDOException $e) {
+        // If rate check fails, allow attempt
+    }
+
     try {
         $stmt = $db->prepare("SELECT id, username, email FROM users WHERE username = ?");
         $stmt->execute([$username]);
         $user = $stmt->fetch();
 
+        // Generic message to prevent user enumeration
         if (!$user) {
-            errorResponse('Username not found.', 404);
+            errorResponse('If the username and email match, an OTP has been sent.', 200);
         }
 
         // If the user's email in the users table is empty (e.g. inspector), check inspector_accounts
@@ -65,10 +87,10 @@ function sendOTP($input) {
         }
 
         if (empty($userEmail) || strtolower($userEmail) !== strtolower($email)) {
-            errorResponse('The Username or Email does not match.', 400);
+            errorResponse('If the username and email match, an OTP has been sent.', 200);
         }
 
-        $otp     = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
+        $otp     = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
 
         $stmt = $db->prepare("
@@ -87,13 +109,6 @@ function sendOTP($input) {
             $mail->Password   = MAIL_PASSWORD;
             $mail->SMTPSecure = 'tls';
             $mail->Port       = MAIL_PORT;
-            $mail->SMTPOptions = [
-                'ssl' => [
-                    'verify_peer'       => false,
-                    'verify_peer_name'  => false,
-                    'allow_self_signed' => true
-                ]
-            ];
 
             $mail->setFrom(MAIL_FROM, MAIL_FROMNAME);
             $mail->addAddress($userEmail, $user['username']);
@@ -118,7 +133,8 @@ function sendOTP($input) {
             $mail->AltBody = "Hello {$user['username']},\n\nYour One-Time Password (OTP) for resetting your TayabasCare password is:\n\n  {$otp}\n\nThis OTP is valid for 10 minutes.\nIf you did not request this, please ignore this email.\n\n- TayabasCare System";
             $mail->send();
         } catch (Exception $e) {
-            errorResponse('Failed to send email: ' . $mail->ErrorInfo, 500);
+            error_log('Mail error: ' . $mail->ErrorInfo);
+            errorResponse('Failed to send email. Please try again later.', 500);
         }
 
         jsonResponse(true, null, 'OTP sent to your registered email address.');
@@ -139,6 +155,23 @@ function verifyOTP($input) {
         errorResponse('Username and OTP are required.', 400);
     }
 
+    // Rate limit: max 5 OTP verify attempts per username within 15 minutes
+    try {
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+        $rateStmt = $db->prepare("
+            SELECT COUNT(*) as cnt FROM activity_log
+            WHERE action = 'OTP_VERIFY' AND details LIKE '%FAILED%' AND (username = ? OR ip_address = ?)
+            AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+        ");
+        $rateStmt->execute([$username, $ip]);
+        $failCount = $rateStmt->fetch()['cnt'] ?? 0;
+        if ($failCount >= 5) {
+            errorResponse('Too many failed OTP attempts. Please try again in 15 minutes.', 429);
+        }
+    } catch (PDOException $e) {
+        // If rate check fails, allow attempt
+    }
+
     try {
         $stmt = $db->prepare("
             SELECT pr.id, pr.otp, pr.expires_at, pr.used
@@ -152,23 +185,34 @@ function verifyOTP($input) {
         $record = $stmt->fetch();
 
         if (!$record) {
-            errorResponse('No OTP request found for this username.', 404);
+            errorResponse('Invalid or expired OTP.', 400);
         }
 
-        if ($record['used'] == 1) {
-            errorResponse('This OTP has already been used.', 400);
+        // Reject if already used (state 1 = consumed by reset, state 2 = verified pending reset)
+        if ($record['used'] != 0) {
+            errorResponse('Invalid or expired OTP.', 400);
         }
 
         if (strtotime($record['expires_at']) < time()) {
-            errorResponse('OTP has expired. Please request a new one.', 400);
+            errorResponse('Invalid or expired OTP.', 400);
         }
 
         if (!hash_equals($record['otp'], $otp)) {
-            errorResponse('Incorrect OTP. Please try again.', 400);
+            // Log failed attempt for rate limiting
+            try {
+                require_once __DIR__ . '/activity_log.php';
+                logActivity($db, 'OTP_VERIFY', 'auth', null, $username, 'FAILED: Invalid OTP');
+            } catch (Exception $e) {}
+            errorResponse('Invalid or expired OTP.', 400);
         }
 
-        $stmt = $db->prepare("UPDATE password_resets SET used = 2 WHERE id = ?");
+        // Atomically consume: only mark used=2 if still used=0
+        $stmt = $db->prepare("UPDATE password_resets SET used = 2 WHERE id = ? AND used = 0");
         $stmt->execute([$record['id']]);
+
+        if ($stmt->rowCount() === 0) {
+            errorResponse('Invalid or expired OTP.', 400);
+        }
 
         $_SESSION['otp_verified_username'] = $username;
         $_SESSION['otp_verified_time']     = time();
@@ -204,8 +248,12 @@ function resetPassword($input) {
         errorResponse('Passwords do not match.', 400);
     }
 
-    if (strlen($newPassword) < 6) {
-        errorResponse('Password must be at least 6 characters long.', 400);
+    if (strlen($newPassword) < 8) {
+        errorResponse('Password must be at least 8 characters long.', 400);
+    }
+
+    if (strlen($newPassword) > 72) {
+        errorResponse('Password must be 72 characters or fewer.', 400);
     }
 
     try {

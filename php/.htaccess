@@ -1,0 +1,7 @@
+# Deny access to sensitive files
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+<FilesMatch "\.(env|example|log|bak|old|swp)$">
+    Require all denied
+</FilesMatch>

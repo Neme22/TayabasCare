@@ -1,6 +1,7 @@
 <?php
 require_once 'auth_check.php';
 require_once 'risk_utils.php';
+require_once 'csrf.php';
 // matchEstablishment() is now defined in risk_utils.php
 
 // ============================================================
@@ -57,21 +58,12 @@ try {
                 'created_at'    => $record['created_at']     ?? '',
                 'business_type' => $record['business_type']  ?? 'Other',
             ];
-            $scored = [
-                'totalScore'       => 85,
-                'riskLevel'        => 'HIGH',
-                'businessType'     => $sanitaryRecord['business_type'],
-                'factors'          => [
-                    'violations'    => ['score' => 0,  'max' => 25, 'label' => 'Previous Violations',        'count' => 0],
-                    'timeSinceLast' => ['score' => 20, 'max' => 20, 'label' => 'Time Since Last Inspection', 'days'  => null],
-                    'estabType'     => ['score' => 5,  'max' => 20, 'label' => 'Establishment Category'],
-                    'compliance'    => ['score' => 10, 'max' => 20, 'label' => 'Compliance History',         'rate'  => null],
-                    'followUp'      => ['score' => 0,  'max' => 15, 'label' => 'Pending Follow-up Actions',  'count' => 0],
-                ],
-                'recommendations'  => ['Never inspected — schedule initial inspection immediately.'],
-                'totalInspections' => 0,
-                'lastInspected'    => 'Never',
-            ];
+            // Score honestly: violations=0, time=20 (never), category=computed, compliance=10 (unknown), followup=0
+            $scored = calculateRiskScore($name, [], $sanitaryRecord);
+            // Override to mark as never-inspected with recommendation
+            $scored['recommendations'] = ['Never inspected — schedule initial inspection immediately.'];
+            $scored['totalInspections'] = 0;
+            $scored['lastInspected']    = 'Never';
             $scored['businessName']    = $name;
             $scored['barangay']        = $record['barangay'] ?? '';
             $scored['permitNo']        = $record['permit_no'] ?? '';
@@ -107,6 +99,8 @@ try {
     usort($results, fn($a, $b) => $b['totalScore'] - $a['totalScore']);
 
     // Log risk scores to history table (create table if needed)
+    // CSRF required for this GET-side write — skip logging if token is absent
+    if (validateCsrf()) {
     try {
         $db->exec("CREATE TABLE IF NOT EXISTS risk_scores (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -152,11 +146,12 @@ try {
     } catch (PDOException $e) {
         // Logging is best-effort — don't fail the prediction
     }
+    }
 
-    echo json_encode(['success' => true, 'data' => $results]);
+    echo json_encode(['success' => true, 'data' => $results, 'message' => ''], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE);
 } catch (PDOException $e) {
     error_log('predict.php error: ' . $e->getMessage());
-    echo json_encode(['success' => false, 'message' => 'Prediction engine error. Please try again.']);
+    echo json_encode(['success' => false, 'data' => null, 'message' => 'Prediction engine error. Please try again.']);
 }
 exit();
 ?>

@@ -1,6 +1,7 @@
 <?php
 require_once 'auth_check.php';
 require_once 'risk_utils.php';
+require_once 'csrf.php';
 // matchEstablishment() is now defined in risk_utils.php
 
 // ============================================================
@@ -10,6 +11,10 @@ require_once 'risk_utils.php';
 // ============================================================
 
 $method = $_SERVER['REQUEST_METHOD'];
+
+if (csrfNeeded()) {
+    requireCsrf();
+}
 
 // ---- GET: Fetch alerts ----
 if ($method === 'GET') {
@@ -39,6 +44,8 @@ if ($method === 'GET') {
     }
 
     if ($action === 'generate') {
+        // GET-triggered write — require CSRF token
+        requireCsrf();
         try {
             generateAlerts($db);
             jsonResponse(true, null, 'Alerts generated successfully.');

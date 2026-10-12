@@ -1,6 +1,7 @@
 <?php
 require_once 'auth_check.php';
 requireRole('admin');
+require_once 'csrf.php';
 
 // ============================================================
 // BULK HISTORICAL RECORD IMPORT (Objective 1)
@@ -12,6 +13,10 @@ requireRole('admin');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     errorResponse('Only POST is allowed for bulk import', 405);
+}
+
+if (csrfNeeded()) {
+    requireCsrf();
 }
 
 $input = json_decode(file_get_contents('php://input'), true);

@@ -2,10 +2,15 @@
 require_once 'auth_check.php';
 requireRole('admin');
 require_once 'activity_log.php';
+require_once 'csrf.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method === 'OPTIONS') { http_response_code(200); exit(); }
+
+if (csrfNeeded()) {
+    requireCsrf();
+}
 
 // ---- POST: Create/update schedule ----
 if ($method === 'POST') {

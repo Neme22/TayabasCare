@@ -672,6 +672,17 @@ try {
     }
     $steps[count($steps)-1] = ['status' => 'success', 'title' => 'Step 26: Establishment ID Columns', 'message' => implode('; ', $eidAlterResults)];
 
+    // Performance indexes for hot query paths
+    $perfIndexes = [
+        ["ALTER TABLE inspection_reports ADD INDEX idx_report_date (report_date)", "report_date on inspection_reports"],
+        ["ALTER TABLE inspection_history ADD INDEX idx_report_date (report_date)", "report_date on inspection_history"],
+        ["ALTER TABLE sanitary_records ADD INDEX idx_created (created_at)", "created_at on sanitary_records"],
+        ["ALTER TABLE activity_log ADD INDEX idx_ip_action (ip_address, action, created_at)", "composite rate-limit index on activity_log"],
+    ];
+    foreach ($perfIndexes as [$sql, $desc]) {
+        try { $pdo->exec($sql); } catch (PDOException $e) { /* column/index may already exist */ }
+    }
+
     // Step 27: Create scoring_weights table for formula visibility
     $steps[] = ['status' => 'processing', 'title' => 'Step 27: Creating scoring weights table...', 'message' => ''];
     $pdo->exec("CREATE TABLE IF NOT EXISTS scoring_weights (

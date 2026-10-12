@@ -1,6 +1,8 @@
 <?php
 require_once 'auth_check.php';
+requireRole('admin');
 require_once 'risk_utils.php';
+require_once 'csrf.php';
 require_once __DIR__ . '/PHPMailer/Exception.php';
 require_once __DIR__ . '/PHPMailer/PHPMailer.php';
 require_once __DIR__ . '/PHPMailer/SMTP.php';
@@ -18,6 +20,10 @@ use PHPMailer\PHPMailer\Exception;
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit(); }
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     errorResponse('Method not allowed. Use GET.', 405);
+}
+
+if (csrfNeeded()) {
+    requireCsrf();
 }
 
 try {
@@ -72,6 +78,8 @@ try {
 
     // ---- GET ?action=send: Trigger sending reminders ----
     if ($action === 'send') {
+        // GET-triggered write — require CSRF token
+        requireCsrf();
         $tomorrow = date('Y-m-d', strtotime('+1 day'));
         $today = date('Y-m-d');
 
@@ -124,13 +132,6 @@ try {
                 $mail->Password   = MAIL_PASSWORD;
                 $mail->SMTPSecure = 'tls';
                 $mail->Port       = MAIL_PORT;
-                $mail->SMTPOptions = [
-                    'ssl' => [
-                        'verify_peer'       => false,
-                        'verify_peer_name'  => false,
-                        'allow_self_signed' => true
-                    ]
-                ];
 
                 $mail->setFrom(MAIL_FROM, MAIL_FROMNAME);
                 $mail->addAddress($s['email'], $s['inspector_name']);
@@ -191,6 +192,8 @@ try {
 
     // ---- GET ?action=send_compliance_alerts: Email admin about HIGH-risk & violations ----
     if ($action === 'send_compliance_alerts') {
+        // GET-triggered write — require CSRF token
+        requireCsrf();
         require_once __DIR__ . '/risk_utils.php';
 
         // Check if already sent today
@@ -262,7 +265,6 @@ try {
             $mail->Password = MAIL_PASSWORD;
             $mail->SMTPSecure = 'tls';
             $mail->Port = MAIL_PORT;
-            $mail->SMTPOptions = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true]];
             $mail->setFrom(MAIL_FROM, MAIL_FROMNAME);
             $mail->addAddress($admin['email']);
             $mail->Subject = 'TayabasCare – Daily Compliance Alert (' . date('M j, Y') . ')';
@@ -332,6 +334,8 @@ try {
 
     // ---- GET ?action=send_followup_reminders: Email inspectors about overdue deadlines ----
     if ($action === 'send_followup_reminders') {
+        // GET-triggered write — require CSRF token
+        requireCsrf();
         $today = date('Y-m-d');
 
         // Find reports with overdue compliance deadlines
@@ -370,7 +374,6 @@ try {
                 $mail->Password = MAIL_PASSWORD;
                 $mail->SMTPSecure = 'tls';
                 $mail->Port = MAIL_PORT;
-                $mail->SMTPOptions = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true]];
                 $mail->setFrom(MAIL_FROM, MAIL_FROMNAME);
                 $mail->addAddress($item['email'], $item['inspector_name']);
                 $mail->Subject = 'TayabasCare – Overdue Compliance Follow-up';

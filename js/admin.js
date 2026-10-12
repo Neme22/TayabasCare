@@ -1,6 +1,33 @@
 // API Configuration — relative path works on localhost and any live server
 const API_BASE_URL = 'php';
 
+// CSRF token management — auto-attach to all mutating requests
+let _csrfToken = null;
+async function _fetchCsrfToken() {
+    if (_csrfToken) return _csrfToken;
+    try {
+        const r = await fetch(`${API_BASE_URL}/csrf_token.php`, { credentials: 'include' });
+        const j = await r.json();
+        _csrfToken = j?.data?.token || j?.csrf_token || null;
+        return _csrfToken;
+    } catch (e) { return null; }
+}
+// Initialize token on load
+_fetchCsrfToken();
+
+// Monkey-patch fetch to auto-attach CSRF header on POST/PUT/DELETE/PATCH
+const _origFetch = window.fetch.bind(window);
+window.fetch = async function(url, opts = {}) {
+    const method = (opts.method || 'GET').toUpperCase();
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+        const token = _csrfToken || await _fetchCsrfToken();
+        if (token) {
+            opts.headers = { ...opts.headers, 'X-CSRF-Token': token };
+        }
+    }
+    return _origFetch(url, opts);
+};
+
 // Data Store — in-memory cache populated from API (no localStorage)
 const STORAGE_KEYS = {
     sanitary: 'sanitaryRecords',
@@ -56,9 +83,13 @@ const DataStore = {
 const Utils = {
     esc: (str) => {
         if (str == null) return '';
-        const d = document.createElement('div');
-        d.textContent = String(str);
-        return d.innerHTML;
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/`/g, '&#96;');
     },
     formatDate: (dateString) => {
         if (!dateString) return 'N/A';
@@ -439,8 +470,8 @@ const Dashboard = {
 
                 return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:${bgColor};border-left:3px solid ${borderColor};border-radius:6px;margin-bottom:6px;">
                     <div>
-                        <div style="font-size:13px;font-weight:600;color:#111827;">${r.establishment || 'Unknown'}</div>
-                        <div style="font-size:11px;color:#6b7280;">${r.inspector || 'Unassigned'} · ${r.status || 'Pending'}</div>
+                        <div style="font-size:13px;font-weight:600;color:#111827;">${Utils.esc(r.establishment || 'Unknown')}</div>
+                        <div style="font-size:11px;color:#6b7280;">${Utils.esc(r.inspector || 'Unassigned')} · ${Utils.esc(r.status || 'Pending')}</div>
                     </div>
                     <div style="text-align:right;">
                         <div style="font-size:12px;font-weight:700;color:${textColor};">${label}</div>
@@ -644,7 +675,7 @@ const Dashboard = {
 
         tbody.innerHTML = sorted.map(([name, d]) => `
             <tr style="border-bottom:1px solid #f3f4f6;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background=''">
-                <td style="padding:8px 10px;color:#374151;font-weight:500;">${name}</td>
+                <td style="padding:8px 10px;color:#374151;font-weight:500;">${Utils.esc(name)}</td>
                 <td style="padding:8px 10px;text-align:center;font-weight:700;color:#374151;">${d.total}</td>
                 <td style="padding:8px 10px;text-align:center;font-weight:700;color:#10b981;">${d.complied}</td>
                 <td style="padding:8px 10px;text-align:center;font-weight:700;color:#ef4444;">${d.notComplied}</td>
@@ -683,7 +714,7 @@ const Dashboard = {
             return `
             <tr style="border-bottom:1px solid #f3f4f6;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background=''">
                 <td style="padding:8px 10px;color:#9ca3af;font-size:11px;">${i + 1}</td>
-                <td style="padding:8px 10px;color:#374151;font-weight:500;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${e.name}">${e.name}</td>
+                <td style="padding:8px 10px;color:#374151;font-weight:500;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${Utils.esc(e.name)}">${Utils.esc(e.name)}</td>
                 <td style="padding:8px 10px;text-align:center;color:#6b7280;">${e.total}</td>
                 <td style="padding:8px 10px;text-align:center;font-weight:700;color:${rateColor};">${e.rate}%</td>
             </tr>`;
@@ -1154,7 +1185,7 @@ const InspectorManager = {
                         </div>
                         <div class="form-group">
                             <label class="form-label">Password</label>
-                            <input type="password" class="form-input" id="password" value="${Utils.esc(inspector.password)}" required data-testid="input-password">
+                            <input type="password" class="form-input" id="password" placeholder="Leave blank to keep current password" data-testid="input-password">
                         </div>
                         <div class="form-group">
                             <label class="form-label">Role</label>
@@ -1198,8 +1229,8 @@ const InspectorManager = {
             showErr('Password is required for new inspectors.');
             return;
         }
-        if (password && password.length < 6) {
-            showErr('Password must be at least 6 characters.');
+        if (password && password.length < 8) {
+            showErr('Password must be at least 8 characters.');
             return;
         }
 
@@ -1569,7 +1600,7 @@ const SanitaryManager = {
                             </div>
                             <div class="detail-item">
                                 <span class="detail-label">Permit No</span>
-                                <span class="detail-value">${record.permitNo || 'N/A'}</span>
+                                <span class="detail-value">${Utils.esc(record.permitNo) || 'N/A'}</span>
                             </div>
                         </div>
                     </div>
@@ -1578,7 +1609,7 @@ const SanitaryManager = {
                         <div class="detail-grid">
                             <div class="detail-item">
                                 <span class="detail-label">Business Name</span>
-                                <span class="detail-value">${record.businessName || 'N/A'}</span>
+                                <span class="detail-value">${Utils.esc(record.businessName) || 'N/A'}</span>
                             </div>
                             <div class="detail-item">
                                 <span class="detail-label">Owner Name</span>
@@ -1590,7 +1621,7 @@ const SanitaryManager = {
                             </div>
                             <div class="detail-item">
                                 <span class="detail-label">Barangay</span>
-                                <span class="detail-value">${record.barangay || 'N/A'}</span>
+                                <span class="detail-value">${Utils.esc(record.barangay) || 'N/A'}</span>
                             </div>
                         </div>
                     </div>
@@ -1613,7 +1644,7 @@ const SanitaryManager = {
                     </div>
                     <div class="detail-section">
                         <h4>Remarks</h4>
-                        <p style="font-size:14px; color:#374151;">${record.remarks || 'No remarks available'}</p>
+                        <p style="font-size:14px; color:#374151;">${Utils.esc(record.remarks) || 'No remarks available'}</p>
                     </div>
                 </div>
 
@@ -1674,7 +1705,7 @@ const SanitaryManager = {
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Sanitary Permit - ${record.businessName || ''}</title>
+<title>Sanitary Permit - ${Utils.esc(record.businessName) || ''}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -1768,14 +1799,14 @@ const SanitaryManager = {
 </head>
 <body>
 <div class="permit-wrapper">
-  <img class="bg" src="${window.location.origin}/TayabasCare/images/Sanitary_Permit.jpg" />
+  <img class="bg" src="${window.location.origin}${window.location.pathname.replace(/\/[^/]*$/, '')}/images/Sanitary_Permit.jpg" />
 
   <div class="field f-owner">${ownerName}</div>
-  <div class="field f-business">${record.businessName || 'N/A'}</div>
+  <div class="field f-business">${Utils.esc(record.businessName) || 'N/A'}</div>
   <div class="field f-address">${address}</div>
 
   <div class="permit-fields">
-    Sanitary Permit No. : &nbsp;<span class="val">${record.permitNo || 'N/A'}</span><br>
+    Sanitary Permit No. : &nbsp;<span class="val">${Utils.esc(record.permitNo) || 'N/A'}</span><br>
     Date of Issuance: &nbsp;<span class="val">${issuanceDate}</span><br>
     Date of Expiration: &nbsp;<span class="val-red">${expirationDate}</span>
   </div>
@@ -1930,11 +1961,11 @@ const BurialManager = {
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">Informant</span>
-                    <span class="detail-value">${record.informant || 'N/A'}</span>
+                    <span class="detail-value">${Utils.esc(record.informant) || 'N/A'}</span>
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">Inspector</span>
-                    <span class="detail-value">${record.inspector || 'N/A'}</span>
+                    <span class="detail-value">${Utils.esc(record.inspector) || 'N/A'}</span>
                 </div>`;
         } else {
             specificFields = `
@@ -1956,7 +1987,7 @@ const BurialManager = {
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">Inspector</span>
-                    <span class="detail-value">${record.inspector || 'N/A'}</span>
+                    <span class="detail-value">${Utils.esc(record.inspector) || 'N/A'}</span>
                 </div>`;
         }
 
@@ -1981,7 +2012,7 @@ const BurialManager = {
                         </div>
                         <div class="detail-item">
                             <span class="detail-label">Deceased Name</span>
-                            <span class="detail-value">${record.deceased || 'N/A'}</span>
+                            <span class="detail-value">${Utils.esc(record.deceased) || 'N/A'}</span>
                         </div>
                         <div class="detail-item">
                             <span class="detail-label">Date of Death</span>
@@ -1999,7 +2030,7 @@ const BurialManager = {
                 <div class="detail-section">
                     <h4>Death Certificate</h4>
                     <p style="font-size: 14px; color: #374151;">
-                        ${record.fileName || 'Attachment'}
+                        ${Utils.esc(record.fileName) || 'Attachment'}
                         <a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(record.filePath)}" class="btn btn-primary" style="margin-left:10px;display:inline-block;padding:4px 10px;">
                             <i class="fas fa-download" style="margin-right:4px;"></i>Download
                         </a>
@@ -2184,7 +2215,7 @@ const ReportsManager = {
                 <div class="detail-section">
                     <h4>Attached File</h4>
                     <p style="font-size: 14px; color: #374151;">
-                        ${report.file || 'Attachment'}
+                        ${Utils.esc(report.file) || 'Attachment'}
                         <a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(report.filePath)}" class="btn btn-primary" style="margin-left:10px;display:inline-block;padding:4px 10px;">
                             <i class="fas fa-download" style="margin-right:4px;"></i>Download
                         </a>
@@ -2193,7 +2224,7 @@ const ReportsManager = {
                 ` : report.file ? `
                 <div class="detail-section">
                     <h4>Attached File</h4>
-                    <p style="font-size: 14px; color: #374151;">${report.file} (file not available for download)</p>
+                    <p style="font-size: 14px; color: #374151;">${Utils.esc(report.file)} (file not available for download)</p>
                 </div>
                 ` : ''}
             </div>
@@ -2814,7 +2845,7 @@ function adminShowNotification(message, type = 'success') {
     const style = types[type] || types.success;
     const toast = document.createElement('div');
     toast.className = `admin-toast-notification fixed bottom-4 right-4 ${style.bg} text-white px-6 py-4 rounded-lg shadow-2xl z-[9999]`;
-    toast.innerHTML = `<div class="flex items-center gap-3"><i class="fas ${style.icon} text-xl"></i><span class="font-medium">${message}</span><button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-white hover:text-gray-200"><i class="fas fa-times"></i></button></div>`;
+    toast.innerHTML = `<div class="flex items-center gap-3"><i class="fas ${style.icon} text-xl"></i><span class="font-medium">${Utils.esc(message)}</span><button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-white hover:text-gray-200"><i class="fas fa-times"></i></button></div>`;
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 4000);
 }
@@ -3162,24 +3193,33 @@ const ArchiveManager = {
         return filtered;
     },
 
+    // Calculate days remaining until expiry
+    getDaysRemaining: (dateStr) => {
+        return Math.max(0, Math.ceil((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24)));
+    },
+
     // Update statistics
     updateStats: (items) => {
-        const totalEl = document.getElementById('totalArchived');
-        const expiringEl = document.getElementById('expiringSoon');
-        const sizeEl = document.getElementById('archiveSize');
+        try {
+            const totalEl = document.getElementById('totalArchived');
+            const expiringEl = document.getElementById('expiringSoon');
+            const sizeEl = document.getElementById('archiveSize');
 
-        if (totalEl) totalEl.textContent = items.length;
+            if (totalEl) totalEl.textContent = items.length;
 
-        const expiring = items.filter(item => {
-            const days = ArchiveManager.getDaysRemaining(item.archivedDate);
-            return days <= 7;
-        }).length;
-        
-        if (expiringEl) expiringEl.textContent = expiring;
+            const expiring = items.filter(item => {
+                const days = ArchiveManager.getDaysRemaining(item.expiryDate);
+                return days <= 7;
+            }).length;
 
-        const size = new Blob([JSON.stringify(items)]).size;
-        const sizeKB = (size / 1024).toFixed(2);
-        if (sizeEl) sizeEl.textContent = `${sizeKB} KB`;
+            if (expiringEl) expiringEl.textContent = expiring;
+
+            const size = new Blob([JSON.stringify(items)]).size;
+            const sizeKB = (size / 1024).toFixed(2);
+            if (sizeEl) sizeEl.textContent = `${sizeKB} KB`;
+        } catch (e) {
+            console.error('ArchiveManager.updateStats error:', e);
+        }
     },
 
     // Update badge count
@@ -3702,7 +3742,12 @@ const NotifManager = {
 
     getReadIds: () => {
         const raw = localStorage.getItem('notifReadIds');
-        return raw ? JSON.parse(raw) : [];
+        try {
+            return raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            localStorage.removeItem('notifReadIds');
+            return [];
+        }
     },
 
     markRead: async (id) => {
@@ -3812,8 +3857,8 @@ const NotifManager = {
                     <i class="bi ${alert.icon}" style="color:${c.icon};font-size:18px;"></i>
                 </div>
                 <div style="flex:1;min-width:0;">
-                    <p style="font-size:12px;font-weight:700;color:${c.text};margin:0 0 2px;">${alert.title}</p>
-                    <p style="font-size:12px;color:#374151;margin:0 0 4px;line-height:1.4;">${alert.message}</p>
+                    <p style="font-size:12px;font-weight:700;color:${c.text};margin:0 0 2px;">${Utils.esc(alert.title)}</p>
+                    <p style="font-size:12px;color:#374151;margin:0 0 4px;line-height:1.4;">${Utils.esc(alert.message)}</p>
                     ${alert.time ? `<p style="font-size:11px;color:#9ca3af;margin:0;">${new Date(alert.time).toLocaleDateString('en-PH', {year:'numeric',month:'short',day:'numeric'})}</p>` : ''}
                 </div>
                 ${!alert.read ? `<button onclick="event.stopPropagation();NotifManager.dismiss('${alert.id}')" style="flex-shrink:0;font-size:11px;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:6px;padding:2px 8px;cursor:pointer;">Dismiss</button>` : `<button onclick="event.stopPropagation();NotifManager.dismiss('${alert.id}')" style="flex-shrink:0;font-size:11px;color:#9ca3af;background:none;border:1px solid #f3f4f6;border-radius:6px;padding:2px 8px;cursor:pointer;">Dismiss</button>`}
@@ -3997,7 +4042,12 @@ const ScheduleManager = {
 
         // 3. In-app notification for inspector bell
         const key  = 'inspectorNotifs_' + cleanName;
-        const list = JSON.parse(localStorage.getItem(key) || '[]');
+        let list = [];
+        try {
+            list = JSON.parse(localStorage.getItem(key) || '[]');
+        } catch (e) {
+            list = [];
+        }
         const dateFormatted = new Date(schedDate).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
         list.push({
             id:      Date.now(),
@@ -4134,7 +4184,7 @@ const ScheduleManager = {
                 return `
                 <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:8px;background:#fafafa;">
                     <div>
-                        <div style="font-weight:600;font-size:14px;color:#111827;">${s.inspector}</div>
+                        <div style="font-weight:600;font-size:14px;color:#111827;">${Utils.esc(s.inspector)}</div>
                         <div style="font-size:12px;color:#6b7280;font-style:italic;">${s.rank || ''}</div>
                         <div style="font-size:12px;color:#2563eb;margin-top:2px;">🏢 ${s.establishment || 'No establishment set'}${s.riskLevel ? ` <span style="background:${s.riskLevel === 'HIGH' ? '#fef2f2;color:#dc2626' : s.riskLevel === 'MODERATE' ? '#fffbeb;color:#d97706' : '#ecfdf5;color:#059669'};font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;">${s.riskLevel}</span>` : ''}</div>
                         ${s.notes ? `<div style="font-size:12px;color:#374151;margin-top:4px;">📝 ${s.notes}</div>` : ''}
@@ -4228,7 +4278,7 @@ const AutoScheduler = {
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
                         <span style="background:${rs.badge};color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">${r.riskLevel}</span>
-                        <span style="font-weight:600;font-size:13px;color:#111827;">${r.establishment}</span>
+                        <span style="font-weight:600;font-size:13px;color:#111827;">${Utils.esc(r.establishment)}</span>
                     </div>
                     <div style="font-size:11px;color:#6b7280;">
                         ${r.barangay ? '📍 ' + r.barangay + ' · ' : ''}Score: ${r.riskScore}/100 · Last: ${r.lastInspected} · ${r.reason}
@@ -4384,10 +4434,15 @@ const PredictionEngine = {
                 <td style="padding:12px 16px;text-align:center;font-size:12px;color:#374151;">${r.lastInspected}</td>
                 <td style="padding:12px 16px;text-align:center;font-size:12px;color:#374151;">${r.totalInspections}</td>
                 <td style="padding:12px 16px;">
-                    <button onclick="PredictionEngine.showDetail(${i})" style="font-size:11px;padding:4px 12px;border:1px solid #7c3aed;color:#7c3aed;background:#f5f3ff;border-radius:6px;cursor:pointer;">View Details</button>
+                    <button onclick="PredictionEngine.showDetailByName('${Utils.esc(r.businessName).replace(/'/g, "\\'")}')" style="font-size:11px;padding:4px 12px;border:1px solid #7c3aed;color:#7c3aed;background:#f5f3ff;border-radius:6px;cursor:pointer;">View Details</button>
                 </td>
             </tr>`;
         }).join('');
+    },
+
+    showDetailByName: async (businessName) => {
+        const r = PredictionEngine.results.find(x => x.businessName === businessName);
+        if (r) PredictionEngine.showDetail(PredictionEngine.results.indexOf(r));
     },
 
     showDetail: async (index) => {
@@ -4789,14 +4844,14 @@ const ActivityLog = {
             const ts = log.createdAt ? new Date(log.createdAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
             return `<tr style="border-bottom:1px solid #f3f4f6;">
                 <td style="padding:10px 14px;color:#374151;white-space:nowrap;">${ts}</td>
-                <td style="padding:10px 14px;font-weight:600;color:#111827;">${log.username || ''}</td>
+                <td style="padding:10px 14px;font-weight:600;color:#111827;">${Utils.esc(log.username) || ''}</td>
                 <td style="padding:10px 14px;text-align:center;">
                     <span style="background:${ac.bg};color:${ac.color};padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;">${log.action}</span>
                 </td>
-                <td style="padding:10px 14px;color:#6b7280;">${log.module || ''}</td>
-                <td style="padding:10px 14px;color:#374151;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${log.recordLabel || ''}">${log.recordLabel || '-'}</td>
-                <td style="padding:10px 14px;color:#6b7280;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${log.details || ''}">${log.details || '-'}</td>
-                <td style="padding:10px 14px;color:#9ca3af;font-size:11px;">${log.ipAddress || ''}</td>
+                <td style="padding:10px 14px;color:#6b7280;">${Utils.esc(log.module) || ''}</td>
+                <td style="padding:10px 14px;color:#374151;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${Utils.esc(log.recordLabel) || ''}">${Utils.esc(log.recordLabel) || '-'}</td>
+                <td style="padding:10px 14px;color:#6b7280;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${Utils.esc(log.details) || ''}">${Utils.esc(log.details) || '-'}</td>
+                <td style="padding:10px 14px;color:#9ca3af;font-size:11px;">${Utils.esc(log.ipAddress) || ''}</td>
             </tr>`;
         }).join('');
     },
@@ -5261,7 +5316,7 @@ function adminRenderIHEstablishments(list) {
             ${list.map(e => {
                 const lastInspected = e.lastDate ? e.lastDate.toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' }) : 'N/A';
                 return `<tr>
-                    <td style="font-weight:600;">${e.name}</td>
+                    <td style="font-weight:600;">${Utils.esc(e.name)}</td>
                     <td>${e.barangay}</td>
                     <td style="text-align:center;">${e.count}</td>
                     <td style="text-align:center;">
@@ -5371,15 +5426,15 @@ async function adminOpenIHDetail(establishmentName) {
         const compliedStatus = r.complied === true || r.complied === 'true' || r.complied === 1;
         const dateStr = (r.date || r.archived_at) ? new Date(r.date || r.archived_at).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' }) : 'N/A';
         const fileCell = r.filePath
-            ? `<a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(r.filePath)}" class="btn btn-primary" style="padding:4px 10px;font-size:12px;"><i class="fas fa-download" style="margin-right:4px;"></i>${r.file || 'File'}</a>`
-            : (r.file ? `<span style="font-size:12px;color:#9ca3af;">${r.file} (unavailable)</span>` : `<span style="font-size:12px;color:#d1d5db;">None</span>`);
+            ? `<a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(r.filePath)}" class="btn btn-primary" style="padding:4px 10px;font-size:12px;"><i class="fas fa-download" style="margin-right:4px;"></i>${Utils.esc(r.file) || 'File'}</a>`
+            : (r.file ? `<span style="font-size:12px;color:#9ca3af;">${Utils.esc(r.file)} (unavailable)</span>` : `<span style="font-size:12px;color:#d1d5db;">None</span>`);
         return `<tr>
             <td style="font-weight:600;">${i + 1}</td>
             <td>${dateStr}</td>
-            <td style="max-width:220px;">${r.remarks || 'N/A'}</td>
-            <td style="max-width:220px;">${r.recommendation || 'N/A'}</td>
+            <td style="max-width:220px;">${Utils.esc(r.remarks) || 'N/A'}</td>
+            <td style="max-width:220px;">${Utils.esc(r.recommendation) || 'N/A'}</td>
             <td><span style="background:${compliedStatus ? '#d1fae5' : '#fee2e2'};color:${compliedStatus ? '#059669' : '#dc2626'};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">${compliedStatus ? '✓ Complied' : '✗ Violation'}</span></td>
-            <td>${r.inspector || 'N/A'}</td>
+            <td>${Utils.esc(r.inspector) || 'N/A'}</td>
             <td>${fileCell}</td>
         </tr>`;
     }).join('');
@@ -5478,8 +5533,8 @@ const PatternAnalysis = {
                 <th style="text-align:center;padding:8px 10px;color:#6b7280;font-weight:700;">Recurrence %</th>
             </tr></thead>
             <tbody>${top.map(r => `<tr style="border-bottom:1px solid #f3f4f6;">
-                <td style="padding:8px 10px;">${r.establishment}</td>
-                <td style="padding:8px 10px;">${r.barangay || 'N/A'}</td>
+                <td style="padding:8px 10px;">${Utils.esc(r.establishment)}</td>
+                <td style="padding:8px 10px;">${Utils.esc(r.barangay) || 'N/A'}</td>
                 <td style="text-align:center;padding:8px 10px;">${r.totalInspections}</td>
                 <td style="text-align:center;padding:8px 10px;">${r.totalViolations}</td>
                 <td style="text-align:center;padding:8px 10px;"><span style="background:${r.recurrenceRate > 50 ? '#fee2e2' : '#fef3c7'};color:${r.recurrenceRate > 50 ? '#dc2626' : '#d97706'};padding:2px 8px;border-radius:10px;font-weight:700;">${r.recurrenceRate}%</span></td>

@@ -2,8 +2,13 @@
 require_once 'auth_check.php';
 requireRole('admin');
 require_once 'activity_log.php';
+require_once 'csrf.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
+
+if (csrfNeeded()) {
+    requireCsrf();
+}
 
 switch($method) {
     case 'GET': getArchive(); break;
@@ -102,7 +107,7 @@ function restoreItem() {
         } elseif ($type === 'inspector' || $type === 'inspectors') {
             // Ensure password is properly hashed before restoring
             $password = $data['password'] ?? '';
-            if ($password && !password_verify($password, $password) && strlen($password) !== 60) {
+            if ($password !== '' && password_get_info($password)['algo'] === 0) {
                 // Not a bcrypt hash — hash it before storing
                 $password = password_hash($password, PASSWORD_DEFAULT);
             }

@@ -4,7 +4,25 @@ require_once 'auth_check.php';
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit(); }
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    die(json_encode(['error' => 'Method not allowed']));
+    die(json_encode(['success' => false, 'data' => null, 'message' => 'Method not allowed']));
+}
+
+// Rate limit: max 10 AI requests per user per hour
+try {
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+    $rateStmt = $db->prepare("
+        SELECT COUNT(*) as cnt FROM activity_log
+        WHERE action = 'AI_ANALYZE' AND (username = ? OR ip_address = ?)
+        AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)
+    ");
+    $rateStmt->execute([$_SESSION['username'] ?? '', $ip]);
+    $aiCount = $rateStmt->fetch()['cnt'] ?? 0;
+    if ($aiCount >= 10) {
+        http_response_code(429);
+        die(json_encode(['success' => false, 'data' => null, 'message' => 'AI analysis rate limit exceeded. Please try again later.']));
+    }
+} catch (PDOException $e) {
+    // If rate check fails, allow attempt
 }
 
 $input          = json_decode(file_get_contents('php://input'), true);
@@ -36,7 +54,7 @@ try {
 
 // If we have a cached analysis with matching risk level, return it
 if ($cachedAnalysis && isset($cachedAnalysis['aiAssessment'])) {
-    echo json_encode(['success' => true, 'analysis' => $cachedAnalysis, 'cached' => true]);
+    echo json_encode(['success' => true, 'data' => $cachedAnalysis, 'message' => ''], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE);
     exit();
 }
 
@@ -116,7 +134,7 @@ foreach ($models as $model) {
 }
 
 if (!$rawText) {
-    echo json_encode(['success' => false, 'message' => $lastError]);
+    echo json_encode(['success' => false, 'data' => null, 'message' => $lastError]);
     exit();
 }
 
@@ -140,5 +158,5 @@ try {
     // Caching is best-effort — don't fail the request
 }
 
-echo json_encode(['success' => true, 'analysis' => $analysis, 'cached' => false]);
+echo json_encode(['success' => true, 'data' => $analysis, 'message' => ''], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE);
 ?>

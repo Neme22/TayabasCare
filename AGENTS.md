@@ -6,7 +6,7 @@ A PHP + vanilla JS web app for sanitary inspection and risk prediction in Tayaba
 
 ## Project objectives
 
-See `objectives.md`. In short: digitize inspection records, score establishments by violation risk (5-factor formula in `predict.php`), and provide dashboards for the City Health Office.
+See `objectives.md`. In short: digitize inspection records, score establishments by violation risk (5-factor formula in `php/risk_utils.php`), and provide dashboards for the City Health Office.
 
 ## Running locally
 
@@ -15,7 +15,7 @@ See `objectives.md`. In short: digitize inspection records, score establishments
 3. One-time DB setup: visit `http://localhost/TayabasCare/php/setup_database.php` in a browser. This creates database `tayabascare_db` and all tables.
 4. Landing page: `http://localhost/TayabasCare/` (index.html).
 
-Default admin: `admin` / `admin123` (created by setup_database.php). There is also a legacy script `create_default_users.php` with different passwords (`admin`/`1234`).
+Default admin: `admin` / `admin123` (created by setup_database.php).
 
 ## Architecture
 
@@ -31,31 +31,53 @@ Default admin: `admin` / `admin123` (created by setup_database.php). There is al
 
 Every PHP endpoint includes `config.php` which sets CORS headers, creates a PDO connection (`$db`), and provides `jsonResponse()` / `errorResponse()` helpers.
 
+All state-changing endpoints (POST/PUT/DELETE) require a CSRF token via `X-CSRF-Token` header or `csrf_token` form field (see `php/csrf.php`). GET endpoints that write data also validate CSRF.
+
 | File | Purpose |
 |---|---|
-| `config.php` | DB connection (PDO), CORS, response helpers. **Must be `require_once`'d by every endpoint.** |
-| `db.php` | Legacy mysqli connection. Used by some older code paths — prefer PDO via `config.php` for new code. |
+| `config.php` | DB connection (PDO), CORS, session config, response helpers. **Must be `require_once`'d by every endpoint.** |
+| `auth_check.php` | Session guard + `requireRole()` helper. CLI requests bypass session (for cron). |
+| `csrf.php` | CSRF token generation + validation. |
+| `csrf_token.php` | GET endpoint returning the session's CSRF token. |
 | `auth.php` | Login (POST), session check (GET), logout (DELETE). Handles bcrypt, MD5, and plaintext password migration. |
 | `sanitary.php` | CRUD for `sanitary_records` table. |
-| `inspection.php` | CRUD for `inspection_reports`. On create/update, archives previous version to `inspection_history`. |
+| `inspection.php` | CRUD for `inspection_reports`. On create/update, archives previous version to `inspection_history`. Inspector ownership enforced on updates. |
 | `inspection_schedules.php` | Upsert schedule entries (inspector + date). |
 | `burial.php` | CRUD for `burial_records` (cadaver/skeletal/exhumation). |
 | `archive.php` | Soft-delete store. Auto-purges expired items (30-day expiry). |
-| `predict.php` | **Risk prediction engine.** 5-factor scoring (0–100): violations, time since last inspection, establishment type, compliance rate, pending follow-ups. |
-| `ai_analyze.php` | Calls OpenRouter API (model prompt in-code) for AI risk narrative. API key in `secrets.php`. |
+| `risk_utils.php` | **Risk scoring engine.** 5-factor formula (0-100): violations, time since last inspection, establishment type, compliance rate, pending follow-ups. Shared by predict/alerts/auto_schedule/pattern_analysis. |
+| `predict.php` | GET endpoint returning risk scores for all establishments. Uses `risk_utils.php` for scoring. |
+| `ai_analyze.php` | Calls OpenRouter API for AI risk narrative. Rate-limited (10/hr). |
+| `forgot_password.php` | OTP-based password reset (send_otp / verify_otp / reset_password). |
+| `change_password.php` | Self-service password change (supports legacy MD5/plaintext migration). |
+| `alerts.php` | Alert generation and management. |
+| `notification_runner.php` | Email notification dispatch (admin only). |
+| `accomplishment.php` | Monthly accomplishment records per inspector. |
+| `statistics.php` | Summary/year-over-year statistics. |
+| `export_analytics.php` | Analytics data export. |
+| `pattern_analysis.php` | Violation pattern analysis. |
+| `risk_history.php` | Risk score trend history. |
+| `activity_log.php` | Audit trail (also a library for `logActivity()`). |
+| `inspector.php` | Inspector account management (admin only). |
 | `import_sanitary.php` | Bulk CSV/Excel import into `sanitary_records`. |
+| `import_inspections.php` | Bulk inspection report import. |
+| `auto_schedule.php` | Risk-based auto-scheduling of inspections. |
+| `get_barangays.php` | Public barangay list (static data). |
+| `download.php` | File download with path traversal protection. |
 | `setup_database.php` | One-time DB + table creation. Run in browser. |
-| `secrets.php` | OpenRouter API key. Do not commit real keys. |
+| `secrets.php` | Loads credentials from `.env`. Never commit real keys. |
+| `email_template.php` | HTML email template renderer. |
+| `PHPMailer/` | PHPMailer library + notification helpers. |
 
 ### JavaScript (`js/`)
 
 | File | Used by |
 |---|---|
 | `login.js` | `index.html` — login form, forgot-password flow |
-| `admin.js` | `admin.html` — all admin modules (~4000 lines, single file) |
-| `inspector.js` | `inspector.html` — inspector modules (~5000 lines, single file) |
+| `admin.js` | `admin.html` — all admin modules (~5700 lines, single file) |
+| `inspector.js` | `inspector.html` — inspector modules (~5800 lines, single file) |
 
-API base URL is hardcoded: `const API_BASE_URL = 'http://localhost/TayabasCare/php';`
+API base URL: `const API_BASE_URL = 'php';` (relative path). A fetch interceptor auto-attaches CSRF tokens to all mutating requests.
 
 ### CSS (`css/`)
 
@@ -68,22 +90,29 @@ API base URL is hardcoded: `const API_BASE_URL = 'http://localhost/TayabasCare/p
 
 External CSS loaded via CDN: Tailwind CSS, DaisyUI 4.6.0, Font Awesome 6.x, Bootstrap Icons, Google Fonts (Inter).
 
-## Database schema (11 tables)
+## Database schema (15+ tables)
 
 All tables use InnoDB + utf8mb4. Key tables:
 
 - **`users`** — login credentials, role (`admin`/`inspector`)
 - **`inspector_accounts`** — inspector profiles. Auth syncs between this and `users`.
-- **`sanitary_records`** — establishment records (the main data table for prediction)
+- **`sanitary_records`** — establishment records (main data table for prediction)
 - **`inspection_reports`** — current/latest inspection per establishment
 - **`inspection_history`** — archived versions of inspection reports (auto-populated on update)
 - **`inspection_schedules`** — inspector schedule entries
-- **`burial_records`** — burial/cadaver records (separate module)
+- **`burial_records`** — burial/cadaver records
 - **`archive_data`** — soft-deleted items with 30-day expiry
 - **`password_resets`** — OTP-based password reset tokens
-- **`sanitary_permits`** — legacy permit data (imported historical records)
+- **`alerts`** — system alerts with fingerprint dedup
+- **`activity_log`** — audit trail
+- **`notification_log`** — email notification history
+- **`risk_scores`** — risk score history for trend analysis
+- **`risk_schedule_config`** — risk-based inspection intervals
+- **`scoring_weights`** — factor weights (25/20/20/20/15)
+- **`violation_categories`** — violation code reference
+- **`accomplishment_records`** — monthly accomplishment per inspector
 
-## Risk prediction formula (`predict.php`)
+## Risk prediction formula (`php/risk_utils.php`)
 
 5 factors, 100-point scale:
 1. **Previous violations** (0–25): keyword scan + `complied` flag, 8 pts each
@@ -94,16 +123,28 @@ All tables use InnoDB + utf8mb4. Key tables:
 
 Risk levels: HIGH >= 60, MODERATE >= 30, LOW < 30.
 
+Inspection revisions (from `inspection_history`) are deduplicated by `report_date` before scoring — editing a report N times does not inflate its risk score.
+
+## Security notes
+
+- **CSRF protection**: All mutating endpoints require `X-CSRF-Token` header. Tokens are fetched from `php/csrf_token.php` or returned in the login response.
+- **Session security**: `HttpOnly`, `SameSite=Lax`, `session_regenerate_id()` on login, strict mode.
+- **CORS**: Restricted to `http://localhost` (not wildcard).
+- **Password hashing**: bcrypt (`PASSWORD_DEFAULT`). Legacy MD5/plaintext auto-migrate on login.
+- **File uploads**: Extension + MIME validation via `finfo`, randomized filenames, size limits.
+- **Path traversal**: `download.php` uses `realpath` + `str_starts_with` with directory separator.
+- **Rate limiting**: Login (5/15min per IP), OTP verify (5/15min), OTP send (3/hr), AI analyze (10/hr).
+- **Secrets**: Stored in `php/.env` (protected by `.htaccess`). Never commit real keys.
+
 ## Quirks and gotchas
 
-- **Two DB drivers coexist**: `config.php` uses PDO, `db.php` uses mysqli. New code should use PDO via `config.php`.
-- **Inspection upsert pattern**: `inspection.php` CREATE checks if an establishment already has a report. If yes, it archives the old one to `inspection_history` and updates the existing row instead of inserting.
+- **Inspection upsert pattern**: `inspection.php` CREATE checks if an establishment already has a report. If yes, it archives the old one to `inspection_history` and updates the existing row (in a transaction). Uses `SELECT ... FOR UPDATE` to prevent race conditions.
 - **Password migration**: `auth.php` tries bcrypt first, then MD5 (32-char hex), then plaintext comparison. On match with non-bcrypt, it auto-upgrades to bcrypt.
-- **No CORS restriction**: `Access-Control-Allow-Origin: *` is set in `config.php`. Fine for local dev, not for production.
-- **`setup_database.php` is a string literal bug**: the file starts with a `"` character (line 1) before the HTML doctype. It still works because PHP processes the `<?php` block inside, but the output starts with a stray quote.
-- **Prediction uses both DB and localStorage**: `predict.php` GET pulls from MySQL. The POST endpoint accepts inspection data from localStorage (frontend passes it). The GET handler merges `inspection_reports` + `inspection_history` for accurate violation counts.
-- **CDN dependencies**: Tailwind, DaisyUI, Chart.js, Tesseract.js, Font Awesome, Bootstrap Icons — all loaded from CDN. No local copies. If CDN is unreachable, UI breaks.
-- **Hardcoded inspector names** in `admin.html` accomplishment report table headers (MEL, MICHAEL, OLIVE, WENDY, ZALDY). Changing inspectors requires editing the HTML.
+- **CLI bypass**: `auth_check.php` allows CLI (cron) requests to bypass session auth with admin role.
+- **Setup guard**: `setup_database.php` blocks re-running if users exist (unless `?force=1`). Delete or lock it after install.
+- **CDN dependencies**: Tailwind, DaisyUI, Chart.js, Tesseract.js, Font Awesome, Bootstrap Icons — all loaded from CDN. No local copies.
+- **XSS protection**: `Utils.esc()` in admin.js and `esc()` in inspector.js escape HTML + quotes. Use these for ALL user data in `innerHTML` templates.
+- **Hardcoded inspector names**: admin.html accomplishment report table may show placeholder headers if `buildAdminInspectorColumnMap` fails.
 
 ## Conventions
 

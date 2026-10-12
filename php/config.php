@@ -1,7 +1,20 @@
 <?php
+// Error handling: log but never display
+error_reporting(E_ALL);
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+
 // Session configuration: 35-minute server-side lifetime (frontend auto-logout at 30 min)
 ini_set('session.gc_maxlifetime', 2100);
-ini_set('session.cookie_lifetime', 0); // browser session cookie
+ini_set('session.use_strict_mode', 1);
+
+// Hardened session cookie flags
+session_set_cookie_params([
+    'lifetime' => 0,
+    'path'     => '/',
+    'httponly' => true,
+    'samesite' => 'Lax',
+]);
 
 // Start session before any output (must be before headers)
 if (session_status() === PHP_SESSION_NONE) {
@@ -37,16 +50,24 @@ class Database {
             return $this->conn;
         } catch(PDOException $e) {
             error_log('DB connection failed: ' . $e->getMessage());
-            echo json_encode(['success' => false, 'error' => 'Database connection failed. Please try again later.']);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'data' => null, 'message' => 'Database connection failed. Please try again later.']);
             exit();
         }
     }
 }
 
-// CORS Headers
-header('Access-Control-Allow-Origin: *');
+// CORS Headers — restrict to local origin
+$allowedOrigins = ['http://localhost', 'http://localhost:80', 'http://127.0.0.1', 'http://localhost:8080'];
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (in_array($origin, $allowedOrigins, true)) {
+    header('Access-Control-Allow-Origin: ' . $origin);
+    header('Access-Control-Allow-Credentials: true');
+} else {
+    header('Access-Control-Allow-Origin: http://localhost');
+}
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, X-CSRF-Token');
 header('Content-Type: application/json; charset=utf-8');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -60,7 +81,7 @@ function jsonResponse($success, $data = null, $message = '') {
         'success' => $success,
         'data' => $data,
         'message' => $message
-    ]);
+    ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE);
     exit();
 }
 
