@@ -245,6 +245,7 @@ const PageManager = {
         } else if (pageName === 'accomplishment-report') {
             adminShowReportTab('monthly', document.getElementById('admin-tab-monthly'));
         } else if (pageName === 'schedule') {
+            await CalendarEvents.fetchAll();
             ScheduleManager.render();
         } else if (pageName === 'archive') {
             ArchiveManager.render();
@@ -2267,7 +2268,9 @@ const ReportsManager = {
                 </div>
                 <div class="detail-section">
                     <h4>Recommendations</h4>
-                    <p style="font-size: 14px; color: #374151;">${Utils.esc(report.recommendation) || 'N/A'}</p>
+                    <div style="max-height:200px;overflow-y:auto;">
+                        <p style="font-size: 14px; color: #374151;">${Utils.esc(report.recommendation) || 'N/A'}</p>
+                    </div>
                 </div>
                 ${report.filePath ? `
                 <div class="detail-section">
@@ -4366,6 +4369,7 @@ const ScheduleManager = {
     render: async () => {
         // Fetch latest from DB before rendering
         await ScheduleManager.fetchAll();
+        await CalendarEvents.fetchAll();
 
         // Update sidebar badge
         const all         = ScheduleManager.getAll();
@@ -4380,6 +4384,7 @@ const ScheduleManager = {
 
     renderCalendar: () => {
         const all    = ScheduleManager.getAll();
+        const events = CalendarEvents._cache || [];
         const year   = ScheduleManager.calYear;
         const month  = ScheduleManager.calMonth;
         const label  = document.getElementById('calMonthLabel');
@@ -4392,12 +4397,19 @@ const ScheduleManager = {
         const daysInMonth = new Date(year, month + 1, 0).getDate();
         const today      = new Date(); today.setHours(0,0,0,0);
 
-        // Build a map: 'YYYY-MM-DD' -> [schedules]
+        // Build maps: 'YYYY-MM-DD' -> [schedules] and [events]
         const schedMap = {};
         all.forEach(s => {
             if (s.schedDate) {
                 if (!schedMap[s.schedDate]) schedMap[s.schedDate] = [];
                 schedMap[s.schedDate].push(s);
+            }
+        });
+        const eventMap = {};
+        events.forEach(e => {
+            if (e.event_date) {
+                if (!eventMap[e.event_date]) eventMap[e.event_date] = [];
+                eventMap[e.event_date].push(e);
             }
         });
 
@@ -4415,18 +4427,27 @@ const ScheduleManager = {
             const cellDate = new Date(year, month, d); cellDate.setHours(0,0,0,0);
             const isToday  = cellDate.getTime() === today.getTime();
             const scheds   = schedMap[dateKey] || [];
-            const hasScheds = scheds.length > 0;
+            const dayEvents = eventMap[dateKey] || [];
+            const hasItems  = scheds.length > 0 || dayEvents.length > 0;
 
             const bgColor   = isToday ? '#ecfdf5' : '#fff';
             const border    = isToday ? '2px solid #10b981' : '1px solid #e5e7eb';
             const dayColor  = isToday ? '#059669' : '#374151';
-            const cursor    = hasScheds ? 'pointer' : 'default';
+            const cursor    = hasItems ? 'pointer' : 'default';
 
             let dotsHtml = '';
-            if (hasScheds) {
+            if (dayEvents.length > 0) {
+                dotsHtml += `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;">` +
+                    dayEvents.slice(0, 2).map(ev =>
+                        `<span style="font-size:10px;background:#f59e0b;color:#fff;border-radius:4px;padding:1px 5px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${ev.title}">${ev.title}</span>`
+                    ).join('') +
+                    (dayEvents.length > 2 ? `<span style="font-size:10px;color:#6b7280;">+${dayEvents.length - 2}</span>` : '') +
+                    `</div>`;
+            }
+            if (scheds.length > 0) {
                 const riskColors = { HIGH: '#ef4444', MODERATE: '#f59e0b', LOW: '#10b981' };
                 const colors = ['#2563eb','#059669','#f59e0b','#ef4444','#8b5cf6'];
-                dotsHtml = `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;">` +
+                dotsHtml += `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;">` +
                     scheds.slice(0, 3).map((s, i) => {
                         const shortName = s.inspector.split(' ')[0] + ' ' + (s.inspector.split(' ')[1] || '');
                         const dotColor = s.riskLevel ? (riskColors[s.riskLevel] || colors[i % colors.length]) : colors[i % colors.length];
@@ -4439,7 +4460,7 @@ const ScheduleManager = {
             html += `
             <div onclick="ScheduleManager.showDay('${dateKey}')"
                 style="min-height:80px;border-radius:8px;background:${bgColor};border:${border};padding:6px 8px;cursor:${cursor};transition:box-shadow 0.15s;"
-                onmouseover="if(${hasScheds}) this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'"
+                onmouseover="if(${hasItems}) this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'"
                 onmouseout="this.style.boxShadow='none'">
                 <div style="font-size:13px;font-weight:${isToday ? '700' : '500'};color:${dayColor};">${d}</div>
                 ${dotsHtml}
@@ -4452,6 +4473,7 @@ const ScheduleManager = {
     showDay: (dateKey) => {
         const all    = ScheduleManager.getAll();
         const scheds = all.filter(s => s.schedDate === dateKey);
+        const dayEvents = CalendarEvents.getEventsForDate(dateKey);
         const panel  = document.getElementById('calDayPanel');
         const title  = document.getElementById('calDayTitle');
         const list   = document.getElementById('calDayList');
@@ -4460,15 +4482,35 @@ const ScheduleManager = {
         const dateFmt = new Date(dateKey + 'T00:00:00').toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         title.textContent = dateFmt;
 
-        if (scheds.length === 0) {
-            list.innerHTML = '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:12px;">No inspectors scheduled on this day.</p>';
-        } else {
+        let html = '';
+
+        // Show events first
+        if (dayEvents.length > 0) {
+            html += `<div style="margin-bottom:12px;"><div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Events</div>`;
+            html += dayEvents.map(ev => `
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;padding:12px 14px;border:1px solid #fde68a;border-radius:10px;margin-bottom:8px;background:#fffbeb;">
+                    <div>
+                        <div style="font-weight:600;font-size:14px;color:#92400e;">${Utils.esc(ev.title)}</div>
+                        ${ev.start_time || ev.end_time ? `<div style="font-size:12px;color:#b45309;margin-top:2px;">🕐 ${CalendarEvents.formatTime(ev.start_time)}${ev.end_time ? ' - ' + CalendarEvents.formatTime(ev.end_time) : ''}</div>` : ''}
+                        ${ev.place ? `<div style="font-size:12px;color:#b45309;margin-top:2px;">📍 ${Utils.esc(ev.place)}</div>` : ''}
+                        ${ev.notes ? `<div style="font-size:12px;color:#374151;margin-top:4px;">${Utils.esc(ev.notes)}</div>` : ''}
+                    </div>
+                    <button onclick="CalendarEvents.deleteEvent(${ev.id})" style="font-size:11px;padding:4px 10px;border:1px solid #dc2626;color:#dc2626;background:#fee2e2;border-radius:6px;cursor:pointer;flex-shrink:0;">Delete</button>
+                </div>
+            `).join('') + `</div>`;
+        }
+
+        // Show schedules
+        if (scheds.length === 0 && dayEvents.length === 0) {
+            html += '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:12px;">No events or inspections scheduled on this day.</p>';
+        } else if (scheds.length > 0) {
             const statusStyle = {
                 Pending: { bg: '#eff6ff', color: '#2563eb' },
                 Done:    { bg: '#d1fae5', color: '#059669' },
                 Overdue: { bg: '#fee2e2', color: '#dc2626' }
             };
-            list.innerHTML = scheds.map(s => {
+            html += `<div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Inspections</div>`;
+            html += scheds.map(s => {
                 const status = ScheduleManager.getStatus(s.schedDate, s.done);
                 const ss     = statusStyle[status] || { bg: '#f3f4f6', color: '#6b7280' };
                 return `
@@ -4488,6 +4530,7 @@ const ScheduleManager = {
             }).join('');
         }
 
+        list.innerHTML = html;
         panel.style.display = 'block';
     },
 
@@ -4505,6 +4548,102 @@ const ScheduleManager = {
 };
 
 // ==================== END SCHEDULE MANAGER ====================
+
+// ==================== CALENDAR EVENTS ====================
+
+const CalendarEvents = {
+    _cache: [],
+
+    fetchAll: async () => {
+        try {
+            const resp = await fetch(`${API_BASE_URL}/calendar_events.php`);
+            const json = await resp.json();
+            if (json.success && Array.isArray(json.data)) {
+                CalendarEvents._cache = json.data;
+            }
+        } catch (e) { console.warn('Could not fetch events:', e); }
+        return CalendarEvents._cache;
+    },
+
+    showAddForm: () => {
+        const form = document.getElementById('addEventForm');
+        if (!form) return;
+        form.style.display = 'block';
+        document.getElementById('eventTitle').value = '';
+        document.getElementById('eventDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('eventPlace').value = '';
+        document.getElementById('eventStartTime').value = '';
+        document.getElementById('eventEndTime').value = '';
+        document.getElementById('eventNotes').value = '';
+        document.getElementById('addEventStatus').innerHTML = '';
+    },
+
+    submitAdd: async () => {
+        const title     = document.getElementById('eventTitle')?.value?.trim();
+        const eventDate = document.getElementById('eventDate')?.value;
+        const place     = document.getElementById('eventPlace')?.value?.trim();
+        const startTime = document.getElementById('eventStartTime')?.value;
+        const endTime   = document.getElementById('eventEndTime')?.value;
+        const notes     = document.getElementById('eventNotes')?.value?.trim();
+        const status    = document.getElementById('addEventStatus');
+
+        if (!title || !eventDate) {
+            status.innerHTML = '<span style="color:#ef4444;">Title and date are required.</span>';
+            return;
+        }
+
+        try {
+            await fetch(`${API_BASE_URL}/calendar_events.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, event_date: eventDate, start_time: startTime, end_time: endTime, place, notes })
+            });
+            status.innerHTML = '<span style="color:#059669;"><i class="fas fa-check"></i> Event saved!</span>';
+            await CalendarEvents.fetchAll();
+            ScheduleManager.renderCalendar();
+            setTimeout(() => { document.getElementById('addEventForm').style.display = 'none'; }, 1200);
+        } catch (e) {
+            status.innerHTML = '<span style="color:#ef4444;">Failed to save event.</span>';
+        }
+    },
+
+    deleteEvent: async (id) => {
+        if (!confirm('Delete this event?')) return;
+        try {
+            await fetch(`${API_BASE_URL}/calendar_events.php?id=${id}`, { method: 'DELETE' });
+            CalendarEvents._cache = CalendarEvents._cache.filter(e => e.id !== id);
+            await ScheduleManager.fetchAll();
+            ScheduleManager.renderCalendar();
+            // Refresh day panel if open
+            const panel = document.getElementById('calDayPanel');
+            if (panel && panel.style.display !== 'none') {
+                const title = document.getElementById('calDayTitle')?.textContent;
+                if (title) {
+                    // Find the date key from current view
+                    const all = ScheduleManager._cache;
+                    // Re-open the day panel for the same date
+                }
+            }
+        } catch (e) {
+            adminShowNotification('Failed to delete event.', 'error');
+        }
+    },
+
+    getEventsForDate: (dateKey) => {
+        return CalendarEvents._cache.filter(e => e.event_date === dateKey);
+    },
+
+    formatTime: (t) => {
+        if (!t) return '';
+        const [h, m] = t.split(':');
+        const hr = parseInt(h);
+        const ampm = hr >= 12 ? 'PM' : 'AM';
+        const hr12 = hr === 0 ? 12 : hr > 12 ? hr - 12 : hr;
+        return `${hr12}:${m} ${ampm}`;
+    }
+};
+
+// ==================== END CALENDAR EVENTS ====================
 
 // ==================== AUTO-SCHEDULER (Risk-Based) ====================
 
@@ -4790,9 +4929,13 @@ const PredictionEngine = {
             </div>
             <div>
                 <h4 style="font-size:15px;font-weight:700;color:#6b7280;margin:0 0 14px;text-transform:uppercase;letter-spacing:0.5px;">Recommendations</h4>
-                <ul style="list-style:none;padding:0;margin:0;">${recoHtml}</ul>
+                <div style="max-height:200px;overflow-y:auto;padding-right:6px;">
+                    <ul style="list-style:none;padding:0;margin:0;">${recoHtml}</ul>
+                </div>
                 <h4 style="font-size:15px;font-weight:700;color:#6b7280;margin:16px 0 10px;text-transform:uppercase;letter-spacing:0.5px;">Inspector Remarks</h4>
-                <ul style="list-style:none;padding:0;margin:0;">${remarksHtml}</ul>
+                <div style="max-height:200px;overflow-y:auto;padding-right:6px;">
+                    <ul style="list-style:none;padding:0;margin:0;">${remarksHtml}</ul>
+                </div>
                 <div style="margin-top:20px;padding:16px;background:#f9fafb;border-radius:8px;font-size:15px;color:#374151;line-height:2;">
                     <strong>Barangay:</strong> ${Utils.esc(r.barangay) || 'N/A'}<br>
                     <strong>Total Inspections on Record:</strong> ${r.totalInspections}<br>
@@ -4830,7 +4973,7 @@ const PredictionEngine = {
                 })
             });
             const aiJson = await aiResp.json();
-            const aiText = aiJson?.analysis?.aiAssessment || aiJson?.error || 'Could not generate AI assessment.';
+            const aiText = aiJson?.data?.aiAssessment || aiJson?.error || 'Could not generate AI assessment.';
             document.getElementById('aiAssessmentText').textContent = aiText;
         } catch (e) {
             document.getElementById('aiAssessmentText').textContent = 'AI assessment unavailable. Check your connection.';
@@ -5990,22 +6133,28 @@ const EstablishmentTrend = {
                 return;
             }
 
-            const container = document.getElementById('predDetailBody');
-            if (!container) return;
+            // Remove existing modal if any
+            document.getElementById('estabTrendModal')?.remove();
 
-            // Add trend chart section
-            let trendSection = document.getElementById('estabTrendSection');
-            if (!trendSection) {
-                trendSection = document.createElement('div');
-                trendSection.id = 'estabTrendSection';
-                trendSection.style.cssText = 'margin-top:16px;padding-top:16px;border-top:1px solid #e5e7eb;';
-                container.appendChild(trendSection);
-            }
+            // Create modal overlay
+            const modal = document.createElement('div');
+            modal.id = 'estabTrendModal';
+            modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                    if (EstablishmentTrend._chart) { EstablishmentTrend._chart.destroy(); EstablishmentTrend._chart = null; }
+                }
+            });
 
-            trendSection.innerHTML = `
-                <h4 style="font-size:14px;font-weight:600;color:#374151;margin:0 0 12px;">Risk Score Trend — ${establishmentName}</h4>
-                <div style="position:relative;height:200px;"><canvas id="estabTrendChart"></canvas></div>
-            `;
+            modal.innerHTML = `
+                <div style="background:#fff;border-radius:16px;padding:28px;width:90%;max-width:700px;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative;">
+                    <button onclick="document.getElementById('estabTrendModal')?.remove();if(EstablishmentTrend._chart){EstablishmentTrend._chart.destroy();EstablishmentTrend._chart=null;}" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;">&times;</button>
+                    <h4 style="font-size:16px;font-weight:700;color:#374151;margin:0 0 16px;">Risk Score Trend — ${establishmentName}</h4>
+                    <div style="position:relative;height:300px;"><canvas id="estabTrendChart"></canvas></div>
+                </div>`;
+
+            document.body.appendChild(modal);
 
             const canvas = document.getElementById('estabTrendChart');
             if (EstablishmentTrend._chart) EstablishmentTrend._chart.destroy();

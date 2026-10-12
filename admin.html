@@ -1188,6 +1188,9 @@
                         <button onclick="ScheduleManager.showAddForm()" style="background:#059669;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
                             <i class="fas fa-plus"></i> Add Schedule
                         </button>
+                        <button onclick="CalendarEvents.showAddForm()" style="background:#f59e0b;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+                            <i class="fas fa-calendar-day"></i> Add Event
+                        </button>
                     </div>
                 </div>
 
@@ -1233,6 +1236,49 @@
                         <button onclick="document.getElementById('addScheduleForm').style.display='none'" style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">Cancel</button>
                     </div>
                     <div id="addSchedStatus" style="margin-top:8px;font-size:12px;"></div>
+                </div>
+
+                <!-- Add Event Form (hidden by default) -->
+                <div id="addEventForm" style="display:none;margin-bottom:16px;background:#fffbeb;border-radius:12px;border:1px solid #fde68a;padding:20px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                        <h3 style="font-size:15px;font-weight:700;color:#92400e;margin:0;">
+                            <i class="fas fa-calendar-day" style="color:#f59e0b;margin-right:6px;"></i> New Event
+                        </h3>
+                        <button onclick="document.getElementById('addEventForm').style.display='none'" style="background:none;border:none;font-size:18px;cursor:pointer;color:#6b7280;">&times;</button>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div style="grid-column:1/-1;">
+                            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Event Title *</label>
+                            <input type="text" id="eventTitle" placeholder="e.g. Barangay Health Assembly" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px;font-size:13px;" />
+                        </div>
+                        <div>
+                            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Date *</label>
+                            <input type="date" id="eventDate" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px;font-size:13px;" />
+                        </div>
+                        <div>
+                            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Place / Location</label>
+                            <input type="text" id="eventPlace" placeholder="e.g. Tayabas City Hall" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px;font-size:13px;" />
+                        </div>
+                        <div>
+                            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Start Time</label>
+                            <input type="time" id="eventStartTime" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px;font-size:13px;" />
+                        </div>
+                        <div>
+                            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">End Time</label>
+                            <input type="time" id="eventEndTime" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px;font-size:13px;" />
+                        </div>
+                        <div style="grid-column:1/-1;">
+                            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Notes</label>
+                            <textarea id="eventNotes" placeholder="Additional details..." rows="2" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px;font-size:13px;resize:vertical;"></textarea>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:12px;">
+                        <button onclick="CalendarEvents.submitAdd()" style="background:#f59e0b;color:#fff;border:none;padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+                            <i class="fas fa-save" style="margin-right:4px;"></i> Save Event
+                        </button>
+                        <button onclick="document.getElementById('addEventForm').style.display='none'" style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">Cancel</button>
+                    </div>
+                    <div id="addEventStatus" style="margin-top:8px;font-size:12px;"></div>
                 </div>
 
                 <!-- Auto-Schedule Recommendations Panel -->
