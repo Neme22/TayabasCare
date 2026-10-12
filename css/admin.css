@@ -87,6 +87,46 @@ body {
     .no-print { display: none !important; }
 }
 
+/* Dashboard Sub-Tabs */
+.dashboard-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #e5e7eb;
+    padding-bottom: 0;
+}
+
+.dashboard-tab {
+    padding: 10px 20px;
+    border: none;
+    background: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: #6b7280;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.dashboard-tab:hover {
+    color: #374151;
+}
+
+.dashboard-tab.active {
+    color: #1e40af;
+    border-bottom-color: #1e40af;
+}
+
+.dashboard-tab-content {
+    display: none;
+}
+
+.dashboard-tab-content.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
 /* Dashboard Stats Grid */
 .stats-grid {
     display: grid;

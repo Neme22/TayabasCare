@@ -201,15 +201,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Admin Recovery Code link
-    const adminRecoveryLink = document.getElementById("adminRecoveryLink");
-    if (adminRecoveryLink) {
-        adminRecoveryLink.addEventListener("click", (e) => {
-            e.preventDefault();
-            showAdminRecoveryForm();
-        });
-    }
-
 });
 
 

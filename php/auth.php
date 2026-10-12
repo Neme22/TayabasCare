@@ -8,7 +8,6 @@ $method = $_SERVER['REQUEST_METHOD'];
 
 switch($method) {
     case 'POST':
-        requireCsrf();
         login();
         break;
     case 'GET':

@@ -251,6 +251,7 @@ const PageManager = {
         } else if (pageName === 'dashboard') {
             Dashboard.updateStats();
             Dashboard.renderActivity();
+            Dashboard.initTabs();
         } else if (pageName === 'prediction') {
             PredictionEngine.run();
         } else if (pageName === 'inspection-history') {
@@ -1074,6 +1075,27 @@ const Dashboard = {
                 </div>
             </div>
         `).join('');
+    },
+
+    initTabs: () => {
+        const tabs = document.querySelectorAll('.dashboard-tab');
+        const contents = document.querySelectorAll('.dashboard-tab-content');
+        if (!tabs.length) return;
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                contents.forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                const target = tab.dataset.tab;
+                document.querySelector(`.dashboard-tab-content[data-tab="${target}"]`)?.classList.add('active');
+                // Resize Chart.js canvases in the now-visible tab
+                setTimeout(() => {
+                    if (typeof Chart !== 'undefined') {
+                        Object.values(Chart.instances || {}).forEach(chart => chart.resize());
+                    }
+                }, 50);
+            });
+        });
     }
 };
 
@@ -3031,6 +3053,7 @@ async function initApp() {
     await InspectorManager.render();
     Dashboard.updateStats();
     Dashboard.renderActivity();
+    Dashboard.initTabs();
     SanitaryManager.render();
     BurialManager.render();
     ReportsManager.loadAndRender();
