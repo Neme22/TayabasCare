@@ -4624,6 +4624,8 @@ const CalendarEvents = {
             return;
         }
 
+        if (!confirm(`Create event "${title}" on ${eventDate}?`)) return;
+
         try {
             await fetch(`${API_BASE_URL}/calendar_events.php`, {
                 method: 'POST',
