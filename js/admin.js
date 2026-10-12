@@ -186,7 +186,7 @@ const Utils = {
 const PageManager = {
     currentPage: 'dashboard',
     
-    switchPage: (pageName) => {
+    switchPage: async (pageName) => {
         // Update navigation
         document.querySelectorAll('.sidebar-item').forEach(item => {
             item.classList.remove('active');
@@ -4799,8 +4799,8 @@ const PredictionEngine = {
         const statusEl = document.getElementById('predStatus');
         const tbody    = document.getElementById('predTableBody');
         // Close detail panel if open
-        const detailPanel = document.getElementById('predDetailPanel');
-        if (detailPanel) detailPanel.style.display = 'none';
+        const detailPanel = document.getElementById('predDetailModal');
+        if (detailPanel) detailPanel.remove();
         statusEl.textContent = 'Running prescription...';
         tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:#6b7280;"><i class="fas fa-spinner fa-spin"></i> Analyzing establishments...</td></tr>';
 
@@ -4919,14 +4919,12 @@ const PredictionEngine = {
     showDetail: async (index) => {
         const r     = PredictionEngine.results[index];
         if (!r) return;
-        const panel = document.getElementById('predDetailPanel');
-        const title = document.getElementById('predDetailTitle');
-        const body  = document.getElementById('predDetailBody');
+
+        // Remove existing modal if any
+        document.getElementById('predDetailModal')?.remove();
 
         const riskColor = r.riskLevel === 'HIGH' ? '#ef4444' : r.riskLevel === 'MODERATE' ? '#d97706' : '#059669';
         const riskBg    = r.riskLevel === 'HIGH' ? '#fef2f2' : r.riskLevel === 'MODERATE' ? '#fffbeb' : '#ecfdf5';
-
-        title.innerHTML = `${Utils.esc(r.businessName)} &nbsp;<span style="font-size:15px;padding:5px 14px;border-radius:999px;background:${riskBg};color:${riskColor};font-weight:700;">${r.riskLevel} RISK · ${r.totalScore}/100</span>`;
 
         const factors = r.factors || {};
         const factorRows = Object.values(factors).map(f => {
@@ -4957,42 +4955,54 @@ const PredictionEngine = {
               ).join('')
             : '<li style="color:#9ca3af;font-size:15px;">No inspector remarks on record yet.</li>';
 
-        // Show panel immediately with loading state for AI
-        body.innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
-            <div>
-                <h4 style="font-size:15px;font-weight:700;color:#6b7280;margin:0 0 14px;text-transform:uppercase;letter-spacing:0.5px;">Factor Breakdown</h4>
-                ${factorRows}
-            </div>
-            <div>
-                <h4 style="font-size:15px;font-weight:700;color:#6b7280;margin:0 0 14px;text-transform:uppercase;letter-spacing:0.5px;">Recommendations</h4>
-                <div style="max-height:200px;overflow-y:auto;padding-right:6px;">
-                    <ul style="list-style:none;padding:0;margin:0;">${recoHtml}</ul>
-                </div>
-                <h4 style="font-size:15px;font-weight:700;color:#6b7280;margin:16px 0 10px;text-transform:uppercase;letter-spacing:0.5px;">Inspector Remarks</h4>
-                <div style="max-height:200px;overflow-y:auto;padding-right:6px;">
-                    <ul style="list-style:none;padding:0;margin:0;">${remarksHtml}</ul>
-                </div>
-                <div style="margin-top:20px;padding:16px;background:#f9fafb;border-radius:8px;font-size:15px;color:#374151;line-height:2;">
-                    <strong>Barangay:</strong> ${Utils.esc(r.barangay) || 'N/A'}<br>
-                    <strong>Total Inspections on Record:</strong> ${r.totalInspections}<br>
-                    <strong>Last Inspected:</strong> ${r.lastInspected}<br>
-                    <strong>Prescription basis:</strong> PD 856 — Sanitation Code of the Philippines
-                </div>
-                <button onclick="EstablishmentTrend.show('${Utils.esc(r.businessName)}')" style="margin-top:12px;background:#7c3aed;border:none;color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">
-                    <i class="fas fa-chart-line" style="margin-right:6px;"></i>View Risk Score Trend
-                </button>
-            </div>
-        </div>
-        <div id="aiAssessmentBox" style="margin-top:24px;padding:28px;background:#f0f9ff;border:2px solid #bae6fd;border-radius:12px;">
-            <h4 style="font-size:20px;font-weight:700;color:#0369a1;margin:0 0 16px;display:flex;align-items:center;gap:8px;">🤖 AI Assessment</h4>
-            <p id="aiAssessmentText" style="font-size:18px;color:#1e3a5f;margin:0;line-height:2;letter-spacing:0.01em;">
-                <i class="fas fa-spinner fa-spin"></i> Generating AI assessment, please wait...
-            </p>
-        </div>`;
+        // Create modal overlay
+        const modal = document.createElement('div');
+        modal.id = 'predDetailModal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:40px 0;';
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.remove();
+        });
 
-        panel.style.display = 'block';
-        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        modal.innerHTML = `
+            <div style="background:#fff;border-radius:16px;padding:28px;width:92%;max-width:900px;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative;margin-bottom:40px;">
+                <button onclick="document.getElementById('predDetailModal')?.remove()" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;">&times;</button>
+                <h3 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 18px;">${Utils.esc(r.businessName)} &nbsp;<span style="font-size:15px;padding:5px 14px;border-radius:999px;background:${riskBg};color:${riskColor};font-weight:700;">${r.riskLevel} RISK · ${r.totalScore}/100</span></h3>
+                <div id="predDetailBody">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                        <div>
+                            <h4 style="font-size:15px;font-weight:700;color:#6b7280;margin:0 0 14px;text-transform:uppercase;letter-spacing:0.5px;">Factor Breakdown</h4>
+                            ${factorRows}
+                        </div>
+                        <div>
+                            <h4 style="font-size:15px;font-weight:700;color:#6b7280;margin:0 0 14px;text-transform:uppercase;letter-spacing:0.5px;">Recommendations</h4>
+                            <div style="max-height:200px;overflow-y:auto;padding-right:6px;">
+                                <ul style="list-style:none;padding:0;margin:0;">${recoHtml}</ul>
+                            </div>
+                            <h4 style="font-size:15px;font-weight:700;color:#6b7280;margin:16px 0 10px;text-transform:uppercase;letter-spacing:0.5px;">Inspector Remarks</h4>
+                            <div style="max-height:200px;overflow-y:auto;padding-right:6px;">
+                                <ul style="list-style:none;padding:0;margin:0;">${remarksHtml}</ul>
+                            </div>
+                            <div style="margin-top:20px;padding:16px;background:#f9fafb;border-radius:8px;font-size:15px;color:#374151;line-height:2;">
+                                <strong>Barangay:</strong> ${Utils.esc(r.barangay) || 'N/A'}<br>
+                                <strong>Total Inspections on Record:</strong> ${r.totalInspections}<br>
+                                <strong>Last Inspected:</strong> ${r.lastInspected}<br>
+                                <strong>Prescription basis:</strong> PD 856 — Sanitation Code of the Philippines
+                            </div>
+                            <button onclick="EstablishmentTrend.show('${Utils.esc(r.businessName).replace(/'/g, "\\'")}')" style="margin-top:12px;background:#7c3aed;border:none;color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">
+                                <i class="fas fa-chart-line" style="margin-right:6px;"></i>View Risk Score Trend
+                            </button>
+                        </div>
+                    </div>
+                    <div id="aiAssessmentBox" style="margin-top:24px;padding:28px;background:#f0f9ff;border:2px solid #bae6fd;border-radius:12px;">
+                        <h4 style="font-size:20px;font-weight:700;color:#0369a1;margin:0 0 16px;display:flex;align-items:center;gap:8px;">🤖 AI Assessment</h4>
+                        <p id="aiAssessmentText" style="font-size:18px;color:#1e3a5f;margin:0;line-height:2;letter-spacing:0.01em;">
+                            <i class="fas fa-spinner fa-spin"></i> Generating AI assessment, please wait...
+                        </p>
+                    </div>
+                </div>
+            </div>`;
+
+        document.body.appendChild(modal);
 
         // Call AI
         try {
