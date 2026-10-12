@@ -253,7 +253,8 @@ function createReport() {
             $stmt = $db->prepare("
                 UPDATE inspection_reports
                 SET file_name = ?, file_path = ?, recommendation = ?, remarks = ?, complied = ?,
-                    inspector_name = ?, location = ?, status = ?, report_date = ?, violation_codes = ?, establishment_id = ?
+                    inspector_name = ?, location = ?, status = ?, report_date = ?, violation_codes = ?, establishment_id = ?,
+                    compliance_deadline = ?
                 WHERE establishment = ?
             ");
             $stmt->execute([
@@ -268,6 +269,7 @@ function createReport() {
                 date('Y-m-d H:i:s', strtotime($input['date'] ?? 'now')),
                 $violationCodes,
                 $establishmentId,
+                !empty($input['compliance_deadline']) ? $input['compliance_deadline'] : null,
                 $establishment
             ]);
             logActivity($db, 'UPDATE', 'inspection', $existing['id'], $establishment, 'Report updated (previous archived)');
@@ -448,11 +450,21 @@ function updateReport() {
             $violationCodes = json_encode($violationCodes);
         }
 
+        // Look up establishment_id
+        $establishmentId = $input['establishment_id'] ?? $current['establishment_id'] ?? null;
+        $establishment = $input['establishment'] ?? $current['establishment'] ?? '';
+        if (!$establishmentId && $establishment) {
+            $eidStmt = $db->prepare("SELECT id FROM sanitary_records WHERE LOWER(TRIM(business_name)) = LOWER(TRIM(?)) LIMIT 1");
+            $eidStmt->execute([$establishment]);
+            $eidRow = $eidStmt->fetch();
+            if ($eidRow) $establishmentId = (int)$eidRow['id'];
+        }
+
         $stmt = $db->prepare("
             UPDATE inspection_reports
             SET file_name = ?, recommendation = ?, remarks = ?, complied = ?,
                 compliance_deadline = ?, inspector_name = ?, location = ?, status = ?, report_date = ?,
-                violation_codes = ?
+                violation_codes = ?, establishment_id = ?
             WHERE id = ?
         ");
         $stmt->execute([
@@ -466,6 +478,7 @@ function updateReport() {
             $input['status'] ?? 'Submitted',
             date('Y-m-d H:i:s', strtotime($input['date'] ?? 'now')),
             $violationCodes,
+            $establishmentId,
             $id
         ]);
 
@@ -556,10 +569,32 @@ function updateReportWithFile() {
             $current['establishment_id'] ?? null
         ]);
 
+        // Parse violation codes
+        $violationCodes = $input['violation_codes'] ?? $input['violationCodes'] ?? null;
+        if ($violationCodes && is_string($violationCodes)) {
+            $decoded = json_decode($violationCodes, true);
+            $violationCodes = is_array($decoded) ? json_encode($decoded) : $current['violation_codes'] ?? null;
+        } elseif (is_array($violationCodes)) {
+            $violationCodes = json_encode($violationCodes);
+        } else {
+            $violationCodes = $current['violation_codes'] ?? null;
+        }
+
+        // Look up establishment_id
+        $establishmentId = $current['establishment_id'] ?? null;
+        $establishment = $input['establishment'] ?? $current['establishment'] ?? '';
+        if ($establishment) {
+            $eidStmt = $db->prepare("SELECT id FROM sanitary_records WHERE LOWER(TRIM(business_name)) = LOWER(TRIM(?)) LIMIT 1");
+            $eidStmt->execute([$establishment]);
+            $eidRow = $eidStmt->fetch();
+            if ($eidRow) $establishmentId = (int)$eidRow['id'];
+        }
+
         $stmt = $db->prepare("
             UPDATE inspection_reports
             SET file_name = ?, file_path = ?, recommendation = ?, remarks = ?, complied = ?,
-                compliance_deadline = ?, inspector_name = ?, location = ?, status = ?, report_date = ?
+                compliance_deadline = ?, inspector_name = ?, location = ?, status = ?, report_date = ?,
+                violation_codes = ?, establishment_id = ?
             WHERE id = ?
         ");
         $stmt->execute([
@@ -573,6 +608,8 @@ function updateReportWithFile() {
             $input['location'] ?? '',
             $input['status'] ?? 'Submitted',
             date('Y-m-d H:i:s', strtotime($input['date'] ?? 'now')),
+            $violationCodes,
+            $establishmentId,
             $id
         ]);
 

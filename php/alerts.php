@@ -44,6 +44,8 @@ if ($method === 'GET') {
     }
 
     if ($action === 'generate') {
+        // GET-triggered write — require CSRF token
+        requireCsrf();
         try {
             generateAlerts($db);
             jsonResponse(true, null, 'Alerts generated successfully.');

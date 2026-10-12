@@ -223,8 +223,8 @@ try {
             $sortedInspections = array_values($myInspections);
             usort($sortedInspections, function($a, $b) {
                 $da = $a['report_date'] ?? $a['date'] ?? '';
-                $db = $b['report_date'] ?? $b['date'] ?? '';
-                return strcmp($da, $db);
+                $dbVal = $b['report_date'] ?? $b['date'] ?? '';
+                return strcmp($da, $dbVal);
             });
 
             $previousViolations = [];

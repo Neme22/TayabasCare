@@ -1,11 +1,14 @@
 <?php
 require_once 'auth_check.php';
+require_once 'csrf.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit(); }
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     die(json_encode(['success' => false, 'data' => null, 'message' => 'Method not allowed']));
 }
+
+requireCsrf();
 
 // Rate limit: max 10 AI requests per user per hour
 try {

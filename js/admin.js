@@ -1926,7 +1926,7 @@ const BurialManager = {
             const result = await response.json();
 
             if (!result.success) {
-                tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Error: ${result.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Error: ${Utils.esc(result.message)}</td></tr>`;
                 return;
             }
 
@@ -4756,7 +4756,7 @@ const AutoScheduler = {
             AutoScheduler.recommendations = json.data || [];
             AutoScheduler.renderList();
         } catch (err) {
-            list.innerHTML = `<p style="text-align:center;padding:20px;color:#ef4444;">Error: ${err.message}</p>`;
+            list.innerHTML = `<p style="text-align:center;padding:20px;color:#ef4444;">Error: ${Utils.esc(err.message)}</p>`;
         }
     },
 
@@ -4817,7 +4817,7 @@ const AutoScheduler = {
             if (!json.success) throw new Error(json.message);
 
             const count = json.data?.scheduled || 0;
-            status.innerHTML = `<span style="color:#059669;font-weight:600;"><i class="fas fa-check-circle"></i> ${json.message}</span>`;
+            status.innerHTML = `<span style="color:#059669;font-weight:600;"><i class="fas fa-check-circle"></i> ${Utils.esc(json.message)}</span>`;
 
             // Refresh the calendar
             await ScheduleManager.render();
@@ -4825,7 +4825,7 @@ const AutoScheduler = {
             // Refresh alerts
             setTimeout(() => NotifManager.fetchAlerts(), 500);
         } catch (err) {
-            status.innerHTML = `<span style="color:#ef4444;"><i class="fas fa-times-circle"></i> Error: ${err.message}</span>`;
+            status.innerHTML = `<span style="color:#ef4444;"><i class="fas fa-times-circle"></i> Error: ${Utils.esc(err.message)}</span>`;
         }
     }
 };
@@ -4865,7 +4865,7 @@ const PredictionEngine = {
             if (badge) { badge.textContent = highCount; badge.style.display = highCount > 0 ? 'inline-block' : 'none'; }
 
         } catch (err) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;color:#ef4444;">Error: ${err.message}. Make sure XAMPP is running and predict.php is in the php folder.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;color:#ef4444;">Error: ${Utils.esc(err.message)}. Make sure XAMPP is running and predict.php is in the php folder.</td></tr>`;
             statusEl.textContent = '';
         }
     },
