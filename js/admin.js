@@ -4598,16 +4598,58 @@ const CalendarEvents = {
     },
 
     showAddForm: () => {
-        const form = document.getElementById('addEventForm');
-        if (!form) return;
-        form.style.display = 'block';
-        document.getElementById('eventTitle').value = '';
+        // Remove existing modal if any
+        document.getElementById('addEventModal')?.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'addEventModal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+        modal.innerHTML = `
+            <div style="background:#fffbeb;border-radius:16px;padding:28px;width:90%;max-width:560px;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative;border:1px solid #fde68a;">
+                <button onclick="document.getElementById('addEventModal')?.remove()" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;">&times;</button>
+                <h3 style="font-size:16px;font-weight:700;color:#92400e;margin:0 0 16px;">
+                    <i class="fas fa-calendar-day" style="color:#f59e0b;margin-right:6px;"></i> New Event
+                </h3>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                    <div style="grid-column:1/-1;">
+                        <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Event Title *</label>
+                        <input type="text" id="eventTitle" placeholder="e.g. Barangay Health Assembly" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px;font-size:13px;" />
+                    </div>
+                    <div>
+                        <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Date *</label>
+                        <input type="date" id="eventDate" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px;font-size:13px;" />
+                    </div>
+                    <div>
+                        <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Place / Location</label>
+                        <input type="text" id="eventPlace" placeholder="e.g. Tayabas City Hall" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px;font-size:13px;" />
+                    </div>
+                    <div>
+                        <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Start Time</label>
+                        <input type="time" id="eventStartTime" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px;font-size:13px;" />
+                    </div>
+                    <div>
+                        <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">End Time</label>
+                        <input type="time" id="eventEndTime" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px;font-size:13px;" />
+                    </div>
+                    <div style="grid-column:1/-1;">
+                        <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Notes</label>
+                        <textarea id="eventNotes" placeholder="Additional details..." rows="2" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px;font-size:13px;resize:vertical;"></textarea>
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:16px;">
+                    <button onclick="CalendarEvents.submitAdd()" style="background:#f59e0b;color:#fff;border:none;padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+                        <i class="fas fa-save" style="margin-right:4px;"></i> Save Event
+                    </button>
+                    <button onclick="document.getElementById('addEventModal')?.remove()" style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">Cancel</button>
+                </div>
+                <div id="addEventStatus" style="margin-top:8px;font-size:12px;"></div>
+            </div>`;
+
+        document.body.appendChild(modal);
         document.getElementById('eventDate').value = new Date().toISOString().split('T')[0];
-        document.getElementById('eventPlace').value = '';
-        document.getElementById('eventStartTime').value = '';
-        document.getElementById('eventEndTime').value = '';
-        document.getElementById('eventNotes').value = '';
-        document.getElementById('addEventStatus').innerHTML = '';
+        document.getElementById('eventTitle').focus();
     },
 
     submitAdd: async () => {
@@ -4635,7 +4677,7 @@ const CalendarEvents = {
             status.innerHTML = '<span style="color:#059669;"><i class="fas fa-check"></i> Event saved!</span>';
             await CalendarEvents.fetchAll();
             ScheduleManager.renderCalendar();
-            setTimeout(() => { document.getElementById('addEventForm').style.display = 'none'; }, 1200);
+            setTimeout(() => { document.getElementById('addEventModal')?.remove(); }, 1200);
         } catch (e) {
             status.innerHTML = '<span style="color:#ef4444;">Failed to save event.</span>';
         }
