@@ -397,17 +397,16 @@
                     </div>
                 </div>
 
-                <!-- Risk Trend Chart -->
+                <!-- Risk Trend Chart (opens as modal) -->
                 <div style="background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);padding:20px;margin-top:20px;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
                         <div style="display:flex;align-items:center;gap:8px;">
                             <i class="fas fa-chart-area" style="color:#7c3aed;font-size:16px;"></i>
                             <h3 style="font-size:15px;font-weight:700;color:#374151;margin:0;">Risk Score Trend (30 Days)</h3>
                         </div>
-                        <span id="riskTrendInfo" style="font-size:11px;color:#9ca3af;">Tracking risk score changes over time</span>
-                    </div>
-                    <div style="position:relative;height:200px;">
-                        <canvas id="riskTrendChart" role="img" aria-label="Line chart showing risk score trends over time">No data yet.</canvas>
+                        <button onclick="Dashboard.showRiskTrendModal()" style="background:#7c3aed;border:none;color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:12px;">
+                            <i class="fas fa-chart-area" style="margin-right:4px;"></i>View Trend
+                        </button>
                     </div>
                 </div>
 

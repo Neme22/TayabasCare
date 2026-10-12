@@ -537,6 +537,34 @@ const Dashboard = {
     },
 
     drawRiskTrendChart: async () => {
+        // Legacy call — now opens as modal
+        Dashboard.showRiskTrendModal();
+    },
+
+    showRiskTrendModal: async () => {
+        // Remove existing modal if any
+        document.getElementById('riskTrendModal')?.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'riskTrendModal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+                if (riskTrendChartInstance) { riskTrendChartInstance.destroy(); riskTrendChartInstance = null; }
+            }
+        });
+
+        modal.innerHTML = `
+            <div style="background:#fff;border-radius:16px;padding:28px;width:90%;max-width:750px;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative;">
+                <button onclick="document.getElementById('riskTrendModal')?.remove();if(riskTrendChartInstance){riskTrendChartInstance.destroy();riskTrendChartInstance=null;}" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;">&times;</button>
+                <h4 style="font-size:16px;font-weight:700;color:#374151;margin:0 0 4px;">Risk Score Trend (30 Days)</h4>
+                <span id="riskTrendInfo" style="font-size:11px;color:#9ca3af;">Loading...</span>
+                <div style="position:relative;height:320px;margin-top:12px;"><canvas id="riskTrendChart"></canvas></div>
+            </div>`;
+
+        document.body.appendChild(modal);
+
         const ctx = document.getElementById('riskTrendChart');
         if (!ctx) return;
 
@@ -614,6 +642,8 @@ const Dashboard = {
             if (infoEl) infoEl.textContent = `${data.length} data points over 30 days`;
         } catch (err) {
             console.warn('Risk trend chart failed:', err);
+            const infoEl = document.getElementById('riskTrendInfo');
+            if (infoEl) infoEl.textContent = 'Failed to load risk trend data.';
         }
     },
 
@@ -4766,6 +4796,9 @@ const PredictionEngine = {
     run: async () => {
         const statusEl = document.getElementById('predStatus');
         const tbody    = document.getElementById('predTableBody');
+        // Close detail panel if open
+        const detailPanel = document.getElementById('predDetailPanel');
+        if (detailPanel) detailPanel.style.display = 'none';
         statusEl.textContent = 'Running prescription...';
         tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:#6b7280;"><i class="fas fa-spinner fa-spin"></i> Analyzing establishments...</td></tr>';
 
