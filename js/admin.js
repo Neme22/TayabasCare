@@ -2470,10 +2470,35 @@ async function buildAdminInspectorColumnMap() {
                 // Only map full name — first name aliases would cause double-counting
                 ADMIN_INSPECTOR_COL_MAP[insp.fullName] = idx;
             });
+            return true;
         }
+        console.warn('Failed to build admin inspector column map: invalid response');
+        return false;
     } catch (e) {
         console.warn('Failed to build admin inspector column map:', e);
+        return false;
     }
+}
+
+// Ensure the column map is ready before showing the accomplishment report.
+// Retries once if the initial load failed or DataStore has inspectors we can reuse.
+async function ensureAdminInspectorColumnMap() {
+    if (_adminInspectorNames && _adminInspectorNames.length > 0) return true;
+
+    // Reuse already-fetched inspectors if available
+    const cached = DataStore.inspectors;
+    if (Array.isArray(cached) && cached.length > 0) {
+        const inspectors = cached.slice(0, 5);
+        _adminInspectorNames = inspectors.map(i => i.fullName || i.full_name || '');
+        ADMIN_INSPECTOR_COL_MAP = {};
+        inspectors.forEach((insp, idx) => {
+            const name = insp.fullName || insp.full_name || '';
+            if (name) ADMIN_INSPECTOR_COL_MAP[name] = idx;
+        });
+        return _adminInspectorNames.length > 0;
+    }
+
+    return await buildAdminInspectorColumnMap();
 }
 
 // Tracks values before editing so Cancel can restore them
@@ -2505,6 +2530,10 @@ function adminBuildInspectorFieldMap(inspectorIdx) {
 }
 
 async function adminGetAccomplishmentDataForPeriod(months, year) {
+    const mapReady = await ensureAdminInspectorColumnMap();
+    if (!mapReady) {
+        Utils.showToast('Inspector list unavailable — report totals may be incomplete. Try again shortly.', 'warning');
+    }
     const records = await adminGetAllAccomplishmentRecords();
     const totalInputs = document.querySelectorAll('#admin-accomplishment-report .admin-report-input').length;
     const totals = new Array(totalInputs).fill(0);
@@ -2568,6 +2597,9 @@ function adminMakeReportEditable() {
 function adminShowReportTab(type, tabEl) {
     document.querySelectorAll('#accomplishmentReportView .tab').forEach(tab => tab.classList.remove('tab-active'));
     if (tabEl) tabEl.classList.add('tab-active');
+
+    // Refresh inspector headers if the initial map load failed
+    ensureAdminInspectorColumnMap().then(() => populateInspectorColumns()).catch(() => {});
 
     ['monthly', 'quarterly', 'annual'].forEach(t => {
         document.getElementById(`admin-${t}-controls`).classList.add('hidden');
@@ -2854,13 +2886,25 @@ function adminShowNotification(message, type = 'success') {
 
 // Populate accomplishment report inspector column headers from database
 function populateInspectorColumns() {
-    if (!_adminInspectorNames || _adminInspectorNames.length === 0) return;
-
     const headers = document.querySelectorAll('.inspector-col-header');
+    if (!_adminInspectorNames || _adminInspectorNames.length === 0) {
+        // Keep neutral placeholders but mark unused slots clearly
+        headers.forEach((th, i) => {
+            th.textContent = `Inspector ${i + 1}`;
+            th.title = 'Inspector names unavailable — will refresh when the list loads';
+        });
+        return;
+    }
+
     headers.forEach((th, i) => {
         if (i < _adminInspectorNames.length) {
-            const firstName = _adminInspectorNames[i].split(' ')[0].toUpperCase();
+            const fullName = _adminInspectorNames[i] || '';
+            const firstName = fullName.split(' ')[0].toUpperCase() || `Inspector ${i + 1}`;
             th.textContent = firstName;
+            th.title = fullName;
+        } else {
+            th.textContent = '—';
+            th.title = '';
         }
     });
 }
@@ -2970,7 +3014,12 @@ async function initApp() {
     if (archiveSortFilter) archiveSortFilter.addEventListener('change', () => ArchiveManager.renderFiltered());
 
     // Build dynamic inspector column map and populate report headers
-    buildAdminInspectorColumnMap().catch(() => {}).then(() => {
+    buildAdminInspectorColumnMap().then((ok) => {
+        populateInspectorColumns();
+        if (!ok) {
+            Utils.showToast('Could not load inspector names for the accomplishment report. They will refresh automatically.', 'warning');
+        }
+    }).catch(() => {
         populateInspectorColumns();
     });
 

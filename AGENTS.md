@@ -144,7 +144,7 @@ Inspection revisions (from `inspection_history`) are deduplicated by `report_dat
 - **Setup guard**: `setup_database.php` blocks re-running if users exist (unless `?force=1`). Delete or lock it after install.
 - **CDN dependencies**: Tailwind, DaisyUI, Chart.js, Tesseract.js, Font Awesome, Bootstrap Icons — all loaded from CDN. No local copies.
 - **XSS protection**: `Utils.esc()` in admin.js and `esc()` in inspector.js escape HTML + quotes. Use these for ALL user data in `innerHTML` templates.
-- **Hardcoded inspector names**: admin.html accomplishment report table may show placeholder headers if `buildAdminInspectorColumnMap` fails.
+- **Inspector column headers**: `buildAdminInspectorColumnMap()` fills the accomplishment report headers. On failure it retries when the report opens (and reuses `DataStore.inspectors` if cached); unused columns show `—` and a toast warns the user.
 
 ## Conventions
 
