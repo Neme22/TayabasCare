@@ -1471,7 +1471,7 @@
                         <button onclick="PredictionEngine.exportCSV()" style="background:#059669;border:none;color:#fff;padding:9px 18px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">
                             <i class="fas fa-download" style="margin-right:6px;"></i>Export CSV
                         </button>
-                        <button onclick="PredictionEngine.run()" style="background:#7c3aed;border:none;color:#fff;padding:9px 18px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">
+                        <button onclick="if(confirm('Run prescription analysis for all establishments? This may take a moment.')) PredictionEngine.run()" style="background:#7c3aed;border:none;color:#fff;padding:9px 18px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">
                             <i class="fas fa-sync-alt" style="margin-right:6px;"></i>Run Prescription
                         </button>
                     </div>
