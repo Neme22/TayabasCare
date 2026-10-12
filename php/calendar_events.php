@@ -1,12 +1,13 @@
 <?php
 require_once 'auth_check.php';
-requireRole('admin');
 require_once 'activity_log.php';
 require_once 'csrf.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 if ($method === 'OPTIONS') { http_response_code(200); exit(); }
-if (csrfNeeded()) { requireCsrf(); }
+
+// GET is open to all authenticated users; write operations require admin
+if ($method !== 'GET' && csrfNeeded()) { requireCsrf(); }
 
 // Ensure table exists
 try {
@@ -24,8 +25,9 @@ try {
     error_log('calendar_events create table: ' . $e->getMessage());
 }
 
-// ---- POST: Create event ----
+// ---- POST: Create event (admin only) ----
 if ($method === 'POST') {
+    requireRole('admin');
     try {
         $input = json_decode(file_get_contents('php://input'), true);
         $title      = trim($input['title'] ?? '');
@@ -71,8 +73,9 @@ if ($method === 'GET') {
     }
 }
 
-// ---- PUT: Update event ----
+// ---- PUT: Update event (admin only) ----
 if ($method === 'PUT') {
+    requireRole('admin');
     try {
         $input = json_decode(file_get_contents('php://input'), true);
         $id = intval($input['id'] ?? 0);
@@ -95,8 +98,9 @@ if ($method === 'PUT') {
     }
 }
 
-// ---- DELETE: Remove event ----
+// ---- DELETE: Remove event (admin only) ----
 if ($method === 'DELETE') {
+    requireRole('admin');
     try {
         $id = intval($_GET['id'] ?? 0);
         if (!$id) errorResponse('Event ID required');

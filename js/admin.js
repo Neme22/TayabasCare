@@ -4438,9 +4438,10 @@ const ScheduleManager = {
             let dotsHtml = '';
             if (dayEvents.length > 0) {
                 dotsHtml += `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;">` +
-                    dayEvents.slice(0, 2).map(ev =>
-                        `<span style="font-size:10px;background:#f59e0b;color:#fff;border-radius:4px;padding:1px 5px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${ev.title}">${ev.title}</span>`
-                    ).join('') +
+                    dayEvents.slice(0, 2).map(ev => {
+                        const tip = `${Utils.esc(ev.title)}${ev.start_time ? '\\n🕐 ' + CalendarEvents.formatTime(ev.start_time) + (ev.end_time ? ' - ' + CalendarEvents.formatTime(ev.end_time) : '') : ''}${ev.place ? '\\n📍 ' + Utils.esc(ev.place) : ''}${ev.notes ? '\\n📝 ' + Utils.esc(ev.notes) : ''}`;
+                        return `<span class="cal-tooltip" style="font-size:10px;background:#f59e0b;color:#fff;border-radius:4px;padding:1px 5px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;">${Utils.esc(ev.title)}<span class="cal-tooltip-text">${tip.replace(/\\n/g, '<br>')}</span></span>`;
+                    }).join('') +
                     (dayEvents.length > 2 ? `<span style="font-size:10px;color:#6b7280;">+${dayEvents.length - 2}</span>` : '') +
                     `</div>`;
             }
@@ -4451,7 +4452,8 @@ const ScheduleManager = {
                     scheds.slice(0, 3).map((s, i) => {
                         const shortName = s.inspector.split(' ')[0] + ' ' + (s.inspector.split(' ')[1] || '');
                         const dotColor = s.riskLevel ? (riskColors[s.riskLevel] || colors[i % colors.length]) : colors[i % colors.length];
-                        return `<span style="font-size:10px;background:${dotColor};color:#fff;border-radius:4px;padding:1px 5px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.establishment || ''}${s.riskLevel ? ' [' + s.riskLevel + ']' : ''}">${shortName}</span>`;
+                        const tip = `${Utils.esc(s.inspector)}${s.rank ? ' (' + Utils.esc(s.rank) + ')' : ''}${s.establishment ? '\\n🏢 ' + Utils.esc(s.establishment) : ''}${s.riskLevel ? '\\n⚠️ Risk: ' + s.riskLevel : ''}${s.notes ? '\\n📝 ' + Utils.esc(s.notes) : ''}`;
+                        return `<span class="cal-tooltip" style="font-size:10px;background:${dotColor};color:#fff;border-radius:4px;padding:1px 5px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;">${shortName}<span class="cal-tooltip-text">${tip.replace(/\\n/g, '<br>')}</span></span>`;
                     }).join('') +
                     (scheds.length > 3 ? `<span style="font-size:10px;color:#6b7280;">+${scheds.length - 3}</span>` : '') +
                     `</div>`;

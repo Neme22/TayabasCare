@@ -510,6 +510,7 @@ let cachedSanitaryRecords = [];
 let cachedBurialRecords = { cadaver: [], skeletal: [], exhumation: [] };
 let cachedInspectionReports = [];
 let cachedSchedules = [];
+let cachedEvents = [];
 
 function setRealtimeDatesAdvanced() {
     const now = new Date();
@@ -768,13 +769,20 @@ const InspSchedule = {
     // Fetch schedules from API and cache
     fetchAll: async () => {
         try {
-            const resp = await fetch(`${API_BASE_URL}/inspection_schedules.php`);
-            const json = await resp.json();
-            if (json.success && Array.isArray(json.data)) {
-                cachedSchedules = json.data;
+            const [schedResp, eventResp] = await Promise.all([
+                fetch(`${API_BASE_URL}/inspection_schedules.php`),
+                fetch(`${API_BASE_URL}/calendar_events.php`)
+            ]);
+            const schedJson = await schedResp.json();
+            const eventJson = await eventResp.json();
+            if (schedJson.success && Array.isArray(schedJson.data)) {
+                cachedSchedules = schedJson.data;
+            }
+            if (eventJson.success && Array.isArray(eventJson.data)) {
+                cachedEvents = eventJson.data;
             }
         } catch (e) {
-            console.warn('Could not fetch schedules:', e);
+            console.warn('Could not fetch schedules/events:', e);
         }
         return cachedSchedules;
     },
@@ -794,6 +802,7 @@ const InspSchedule = {
 
     renderCalendar: () => {
         const all    = InspSchedule.getAll();
+        const events = cachedEvents || [];
         const myNames = InspSchedule.getMyNames();
         const year   = InspSchedule.calYear;
         const month  = InspSchedule.calMonth;
@@ -820,6 +829,23 @@ const InspSchedule = {
             schedMap[s.schedDate].push(s);
         });
 
+        const eventMap = {};
+        events.forEach(e => {
+            if (e.event_date) {
+                if (!eventMap[e.event_date]) eventMap[e.event_date] = [];
+                eventMap[e.event_date].push(e);
+            }
+        });
+
+        const formatTime = (t) => {
+            if (!t) return '';
+            const [h, m] = t.split(':');
+            const hr = parseInt(h);
+            const ampm = hr >= 12 ? 'PM' : 'AM';
+            const hr12 = hr === 0 ? 12 : hr > 12 ? hr - 12 : hr;
+            return `${hr12}:${m} ${ampm}`;
+        };
+
         let html = '';
 
         for (let i = 0; i < firstDay; i++) {
@@ -833,25 +859,36 @@ const InspSchedule = {
             const cellDate = new Date(year, month, d); cellDate.setHours(0,0,0,0);
             const isToday  = cellDate.getTime() === today.getTime();
             const scheds   = schedMap[dateKey] || [];
+            const dayEvents = eventMap[dateKey] || [];
             const hasScheds = scheds.length > 0;
+            const hasItems  = hasScheds || dayEvents.length > 0;
 
             const cellClasses = ['schedule-cell'];
             if (isToday) cellClasses.push('is-today');
             if (hasScheds) cellClasses.push('has-schedule');
 
             let dotsHtml = '';
+            if (dayEvents.length > 0) {
+                dotsHtml += `<div style="margin-top:4px;">` +
+                    dayEvents.slice(0, 2).map(ev => {
+                        const tip = `${esc(ev.title)}${ev.start_time ? '\\n🕐 ' + formatTime(ev.start_time) + (ev.end_time ? ' - ' + formatTime(ev.end_time) : '') : ''}${ev.place ? '\\n📍 ' + esc(ev.place) : ''}${ev.notes ? '\\n📝 ' + esc(ev.notes) : ''}`;
+                        return `<span class="cal-tooltip schedule-status-badge" style="background:#f59e0b;color:#fff;cursor:pointer;">Event<span class="cal-tooltip-text">${tip.replace(/\\n/g, '<br>')}</span></span>`;
+                    }).join('') +
+                    `</div>`;
+            }
             if (hasScheds) {
-                dotsHtml = `<div style="margin-top:4px;">` +
+                dotsHtml += `<div style="margin-top:4px;">` +
                     scheds.slice(0, 2).map(s => {
                         const badgeClass = s.done ? 'done' : 'scheduled';
                         const label = s.done ? 'Done' : 'Scheduled';
-                        return `<span class="schedule-status-badge ${badgeClass}">${label}</span>`;
+                        const tip = `${esc(s.inspector)}${s.establishment ? '\\n🏢 ' + esc(s.establishment) : ''}${s.riskLevel ? '\\n⚠️ Risk: ' + s.riskLevel : ''}${s.notes ? '\\n📝 ' + esc(s.notes) : ''}`;
+                        return `<span class="cal-tooltip schedule-status-badge ${badgeClass}" style="cursor:pointer;">${label}<span class="cal-tooltip-text">${tip.replace(/\\n/g, '<br>')}</span></span>`;
                     }).join('') +
                     `</div>`;
             }
 
             html += `
-            <div onclick="InspSchedule.showDay('${dateKey}')" data-date="${dateKey}" class="${cellClasses.join(' ')}">
+            <div onclick="InspSchedule.showDay('${dateKey}')" data-date="${dateKey}" class="${cellClasses.join(' ')}" style="cursor:${hasItems ? 'pointer' : 'default'}">
                 <div class="day-number">${d}</div>
                 ${dotsHtml}
             </div>`;
@@ -871,6 +908,16 @@ const InspSchedule = {
                 n.startsWith(inspLower)
             ));
         });
+        const dayEvents = (cachedEvents || []).filter(e => e.event_date === dateKey);
+
+        const formatTime = (t) => {
+            if (!t) return '';
+            const [h, m] = t.split(':');
+            const hr = parseInt(h);
+            const ampm = hr >= 12 ? 'PM' : 'AM';
+            const hr12 = hr === 0 ? 12 : hr > 12 ? hr - 12 : hr;
+            return `${hr12}:${m} ${ampm}`;
+        };
 
         const panel = document.getElementById('inspCalDayPanel');
         const title = document.getElementById('inspCalDayTitle');
@@ -880,10 +927,30 @@ const InspSchedule = {
         const dateFmt = new Date(dateKey + 'T00:00:00').toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         title.textContent = dateFmt;
 
-        if (scheds.length === 0) {
-            list.innerHTML = '<p class="text-center text-sm text-gray-400 py-3">You have no scheduled inspection on this day.</p>';
-        } else {
-            list.innerHTML = scheds.map(s => {
+        let html = '';
+
+        // Show events first
+        if (dayEvents.length > 0) {
+            html += `<div style="margin-bottom:12px;"><div class="text-xs font-bold text-amber-700 uppercase tracking-wide mb-2">Events</div>`;
+            html += dayEvents.map(ev => `
+                <div class="schedule-task-item" style="border-color:#fde68a;background:#fffbeb;">
+                    <div class="schedule-task-dot scheduled" style="background:#f59e0b;"></div>
+                    <div style="flex:1;min-width:0;">
+                        <div class="font-semibold text-sm text-amber-900">${esc(ev.title)}</div>
+                        ${ev.start_time || ev.end_time ? `<div class="text-xs text-amber-700 mt-1">🕐 ${formatTime(ev.start_time)}${ev.end_time ? ' - ' + formatTime(ev.end_time) : ''}</div>` : ''}
+                        ${ev.place ? `<div class="text-xs text-amber-700 mt-1">📍 ${esc(ev.place)}</div>` : ''}
+                        ${ev.notes ? `<div class="text-xs text-gray-600 mt-1">${esc(ev.notes)}</div>` : ''}
+                    </div>
+                </div>
+            `).join('') + `</div>`;
+        }
+
+        // Show schedules
+        if (scheds.length === 0 && dayEvents.length === 0) {
+            html += '<p class="text-center text-sm text-gray-400 py-3">You have no scheduled inspection or events on this day.</p>';
+        } else if (scheds.length > 0) {
+            html += `<div class="text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Inspections</div>`;
+            html += scheds.map(s => {
                 const today = new Date(); today.setHours(0,0,0,0);
                 const due   = new Date(s.schedDate); due.setHours(0,0,0,0);
                 const status = s.done ? 'Done' : (due < today ? 'Overdue' : 'Pending');
@@ -904,6 +971,7 @@ const InspSchedule = {
             }).join('');
         }
 
+        list.innerHTML = html;
         panel.style.display = 'block';
     },
 
