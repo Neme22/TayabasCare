@@ -713,6 +713,14 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('burial-form').addEventListener('submit', handleBurialSubmit);
     document.getElementById('inspection-form').onsubmit = handleInspectionSubmit;
 
+    // Set welcome name in navbar
+    const inspNameDisplay = document.getElementById('insp-username-display');
+    if (inspNameDisplay) {
+        const savedName = localStorage.getItem('inspectorDisplayName') ||
+            localStorage.getItem('inspectorFullName') ||
+            localStorage.getItem('username') || 'Inspector';
+        inspNameDisplay.textContent = savedName;
+    }
 });
 
 // ==================== MODULE NAVIGATION ====================
@@ -736,7 +744,8 @@ function showModule(moduleName) {
         loadSanitaryRecords();
         updateSanitaryStatistics();
     } else if (moduleName === 'burial') {
-        loadBurialRecords('cadaver');
+        // Reset to cadaver tab when entering burial module
+        showBurialTab('cadaver', document.querySelector('#burial-tabs [data-testid="tab-cadaver"]'));
         updateBurialStatistics();
     } else if (moduleName === 'accomplishment') {
         loadAccomplishmentRecords();
@@ -1527,17 +1536,15 @@ function showBurialTab(type, tabEl) {
     // Show selected section
     document.getElementById(`${type}-section`).classList.remove('hidden');
     
-    // Update active tab
-    document.querySelectorAll('.tabs .tab').forEach(tab => {
-        tab.classList.remove('tab-active');
-    });
-    if (tabEl) {
+    // Update active tab — scope to burial-tabs only to avoid affecting other tabs
+    const burialTabs = document.querySelectorAll('#burial-tabs .tab');
+    burialTabs.forEach(tab => tab.classList.remove('tab-active'));
+    if (tabEl && tabEl.classList) {
         tabEl.classList.add('tab-active');
     } else {
-        // Fallback: find the matching tab by text
-        document.querySelectorAll('.tabs .tab').forEach(tab => {
-            if (tab.onclick && tab.getAttribute('onclick')?.includes(type)) tab.classList.add('tab-active');
-        });
+        // Fallback: find the matching tab by data-testid
+        const match = document.querySelector(`#burial-tabs [data-testid="tab-${type}"]`);
+        if (match) match.classList.add('tab-active');
     }
     
     // Load data
@@ -4923,7 +4930,6 @@ window.addEventListener('beforeunload', stopBurialRealtimeClock);
 // Open Profile Modal
 async function openProfileModal() {
     const modal = document.getElementById('profile-modal');
-    // Populate profile data from session + inspector_accounts
     try {
         const resp = await fetch(`${API_BASE_URL}/auth.php`);
         const json = await resp.json();
@@ -4936,13 +4942,11 @@ async function openProfileModal() {
             const avatarEl   = document.getElementById('insp-profile-avatar');
             if (usernameEl) usernameEl.value = d.username || '';
             if (roleEl)     roleEl.value = 'Sanitary Inspector';
-            // Get full name and email from inspector_accounts
-            if (d.fullName) {
-                if (fullnameEl) fullnameEl.value = d.fullName;
-                if (avatarEl) {
-                    const name = encodeURIComponent(d.fullName);
-                    avatarEl.src = `https://ui-avatars.com/api/?name=${name}&background=10b981&color=fff&size=200`;
-                }
+            // Get full name from session or localStorage
+            let displayName = localStorage.getItem('inspectorDisplayName') || d.fullName || '';
+            if (fullnameEl) fullnameEl.value = displayName;
+            if (avatarEl && displayName) {
+                avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=10b981&color=fff&size=200`;
             }
             // Fetch email from inspector_accounts
             try {
@@ -4951,8 +4955,9 @@ async function openProfileModal() {
                 if (inspJson.success && Array.isArray(inspJson.data)) {
                     const me = inspJson.data.find(i => i.username === d.username);
                     if (me && emailEl) emailEl.value = me.email || '';
-                    if (me && fullnameEl && me.fullName) {
-                        fullnameEl.value = me.fullName;
+                    // Use server name if no saved display name
+                    if (me && me.fullName && !localStorage.getItem('inspectorDisplayName')) {
+                        if (fullnameEl) fullnameEl.value = me.fullName;
                         if (avatarEl) {
                             avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(me.fullName)}&background=10b981&color=fff&size=200`;
                         }
@@ -4964,6 +4969,33 @@ async function openProfileModal() {
         // Show defaults if fetch fails
     }
     modal.showModal();
+}
+
+// Save Inspector Profile
+function handleInspSaveProfile() {
+    const fullnameEl = document.getElementById('insp-profile-fullname');
+    const name = (fullnameEl?.value || '').trim();
+
+    if (!name) {
+        showNotification('Display name cannot be empty.', 'error');
+        return;
+    }
+
+    // Save display name to localStorage
+    localStorage.setItem('inspectorDisplayName', name);
+    localStorage.setItem('inspectorFullName', name);
+
+    // Update navbar welcome name
+    const nameDisplay = document.getElementById('insp-username-display');
+    if (nameDisplay) nameDisplay.textContent = name;
+
+    // Update avatar
+    const avatarEl = document.getElementById('insp-profile-avatar');
+    if (avatarEl) {
+        avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=10b981&color=fff&size=200`;
+    }
+
+    showNotification('Profile updated successfully.', 'success');
 }
 
 // Close Profile Modal
@@ -4983,6 +5015,37 @@ function closeSettingsModal() {
     const modal = document.getElementById('settings-modal');
     modal.close();
 }
+
+// ==================== THEME TOGGLE ====================
+function toggleTheme() {
+    const html = document.documentElement;
+    const current = html.getAttribute('data-theme');
+    const next = current === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('tayabasTheme', next);
+    updateThemeUI(next);
+}
+
+function updateThemeUI(theme) {
+    const isDark = theme === 'dark';
+    const toggleEl = document.getElementById('insp-theme-toggle');
+    if (toggleEl) {
+        toggleEl.innerHTML = isDark
+            ? '<i class="bi bi-moon-stars text-blue-300 text-lg"></i>'
+            : '<i class="bi bi-sun text-amber-500 text-lg"></i>';
+    }
+    const labelEl = document.getElementById('insp-theme-label');
+    if (labelEl) {
+        labelEl.textContent = isDark ? 'Dark mode is on' : 'Switch between light and dark mode';
+    }
+}
+
+// Apply saved theme on load
+(function applySavedTheme() {
+    const saved = localStorage.getItem('tayabasTheme') || 'light';
+    document.documentElement.setAttribute('data-theme', saved);
+    updateThemeUI(saved);
+})();
 
 // Open Change Password Modal
 function openChangePasswordModal() {
@@ -5498,6 +5561,24 @@ const InspNotifManager = {
         }
     },
 
+    getDismissedIds: () => {
+        try {
+            return JSON.parse(localStorage.getItem('inspNotifDismissedIds') || '[]');
+        } catch (e) {
+            return [];
+        }
+    },
+
+    dismiss: (id) => {
+        const ids = InspNotifManager.getDismissedIds();
+        const strId = String(id);
+        if (!ids.includes(strId)) {
+            ids.push(strId);
+            localStorage.setItem('inspNotifDismissedIds', JSON.stringify(ids));
+        }
+        InspNotifManager.render();
+    },
+
     markRead: (id) => {
         const ids = InspNotifManager.getReadIds();
         const strId = String(id);
@@ -5520,7 +5601,8 @@ const InspNotifManager = {
     },
 
     render: () => {
-        const readIds     = InspNotifManager.getReadIds();
+        const readIds      = InspNotifManager.getReadIds();
+        const dismissedIds = InspNotifManager.getDismissedIds();
         const schedNotifs = InspNotifManager.getScheduleNotifs().map(n => ({
             id:      String(n.id),
             type:    n.type,
@@ -5538,7 +5620,10 @@ const InspNotifManager = {
             read: readIds.includes(a.id)
         }));
 
-        const allNotifs = [...sysAlerts, ...schedNotifs].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+        // Filter out dismissed notifications
+        const allNotifs = [...sysAlerts, ...schedNotifs]
+            .filter(n => !dismissedIds.includes(String(n.id)))
+            .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
         const unread    = allNotifs.filter(n => !n.read).length;
 
         // Cache by id so a click on a row can look up its full data.
@@ -5575,7 +5660,7 @@ const InspNotifManager = {
                     <p style="font-size:12px;color:#374151;margin:0 0 4px;line-height:1.5;">${esc(n.message)}</p>
                     <p style="font-size:11px;color:#9ca3af;margin:0;">${new Date(n.date).toLocaleDateString('en-PH', {year:'numeric',month:'short',day:'numeric'})}${n.schedDate ? ' &middot; tap to view' : ''}</p>
                 </div>
-                ${!n.read ? `<button onclick="event.stopPropagation();InspNotifManager.markRead('${n.id}')" style="flex-shrink:0;font-size:11px;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:6px;padding:2px 8px;cursor:pointer;">Dismiss</button>` : ''}
+                ${!n.read ? `<button onclick="event.stopPropagation();InspNotifManager.dismiss('${n.id}')" style="flex-shrink:0;font-size:11px;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:6px;padding:2px 8px;cursor:pointer;">Dismiss</button>` : ''}
             </div>`
         ).join('');
     },
@@ -5671,6 +5756,15 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => InspNotifManager.render(), 600);
         setInterval(() => InspNotifManager.render(), 30000);
     }
+
+    // Click outside to close notification panel
+    document.addEventListener('click', (e) => {
+        const wrapper = document.getElementById('inspNotifBellWrapper');
+        const panel   = document.getElementById('inspNotifPanel');
+        if (panel && wrapper && !wrapper.contains(e.target)) {
+            panel.style.display = 'none';
+        }
+    });
 });
 
 // Click on the dimmed backdrop (outside the card) closes the modal

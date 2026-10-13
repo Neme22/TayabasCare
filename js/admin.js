@@ -3019,7 +3019,8 @@ async function initApp() {
     // Update header with actual username
     const usernameDisplay = document.getElementById('admin-username-display');
     if (usernameDisplay && sessData && sessData.data) {
-        usernameDisplay.textContent = sessData.data.fullName || sessData.data.username || 'Admin';
+        const savedName = localStorage.getItem('adminDisplayName') || sessData.data.fullName || sessData.data.username || 'Admin';
+        usernameDisplay.textContent = savedName;
     }
 
     // Set up navigation
@@ -3643,7 +3644,6 @@ function handleLogout() {
 // Profile Modal Functions
 async function openProfileModal() {
     const modal = document.getElementById('profile-modal');
-    // Populate profile data from session
     try {
         const resp = await fetch(`${API_BASE_URL}/auth.php`);
         const json = await resp.json();
@@ -3654,13 +3654,14 @@ async function openProfileModal() {
             const roleEl     = document.getElementById('profile-role');
             const emailEl    = document.getElementById('profile-email');
             const avatarEl   = document.getElementById('profile-avatar');
-            if (fullnameEl) fullnameEl.value = d.fullName || d.username || 'Admin';
+            // Use saved display name or session data
+            const savedName = localStorage.getItem('adminDisplayName') || d.fullName || d.username || 'Admin';
+            if (fullnameEl) fullnameEl.value = savedName;
             if (usernameEl) usernameEl.value = d.username || 'admin';
             if (roleEl)     roleEl.value = d.role === 'admin' ? 'System Administrator' : d.role;
             if (emailEl)    emailEl.value = d.email || '';
             if (avatarEl) {
-                const name = encodeURIComponent(d.fullName || d.username || 'Admin');
-                avatarEl.src = `https://ui-avatars.com/api/?name=${name}&background=1e40af&color=fff&size=200`;
+                avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(savedName)}&background=1e40af&color=fff&size=200`;
             }
         }
     } catch (e) {
@@ -3674,28 +3675,54 @@ function closeProfileModal() {
     modal.close();
 }
 
-async function handleSaveProfileEmail() {
-    const emailEl = document.getElementById('profile-email');
+async function handleSaveProfile() {
+    const fullnameEl = document.getElementById('profile-fullname');
+    const emailEl    = document.getElementById('profile-email');
+    const name  = (fullnameEl?.value || '').trim();
     const email = (emailEl?.value || '').trim();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+
+    if (!name) {
+        Utils.showToast('Display name cannot be empty.', 'error');
+        return;
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         Utils.showToast('Please enter a valid email address.', 'error');
         return;
     }
-    try {
-        const resp = await fetch(`${API_BASE_URL}/admin_recovery.php`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'update_email', email })
-        });
-        const json = await resp.json();
-        if (json.success) {
-            Utils.showToast('Email updated successfully.', 'success');
-        } else {
-            Utils.showToast(json.message || 'Failed to update email.', 'error');
-        }
-    } catch (e) {
-        Utils.showToast('Failed to update email.', 'error');
+
+    // Save display name to localStorage
+    localStorage.setItem('adminDisplayName', name);
+
+    // Update navbar welcome name
+    const usernameDisplay = document.getElementById('admin-username-display');
+    if (usernameDisplay) usernameDisplay.textContent = name;
+
+    // Update avatar
+    const avatarEl = document.getElementById('profile-avatar');
+    if (avatarEl) {
+        avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=1e40af&color=fff&size=200`;
     }
+
+    // Save email if changed
+    if (email) {
+        try {
+            const resp = await fetch(`${API_BASE_URL}/admin_recovery.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'update_email', email })
+            });
+            const json = await resp.json();
+            if (!json.success) {
+                Utils.showToast(json.message || 'Failed to update email.', 'error');
+                return;
+            }
+        } catch (e) {
+            Utils.showToast('Failed to update email.', 'error');
+            return;
+        }
+    }
+
+    Utils.showToast('Profile updated successfully.', 'success');
 }
 
 // Settings Modal Functions
@@ -3708,6 +3735,38 @@ function closeSettingsModal() {
     const modal = document.getElementById('settings-modal');
     modal.close();
 }
+
+// ==================== THEME TOGGLE ====================
+function toggleTheme() {
+    const html = document.documentElement;
+    const current = html.getAttribute('data-theme');
+    const next = current === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('tayabasTheme', next);
+    updateThemeUI(next);
+}
+
+function updateThemeUI(theme) {
+    const isDark = theme === 'dark';
+    // Update admin toggle icon
+    const toggleEl = document.getElementById('admin-theme-toggle');
+    if (toggleEl) {
+        toggleEl.innerHTML = isDark
+            ? '<i class="bi bi-moon-stars text-blue-300 text-lg"></i>'
+            : '<i class="bi bi-sun text-amber-500 text-lg"></i>';
+    }
+    const labelEl = document.getElementById('admin-theme-label');
+    if (labelEl) {
+        labelEl.textContent = isDark ? 'Dark mode is on' : 'Switch between light and dark mode';
+    }
+}
+
+// Apply saved theme on load
+(function applySavedTheme() {
+    const saved = localStorage.getItem('tayabasTheme') || 'light';
+    document.documentElement.setAttribute('data-theme', saved);
+    updateThemeUI(saved);
+})();
 
 // Admin Recovery Codes
 let _recoveryPlaintextCodes = [];
@@ -3964,15 +4023,15 @@ const NotifManager = {
 
     alerts: [],
     loading: false,
+    activeTab: 'all',
+    _cache: {},
 
     // Fetch alerts from the server-side alerts.php
     fetchAlerts: async () => {
         if (NotifManager.loading) return;
         NotifManager.loading = true;
         try {
-            // First, trigger alert generation on the server
             await fetch(`${API_BASE_URL}/alerts.php?action=generate`).catch(() => {});
-            // Then fetch the generated alerts
             const resp = await fetch(`${API_BASE_URL}/alerts.php?action=list`);
             const text = await resp.text();
             let json;
@@ -3980,7 +4039,6 @@ const NotifManager = {
             if (json.success) {
                 NotifManager.alerts = (json.data || []).map(a => ({ ...a, serverId: a.id }));
             } else {
-                // Fall back to local generation
                 NotifManager.alerts = NotifManager.generateLocal();
             }
         } catch (err) {
@@ -3991,7 +4049,7 @@ const NotifManager = {
         NotifManager.render();
     },
 
-    // Local fallback: generates alerts from in-memory data (original logic)
+    // Local fallback: generates alerts from in-memory data
     generateLocal: () => {
         const alerts = [];
         const today  = new Date();
@@ -4032,8 +4090,12 @@ const NotifManager = {
         });
 
         const readIds = NotifManager.getReadIds();
-        alerts.forEach(a => { if (readIds.includes(a.id)) a.read = true; });
-        return alerts;
+        const dismissedIds = NotifManager.getDismissedIds();
+        alerts.forEach(a => {
+            if (readIds.includes(a.id)) a.read = true;
+        });
+        // Filter out dismissed alerts
+        return alerts.filter(a => !dismissedIds.includes(String(a.id)));
     },
 
     // Map server alert types to UI display properties
@@ -4073,8 +4135,17 @@ const NotifManager = {
         }
     },
 
+    getDismissedIds: () => {
+        const raw = localStorage.getItem('notifDismissedIds');
+        try {
+            return raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            localStorage.removeItem('notifDismissedIds');
+            return [];
+        }
+    },
+
     markRead: async (id) => {
-        // Try server-side mark
         const alert = NotifManager.alerts.find(a => String(a.id) === String(id));
         if (alert && alert.serverId) {
             try {
@@ -4085,7 +4156,6 @@ const NotifManager = {
                 });
             } catch (e) { /* ignore */ }
         }
-        // Also mark locally
         const ids = NotifManager.getReadIds();
         if (!ids.includes(id)) {
             ids.push(id);
@@ -4095,7 +4165,6 @@ const NotifManager = {
     },
 
     markAllRead: async () => {
-        // Server-side mark all
         try {
             await fetch(`${API_BASE_URL}/alerts.php`, {
                 method: 'PUT',
@@ -4103,7 +4172,6 @@ const NotifManager = {
                 body: JSON.stringify({ action: 'read_all' })
             });
         } catch (e) { /* ignore */ }
-        // Local mark all
         const alerts = NotifManager.alerts;
         const ids    = alerts.map(a => a.id);
         localStorage.setItem('notifReadIds', JSON.stringify(ids));
@@ -4113,7 +4181,6 @@ const NotifManager = {
 
     dismissAll: async () => {
         const alerts = NotifManager.alerts;
-        // Dismiss each on server
         for (const alert of alerts) {
             if (alert.serverId) {
                 try {
@@ -4125,6 +4192,9 @@ const NotifManager = {
                 } catch (e) { /* ignore */ }
             }
         }
+        // Also save all IDs as dismissed in localStorage (for local fallback)
+        const allIds = alerts.map(a => String(a.id));
+        localStorage.setItem('notifDismissedIds', JSON.stringify(allIds));
         NotifManager.alerts = [];
         NotifManager.render();
     },
@@ -4140,14 +4210,59 @@ const NotifManager = {
                 });
             } catch (e) { /* ignore */ }
         }
-        // Remove from local list
+        // Persist dismissed ID in localStorage
+        const dismissed = NotifManager.getDismissedIds();
+        const strId = String(id);
+        if (!dismissed.includes(strId)) {
+            dismissed.push(strId);
+            localStorage.setItem('notifDismissedIds', JSON.stringify(dismissed));
+        }
         NotifManager.alerts = NotifManager.alerts.filter(a => String(a.id) !== String(id));
         NotifManager.render();
     },
 
+    setTab: (tab) => {
+        NotifManager.activeTab = tab;
+        const tabAll    = document.getElementById('notifTabAll');
+        const tabUnread = document.getElementById('notifTabUnread');
+        if (tabAll)    { tabAll.classList.toggle('active', tab === 'all'); tabAll.setAttribute('aria-selected', tab === 'all'); }
+        if (tabUnread) { tabUnread.classList.toggle('active', tab === 'unread'); tabUnread.setAttribute('aria-selected', tab === 'unread'); }
+        NotifManager.render();
+    },
+
+    openDetail: (id) => {
+        const alert = NotifManager._cache[String(id)];
+        if (!alert) return;
+
+        const colorMap = {
+            danger:  { bg: '#fef2f2', icon: '#ef4444' },
+            warning: { bg: '#fffbeb', icon: '#d97706' },
+            info:    { bg: '#eff6ff', icon: '#2563eb' }
+        };
+        const c = colorMap[alert.type] || colorMap.info;
+
+        document.getElementById('adminNotifDetailTitle').textContent = alert.title || 'Alert';
+        document.getElementById('adminNotifDetailDate').textContent  = alert.time
+            ? new Date(alert.time).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : '';
+        document.getElementById('adminNotifDetailMessage').textContent = alert.message;
+
+        const iconEl   = document.getElementById('adminNotifDetailIcon');
+        const iconWrap = document.getElementById('adminNotifDetailIconWrap');
+        iconEl.className   = 'bi ' + alert.icon;
+        iconEl.style.color = c.icon;
+        iconWrap.style.background = c.bg;
+
+        document.getElementById('notifPanel').style.display = 'none';
+        NotifManager.markRead(id);
+        document.getElementById('notif-detail-modal').showModal();
+    },
+
     render: () => {
-        // Map server alerts to display format
-        let displayAlerts = NotifManager.alerts.map(a => a.serverId ? NotifManager.mapAlert(a) : a);
+        const dismissedIds = NotifManager.getDismissedIds();
+        let displayAlerts = NotifManager.alerts
+            .map(a => a.serverId ? NotifManager.mapAlert(a) : a)
+            .filter(a => !dismissedIds.includes(String(a.id)));
         displayAlerts.sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0));
         const unread = displayAlerts.filter(a => !a.read);
         const badge  = document.getElementById('notifBadge');
@@ -4158,10 +4273,25 @@ const NotifManager = {
             badge.style.display = unread.length > 0 ? 'inline-block' : 'none';
         }
 
+        // Update unread tab count
+        const unreadCountEl = document.getElementById('notifTabUnreadCount');
+        if (unreadCountEl) {
+            unreadCountEl.textContent = unread.length > 0 ? ' (' + (unread.length > 9 ? '9+' : unread.length) + ')' : '';
+        }
+
+        // Cache for detail modal
+        NotifManager._cache = {};
+        displayAlerts.forEach(a => { NotifManager._cache[String(a.id)] = a; });
+
         if (!listEl) return;
 
-        if (displayAlerts.length === 0) {
-            listEl.innerHTML = '<p style="text-align:center;color:#9ca3af;font-size:13px;padding:20px;">No alerts at this time</p>';
+        // Filter by active tab
+        const visible = NotifManager.activeTab === 'unread'
+            ? displayAlerts.filter(a => !a.read)
+            : displayAlerts;
+
+        if (visible.length === 0) {
+            listEl.innerHTML = `<p class="notif-empty">${NotifManager.activeTab === 'unread' ? "You're all caught up — no unread alerts." : 'No alerts at this time'}</p>`;
             return;
         }
 
@@ -4171,16 +4301,14 @@ const NotifManager = {
             info:    { bg: '#eff6ff', border: '#3b82f6', icon: '#2563eb', text: '#1e40af' }
         };
 
-        listEl.innerHTML = displayAlerts.map(alert => {
+        listEl.innerHTML = visible.map(alert => {
             const c   = colorMap[alert.type] || colorMap.info;
             const dim = alert.read ? 'opacity:0.5;' : '';
             return `
-            <div onclick="NotifManager.markRead('${alert.id}')" style="${dim}display:flex;align-items:flex-start;gap:10px;padding:10px 16px;border-bottom:1px solid #f3f4f6;background:${alert.read ? '#fff' : c.bg};cursor:pointer;transition:background 0.15s;" onmouseover="if(!${alert.read}) this.style.background='${c.bg}ee'" onmouseout="this.style.background='${alert.read ? '#fff' : c.bg}'">
-                <div style="flex-shrink:0;margin-top:2px;">
-                    <i class="bi ${alert.icon}" style="color:${c.icon};font-size:18px;"></i>
-                </div>
-                <div style="flex:1;min-width:0;">
-                    <p style="font-size:12px;font-weight:700;color:${c.text};margin:0 0 2px;">${Utils.esc(alert.title)}</p>
+            <div class="insp-notif-row" onclick="NotifManager.openDetail('${alert.id}')" style="${dim}display:flex;align-items:flex-start;gap:10px;padding:10px 16px;border-bottom:1px solid #f3f4f6;background:${alert.read ? '#fff' : c.bg};cursor:pointer;">
+                <i class="bi ${alert.icon}" style="color:${c.icon};font-size:18px;flex-shrink:0;margin-top:2px;opacity:${alert.read ? '0.55' : '1'};"></i>
+                <div style="flex:1;min-width:0;opacity:${alert.read ? '0.65' : '1'};">
+                    <p style="font-size:12px;font-weight:700;color:${c.text};margin:0 0 2px;">${Utils.esc(alert.title || 'Alert')}</p>
                     <p style="font-size:12px;color:#374151;margin:0 0 4px;line-height:1.4;">${Utils.esc(alert.message)}</p>
                     ${alert.time ? `<p style="font-size:11px;color:#9ca3af;margin:0;">${new Date(alert.time).toLocaleDateString('en-PH', {year:'numeric',month:'short',day:'numeric'})}</p>` : ''}
                 </div>
@@ -4202,9 +4330,28 @@ const NotifManager = {
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => NotifManager.fetchAlerts(), 1000);
     setInterval(() => NotifManager.fetchAlerts(), 120000);
+
+    // Click outside to close notification panel
+    document.addEventListener('click', (e) => {
+        const wrapper = document.getElementById('notifBellWrapper');
+        const panel   = document.getElementById('notifPanel');
+        if (panel && wrapper && !wrapper.contains(e.target)) {
+            panel.style.display = 'none';
+        }
+    });
 });
 
 // ==================== END NOTIFICATION / ALERT MANAGER ====================
+
+// Close notification detail modal on backdrop click
+document.addEventListener('DOMContentLoaded', () => {
+    const notifModal = document.getElementById('notif-detail-modal');
+    if (notifModal) {
+        notifModal.addEventListener('click', (e) => {
+            if (e.target === notifModal) notifModal.close();
+        });
+    }
+});
 
 // ==================== SCHEDULE MANAGER ====================
 

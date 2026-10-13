@@ -33,22 +33,50 @@
 
             <!-- NOTIFICATION BELL -->
             <div class="relative mr-2" id="notifBellWrapper">
-                <button onclick="NotifManager.togglePanel()" class="btn btn-ghost text-white relative" id="notifBellBtn" style="background:none; border:none; padding:6px 10px;">
-                    <i class="bi bi-bell text-xl"></i>
-                    <span id="notifBadge" style="display:none; position:absolute; top:4px; right:4px; background:#ef4444; color:#fff; font-size:10px; font-weight:700; border-radius:999px; min-width:18px; height:18px; line-height:18px; text-align:center; padding:0 4px;">0</span>
+                <button onclick="NotifManager.togglePanel()" class="notif-bell-btn" id="notifBellBtn">
+                    <i class="bi bi-bell"></i>
+                    <span id="notifBadge" class="notif-badge" style="display:none;">0</span>
                 </button>
                 <!-- Notification Panel -->
-                <div id="notifPanel" style="display:none; position:absolute; top:48px; right:0; width:340px; background:#fff; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.18); z-index:9999; border:1px solid #e5e7eb; overflow:hidden;">
-                    <div style="padding:14px 16px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-weight:700; font-size:15px; color:#111827;">Alerts & Notifications</span>
-                        <button onclick="NotifManager.dismissAll()" style="font-size:12px; color:#ef4444; background:none; border:none; cursor:pointer; font-weight:600;">Dismiss all</button>
+                <div id="notifPanel" class="notif-panel" style="display:none;">
+                    <div class="notif-panel-header">
+                        <span class="notif-panel-title">Alerts & Notifications</span>
+                        <button onclick="NotifManager.markAllRead()" class="notif-mark-read-btn">Mark all read</button>
                     </div>
-                    <div id="notifList" style="max-height:360px; overflow-y:auto; padding:8px 0;">
-                        <p style="text-align:center; color:#9ca3af; font-size:13px; padding:20px;">No alerts at this time</p>
+                    <div class="insp-notif-tabs" role="tablist">
+                        <button type="button" id="notifTabAll" class="insp-notif-tab active" role="tab" aria-selected="true" onclick="NotifManager.setTab('all')">All</button>
+                        <button type="button" id="notifTabUnread" class="insp-notif-tab" role="tab" aria-selected="false" onclick="NotifManager.setTab('unread')">Unread<span id="notifTabUnreadCount" class="insp-notif-tab-count"></span></button>
+                    </div>
+                    <div id="notifList" style="max-height:360px;overflow-y:auto;padding:8px 0;">
+                        <p class="notif-empty">No alerts at this time</p>
                     </div>
                 </div>
             </div>
             <!-- END NOTIFICATION BELL -->
+
+        <!-- NOTIFICATION DETAIL MODAL -->
+        <dialog id="notif-detail-modal" class="modal">
+            <div class="modal-box max-w-md">
+                <button type="button" class="notif-detail-close-x" onclick="document.getElementById('notif-detail-modal').close()" aria-label="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div class="notif-detail-header">
+                    <div id="adminNotifDetailIconWrap" class="notif-detail-icon-wrap">
+                        <i id="adminNotifDetailIcon" class="bi" style="font-size:20px;"></i>
+                    </div>
+                    <div class="notif-detail-body">
+                        <h3 id="adminNotifDetailTitle" class="font-bold text-lg text-gray-800"></h3>
+                        <p id="adminNotifDetailDate" class="text-xs date"></p>
+                    </div>
+                </div>
+                <p id="adminNotifDetailMessage" class="text-sm notif-detail-message"></p>
+                <div class="flex gap-3">
+                    <button type="button" class="btn btn-ghost" onclick="document.getElementById('notif-detail-modal').close()">Close</button>
+                </div>
+            </div>
+            <form method="dialog" class="modal-backdrop"><button>close</button></form>
+        </dialog>
+        <!-- END NOTIFICATION DETAIL MODAL -->
             <div class="dropdown dropdown-end">
                 <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar border-2 border-blue-400">
                     <div class="w-10 rounded-full">
@@ -1580,7 +1608,7 @@
     <dialog id="profile-modal" class="modal">
         <div class="modal-box max-w-2xl">
             <h3 class="font-bold text-2xl text-emerald-700 mb-4">
-                <i class="bi bi-person-circle mr-2"></i>Admin Profile
+                <i class="bi bi-person-circle mr-2"></i>My Profile
             </h3>
             
             <div class="space-y-4">
@@ -1597,9 +1625,12 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="form-control">
                         <label class="label">
-                            <span class="label-text font-semibold">Full Name</span>
+                            <span class="label-text font-semibold">Display Name <span class="text-red-500">*</span></span>
                         </label>
-                        <input type="text" id="profile-fullname" value="Admin" class="input input-bordered input-success" readonly />
+                        <input type="text" id="profile-fullname" value="Admin" class="input input-bordered input-success" placeholder="Enter your display name" />
+                        <label class="label">
+                            <span class="label-text-alt text-gray-500">Shown in the top navbar as a welcome greeting</span>
+                        </label>
                     </div>
 
                     <div class="form-control">
@@ -1636,10 +1667,10 @@
 
                 <!-- Action Buttons -->
                 <div class="flex gap-3 mt-6">
-                    <button type="button" class="btn btn-success text-white" onclick="handleSaveProfileEmail()">
-                        <i class="bi bi-save mr-2"></i>Save Email
+                    <button type="button" class="btn btn-success text-white" onclick="handleSaveProfile()">
+                        <i class="bi bi-save mr-2"></i>Save Changes
                     </button>
-                    <button type="button" class="btn btn-success text-white" onclick="closeProfileModal()">
+                    <button type="button" class="btn btn-ghost" onclick="closeProfileModal()">
                         <i class="bi bi-x-lg mr-2"></i>Close
                     </button>
                 </div>
@@ -1713,18 +1744,22 @@
                     </div>
                 </div>
 
-                <div class="card bg-white border border-gray-200">
-                    <div class="card-body p-4 flex flex-row items-center justify-between opacity-50">
+                <!-- Appearance -->
+                <div class="card bg-white border border-emerald-200 hover:border-emerald-400 transition-all cursor-pointer" onclick="toggleTheme()">
+                    <div class="card-body p-4 flex flex-row items-center justify-between">
                         <div class="flex items-center gap-3">
                             <div class="avatar placeholder">
-                                <div class="bg-gray-100 text-gray-500 rounded-full w-12">
+                                <div class="bg-purple-100 text-purple-700 rounded-full w-12">
                                     <i class="bi bi-palette text-xl"></i>
                                 </div>
                             </div>
                             <div>
                                 <h4 class="font-semibold text-lg">Appearance</h4>
-                                <p class="text-sm text-gray-500">Theme customization will be available in a future update.</p>
+                                <p class="text-sm text-gray-500" id="admin-theme-label">Switch between light and dark mode</p>
                             </div>
+                        </div>
+                        <div id="admin-theme-toggle" class="flex items-center gap-2">
+                            <i class="bi bi-sun text-amber-500 text-lg"></i>
                         </div>
                     </div>
                 </div>
