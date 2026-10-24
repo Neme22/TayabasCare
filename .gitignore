@@ -6,6 +6,9 @@ node_modules/
 php/secrets.php
 php/.env
 
+# Runtime cache (PSGC barangay refresh)
+php/barangays_cache.json
+
 # Playwright
 .playwright-cli/
 

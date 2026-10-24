@@ -5,8 +5,14 @@ require_once 'csrf.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 
-// Write operations require admin role
-if (in_array($method, ['POST', 'PUT', 'DELETE'])) {
+// Inspectors and admins can add records; only admins can edit or delete
+if ($method === 'POST') {
+    if (!empty($_POST['id'])) {
+        requireRole('admin');                  // POST with id = update
+    } else {
+        requireRole(['admin', 'inspector']);   // POST without id = create
+    }
+} elseif (in_array($method, ['PUT', 'DELETE'])) {
     requireRole('admin');
 }
 

@@ -1324,24 +1324,84 @@
                             <span class="text-xl font-bold">-</span>
                             <input type="text" id="sanitary-permit-2" maxlength="3" class="input input-bordered input-success w-24 bg-gray-100 cursor-not-allowed" placeholder="A1B" readonly required />
                             <span class="text-xl font-bold">-</span>
-                            <select id="sanitary-permit-3" class="select select-bordered select-warning w-32" required>
-                                <option value="FM">FM</option>
-                                <option value="FR">FR</option>
-                                <option value="FS">FS</option>
-                                <option value="IE">IE</option>
-                                <option value="IS">IS</option>
-                                <option value="NFC">NFC</option>
-                                <option value="PDD">PDD</option>
-                                <option value="PPI">PPI</option>
-                                <option value="PPL">PPL</option>
-                                <option value="PPO">PPO</option>
-                                <option value="PPR">PPR</option>
-                                <option value="PPT">PPT</option>
-                                <option value="PPTD">PPTD</option>
-                                <option value="RFV">RFV</option>
-                                <option value="SFV">SFV</option>
-                                <option value="WRS">WRS</option>
-                            </select>
+                            <div class="custom-dropdown-container permit-code-dropdown">
+                                <input type="hidden" id="sanitary-permit-3" value="FM" />
+                                <button type="button"
+                                        class="custom-dropdown-selected permit-code-trigger"
+                                        id="sanitary-permit-3-trigger"
+                                        onclick="togglePermit3Dropdown()"
+                                        aria-haspopup="listbox"
+                                        aria-expanded="false">
+                                    <span class="selected-text" id="sanitary-permit-3-label">FM</span>
+                                    <i class="fas fa-chevron-down dropdown-arrow"></i>
+                                </button>
+                                <div class="custom-dropdown-options" id="sanitary-permit-3-options" role="listbox">
+                                    <div class="custom-option permit-code-option" role="option" data-code="FM" onclick="selectPermit3('FM')">
+                                        <span class="permit-code-acronym">FM</span>
+                                        <span class="permit-code-fullname">Food Manufacturing</span>
+                                    </div>
+                                    <div class="custom-option permit-code-option" role="option" data-code="FR" onclick="selectPermit3('FR')">
+                                        <span class="permit-code-acronym">FR</span>
+                                        <span class="permit-code-fullname">Food Retail</span>
+                                    </div>
+                                    <div class="custom-option permit-code-option" role="option" data-code="FS" onclick="selectPermit3('FS')">
+                                        <span class="permit-code-acronym">FS</span>
+                                        <span class="permit-code-fullname">Food Serving</span>
+                                    </div>
+                                    <div class="custom-option permit-code-option" role="option" data-code="IE" onclick="selectPermit3('IE')">
+                                        <span class="permit-code-acronym">IE</span>
+                                        <span class="permit-code-fullname">Industrial Establishment</span>
+                                    </div>
+                                    <div class="custom-option permit-code-option" role="option" data-code="IS" onclick="selectPermit3('IS')">
+                                        <span class="permit-code-acronym">IS</span>
+                                        <span class="permit-code-fullname">Individual Services</span>
+                                    </div>
+                                    <div class="custom-option permit-code-option" role="option" data-code="NFC" onclick="selectPermit3('NFC')">
+                                        <span class="permit-code-acronym">NFC</span>
+                                        <span class="permit-code-fullname">Non Food Commercial</span>
+                                    </div>
+                                    <div class="custom-option permit-code-option" role="option" data-code="PDD" onclick="selectPermit3('PDD')">
+                                        <span class="permit-code-acronym">PDD</span>
+                                        <span class="permit-code-fullname">Public Disposal of Death</span>
+                                    </div>
+                                    <div class="custom-option permit-code-option" role="option" data-code="PPI" onclick="selectPermit3('PPI')">
+                                        <span class="permit-code-acronym">PPI</span>
+                                        <span class="permit-code-fullname">Public Place Institu.</span>
+                                    </div>
+                                    <div class="custom-option permit-code-option" role="option" data-code="PPL" onclick="selectPermit3('PPL')">
+                                        <span class="permit-code-acronym">PPL</span>
+                                        <span class="permit-code-fullname">Public Place Lodging</span>
+                                    </div>
+                                    <div class="custom-option permit-code-option" role="option" data-code="PPO" onclick="selectPermit3('PPO')">
+                                        <span class="permit-code-acronym">PPO</span>
+                                        <span class="permit-code-fullname">Public Place Others</span>
+                                    </div>
+                                    <div class="custom-option permit-code-option" role="option" data-code="PPR" onclick="selectPermit3('PPR')">
+                                        <span class="permit-code-acronym">PPR</span>
+                                        <span class="permit-code-fullname">Public Place Recreational</span>
+                                    </div>
+                                    <div class="custom-option permit-code-option" role="option" data-code="PPT" onclick="selectPermit3('PPT')">
+                                        <span class="permit-code-acronym">PPT</span>
+                                        <span class="permit-code-fullname">Public Place Tonsorial</span>
+                                    </div>
+                                    <div class="custom-option permit-code-option" role="option" data-code="PPTD" onclick="selectPermit3('PPTD')">
+                                        <span class="permit-code-acronym">PPTD</span>
+                                        <span class="permit-code-fullname">Public Place Transfort Depo</span>
+                                    </div>
+                                    <div class="custom-option permit-code-option" role="option" data-code="RFV" onclick="selectPermit3('RFV')">
+                                        <span class="permit-code-acronym">RFV</span>
+                                        <span class="permit-code-fullname">Raw Food Vendor</span>
+                                    </div>
+                                    <div class="custom-option permit-code-option" role="option" data-code="SFV" onclick="selectPermit3('SFV')">
+                                        <span class="permit-code-acronym">SFV</span>
+                                        <span class="permit-code-fullname">Street Food Vendor</span>
+                                    </div>
+                                    <div class="custom-option permit-code-option" role="option" data-code="WRS" onclick="selectPermit3('WRS')">
+                                        <span class="permit-code-acronym">WRS</span>
+                                        <span class="permit-code-fullname">Water Refiling Station</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <label class="label">
                             <span class="label-text-alt text-gray-500">(e.g., 001-00-PPTD)</span>

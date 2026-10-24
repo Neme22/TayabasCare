@@ -1497,6 +1497,64 @@ select:valid {
     background-color: var(--insp-primary-50);
 }
 
+/* ==================== PERMIT CATEGORY DROPDOWN ==================== */
+/* Sanitary Permit No. box 3 — acronym + full name under it */
+.permit-code-dropdown {
+    width: 8rem;
+}
+
+.permit-code-trigger {
+    width: 100%;
+    min-height: 3rem;
+    border-color: #f59e0b;
+    justify-content: space-between;
+    font: inherit;
+    text-align: left;
+}
+
+.permit-code-trigger:hover,
+.permit-code-trigger.active {
+    border-color: #d97706;
+    background: #fffbeb;
+}
+
+.permit-code-trigger:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    background: #f3f4f6;
+}
+
+.permit-code-dropdown .custom-dropdown-options {
+    width: 16rem;
+    left: 0;
+    right: auto;
+    max-height: 280px;
+    z-index: 1050;
+}
+
+.permit-code-option {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 12px;
+}
+
+.permit-code-acronym {
+    font-weight: 700;
+    font-size: 0.875rem;
+    color: #111827;
+}
+
+.permit-code-fullname {
+    font-size: 0.7rem;
+    color: #6b7280;
+    line-height: 1.2;
+}
+
+.permit-code-option[aria-selected="true"] {
+    background: #fffbeb;
+}
+
 .custom-option .option-name {
     display: block;
     font-weight: 600;

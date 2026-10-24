@@ -259,7 +259,7 @@ const FormDrafts = {
         openSanitaryModal(d.mode === 'edit' ? 'edit' : 'add', d.editId || undefined);
 
         setTimeout(() => {
-            if (d.permit3) document.getElementById('sanitary-permit-3').value = d.permit3;
+            if (d.permit3) setPermit3(d.permit3);
             if (d.business) document.getElementById('sanitary-business').value = d.business;
             if (d.barangay) document.getElementById('sanitary-barangay').value = d.barangay;
             if (d.buildingStreet) document.getElementById('sanitary-building-street').value = d.buildingStreet;
@@ -2591,6 +2591,16 @@ function openSanitaryModal(mode, index = null) {
     const printBtn = document.getElementById('sanitary-print-btn');
     
     form.reset();
+    setPermit3('FM');
+
+    // form.reset() does not remove dynamically generated personnel rows
+    const pNo = document.getElementById('sanitary-personnel-no');
+    if (pNo) pNo.value = '';
+    const pContainer = document.getElementById('personnelContainer');
+    if (pContainer) pContainer.innerHTML = '';
+    const pSection = document.getElementById('personnelSection');
+    if (pSection) pSection.style.display = 'none';
+
     const now = new Date();
     const dateInput = document.getElementById('sanitary-date');
     
@@ -2649,7 +2659,9 @@ function loadSanitaryData(id) {
         const parts = record.permitNo.split('-');
         document.getElementById('sanitary-permit-1').value = parts[0] || '';
         document.getElementById('sanitary-permit-2').value = parts[1] || '';
-        document.getElementById('sanitary-permit-3').value = parts[2] || '';
+        setPermit3(parts[2] || 'FM');
+    } else {
+        setPermit3('FM');
     }
 
     // Handle owner data
@@ -3043,6 +3055,11 @@ function disableFormInputs(disable) {
     inputs.forEach(input => {
         input.disabled = disable;
     });
+    const permitTrigger = document.getElementById('sanitary-permit-3-trigger');
+    if (permitTrigger) {
+        permitTrigger.disabled = disable;
+        if (disable) closePermit3Dropdown();
+    }
 }
 
 // ==================== INSPECTION REPORT MODULE ====================
@@ -4861,27 +4878,6 @@ function sanitaryPermitValidation() {
             }
         });
     }
-
-
-
-    const permit3 = document.getElementById('sanitary-permit-3');
-    if (permit3) {
-        permit3.addEventListener('input', (e) => {
-            e.target.value = e.target.value.replace(/[^a-zA-Z]/g, '').toUpperCase();
-        });
-        permit3.addEventListener('keypress', (e) => {
-            const charCode = e.which ? e.which : e.keyCode;
-            if (!(charCode >= 65 && charCode <= 90) && !(charCode >= 97 && charCode <= 122)) {
-                e.preventDefault();
-            }
-        });
-        permit3.addEventListener('paste', (e) => {
-            e.preventDefault();
-            const pastedText = (e.clipboardData || window.clipboardData).getData('text');
-            const lettersOnly = pastedText.replace(/[^a-zA-Z]/g, '').toUpperCase();
-            document.execCommand('insertText', false, lettersOnly);
-        });
-    }
 }
 
 let burialClockInterval = null;
@@ -5173,17 +5169,76 @@ function selectInspector(value, name, rank) {
     selectedDiv.classList.remove('active');
 }
 
-// Close dropdown when clicking outside
+// Close dropdown when clicking outside (all custom dropdowns: burial + permit)
 document.addEventListener('click', function(event) {
-    const container = document.querySelector('.custom-dropdown-container');
-    const dropdown = document.getElementById('burial-inspector-options');
-    const selected = document.getElementById('inspector-dropdown-selected');
-    
-    if (container && !container.contains(event.target)) {
-        if (dropdown) dropdown.classList.remove('show');
-        if (selected) selected.classList.remove('active');
-    }
+    document.querySelectorAll('.custom-dropdown-container').forEach(container => {
+        if (container.contains(event.target)) return;
+        const options = container.querySelector('.custom-dropdown-options');
+        const selected = container.querySelector('.custom-dropdown-selected');
+        if (options) options.classList.remove('show');
+        if (selected) {
+            selected.classList.remove('active');
+            selected.setAttribute('aria-expanded', 'false');
+        }
+    });
 });
+
+// ==================== PERMIT CATEGORY DROPDOWN ====================
+// Sanitary Permit No. box 3 — value is the acronym only (FR), display shows
+// the acronym with the full name underneath in the open list.
+const PERMIT3_LABELS = {
+    FM: 'Food Manufacturing',
+    FR: 'Food Retail',
+    FS: 'Food Serving',
+    IE: 'Industrial Establishment',
+    IS: 'Individual Services',
+    NFC: 'Non Food Commercial',
+    PDD: 'Public Disposal of Death',
+    PPI: 'Public Place Institu.',
+    PPL: 'Public Place Lodging',
+    PPO: 'Public Place Others',
+    PPR: 'Public Place Recreational',
+    PPT: 'Public Place Tonsorial',
+    PPTD: 'Public Place Transfort Depo',
+    RFV: 'Raw Food Vendor',
+    SFV: 'Street Food Vendor',
+    WRS: 'Water Refiling Station'
+};
+
+function setPermit3(code) {
+    const input = document.getElementById('sanitary-permit-3');
+    const label = document.getElementById('sanitary-permit-3-label');
+    const safe = PERMIT3_LABELS[code] ? code : 'FM';
+    if (input) input.value = safe;
+    if (label) label.textContent = safe;
+    document.querySelectorAll('#sanitary-permit-3-options .permit-code-option').forEach(el => {
+        el.setAttribute('aria-selected', el.dataset.code === safe ? 'true' : 'false');
+    });
+}
+
+function togglePermit3Dropdown() {
+    const trigger = document.getElementById('sanitary-permit-3-trigger');
+    const options = document.getElementById('sanitary-permit-3-options');
+    if (!trigger || !options || trigger.disabled) return;
+    const open = options.classList.toggle('show');
+    trigger.classList.toggle('active', open);
+    trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function selectPermit3(code) {
+    setPermit3(code);
+    closePermit3Dropdown();
+}
+
+function closePermit3Dropdown() {
+    const trigger = document.getElementById('sanitary-permit-3-trigger');
+    const options = document.getElementById('sanitary-permit-3-options');
+    if (options) options.classList.remove('show');
+    if (trigger) {
+        trigger.classList.remove('active');
+        trigger.setAttribute('aria-expanded', 'false');
+    }
+}
 
 // ============================================================
 // Burial Place of Origin — Barangay of Tayabas City (API)
@@ -5535,8 +5590,47 @@ const InspNotifManager = {
         return alerts;
     },
 
-// Which tab is active in the panel: 'all' | 'unread'
+    // Which tab is active in the panel: 'all' | 'unread'
     activeTab: 'all',
+
+    // Server-hydrated read/dismiss state (source of truth across logins)
+    _serverReadIds: [],
+    _serverDismissedIds: [],
+    _serverLoaded: false,
+
+    // Load persisted state from php/notif_state.php and merge into localStorage
+    loadServerState: async () => {
+        try {
+            const r = await fetch(`${API_BASE_URL}/notif_state.php`, { credentials: 'include' });
+            const j = await r.json();
+            if (j.success && j.data) {
+                InspNotifManager._serverReadIds      = (j.data.read_ids || []).map(String);
+                InspNotifManager._serverDismissedIds = (j.data.dismissed_ids || []).map(String);
+                InspNotifManager._serverLoaded = true;
+                // Union with localStorage so optimistic writes before load are kept
+                const mergedRead = [...new Set([...InspNotifManager.getReadIds(), ...InspNotifManager._serverReadIds])];
+                const mergedDis  = [...new Set([...InspNotifManager.getDismissedIds(), ...InspNotifManager._serverDismissedIds])];
+                localStorage.setItem('inspNotifReadIds', JSON.stringify(mergedRead));
+                localStorage.setItem('inspNotifDismissedIds', JSON.stringify(mergedDis));
+                InspNotifManager.render();
+            }
+        } catch (e) {
+            console.warn('notif_state load failed', e);
+        }
+    },
+
+    // Fire-and-forget persist of read/dismiss flags to the server
+    _postState: (action, ids) => {
+        if (!ids || !ids.length) return;
+        fetch(`${API_BASE_URL}/notif_state.php`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, notif_ids: ids.map(String) })
+        }).then(r => r.json()).then(j => {
+            if (!j.success) console.warn('notif_state POST failed', j.message);
+        }).catch(e => console.warn('notif_state POST error', e));
+    },
 
     // In-memory lookup of the notifs currently on screen, keyed by id,
     // so the detail modal can find the one that was clicked.
@@ -5576,6 +5670,7 @@ const InspNotifManager = {
             ids.push(strId);
             localStorage.setItem('inspNotifDismissedIds', JSON.stringify(ids));
         }
+        InspNotifManager._postState('dismiss', [strId]);
         InspNotifManager.render();
     },
 
@@ -5586,6 +5681,7 @@ const InspNotifManager = {
             ids.push(strId);
             localStorage.setItem('inspNotifReadIds', JSON.stringify(ids));
         }
+        InspNotifManager._postState('read', [strId]);
         InspNotifManager.render();
     },
 
@@ -5597,6 +5693,7 @@ const InspNotifManager = {
             ...sysAlerts.map(a => a.id)
         ];
         localStorage.setItem('inspNotifReadIds', JSON.stringify(allIds));
+        InspNotifManager._postState('read', allIds);
         InspNotifManager.render();
     },
 
@@ -5753,7 +5850,9 @@ const InspNotifManager = {
 // Auto-run on page load and refresh every 30 seconds
 document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('inspNotifBadge')) {
-        setTimeout(() => InspNotifManager.render(), 600);
+        setTimeout(() => {
+            InspNotifManager.loadServerState().finally(() => InspNotifManager.render());
+        }, 600);
         setInterval(() => InspNotifManager.render(), 30000);
     }
 
