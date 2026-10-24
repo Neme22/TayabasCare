@@ -1771,6 +1771,23 @@ const SanitaryManager = {
         }
     },
 
+    permitInspectorName() {
+        const INSPECTORS = {
+            'rommel d. sate': 'Rommel D. Sate, LPT, MMPA',
+            'michael o. baldovino': 'Michael O. Baldovino, RN',
+            'olive b. caagbay': 'Olive B. Caagbay, RND, LPT',
+            'april wendy s. ponce': 'April Wendy S. Ponce, RN',
+            'rizaldy a. ramos': 'Rizaldy A. Ramos, RN',
+        };
+        const raw = (localStorage.getItem('adminDisplayName') ||
+            localStorage.getItem('username') || '').trim();
+        const key = raw.toLowerCase();
+        if (INSPECTORS[key]) return INSPECTORS[key];
+        const surname = key.split(/\s+/).pop();
+        const hit = Object.keys(INSPECTORS).find(k => k.split(' ').pop() === surname);
+        return hit ? INSPECTORS[hit] : (raw || 'Sanitation Inspector');
+    },
+
     printPermit: (index) => {
         const record = (SanitaryManager._displayed || SanitaryManager.records)[index];
         if (!record) return;
@@ -1850,6 +1867,18 @@ const SanitaryManager = {
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
+  .f-inspector {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 16px;
+    font-weight: bold;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0;
+    text-align: left;
+    left: 4%;
+    top: 88.6%;
+    transform: none;
+  }
   .permit-fields {
     position: absolute;
     z-index: 2;
@@ -1891,6 +1920,8 @@ const SanitaryManager = {
   <div class="field f-owner">${ownerName}</div>
   <div class="field f-business">${Utils.esc(record.businessName) || 'N/A'}</div>
   <div class="field f-address">${address}</div>
+
+  <div class="field f-inspector">${Utils.esc(SanitaryManager.permitInspectorName())}</div>
 
   <div class="permit-fields">
     Sanitary Permit No. : &nbsp;<span class="val">${Utils.esc(record.permitNo) || 'N/A'}</span><br>

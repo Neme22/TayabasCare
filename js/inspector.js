@@ -2914,6 +2914,24 @@ function closeSanitaryModal() {
     document.getElementById('sanitary-modal').close();
 }
 
+function permitInspectorName() {
+    const INSPECTORS = {
+        'rommel d. sate': 'Rommel D. Sate, LPT, MMPA',
+        'michael o. baldovino': 'Michael O. Baldovino, RN',
+        'olive b. caagbay': 'Olive B. Caagbay, RND, LPT',
+        'april wendy s. ponce': 'April Wendy S. Ponce, RN',
+        'rizaldy a. ramos': 'Rizaldy A. Ramos, RN',
+    };
+    const raw = (localStorage.getItem('inspectorFullName') ||
+        localStorage.getItem('inspectorDisplayName') ||
+        localStorage.getItem('username') || '').trim();
+    const key = raw.toLowerCase();
+    if (INSPECTORS[key]) return INSPECTORS[key];
+    const surname = key.split(/\s+/).pop();
+    const hit = Object.keys(INSPECTORS).find(k => k.split(' ').pop() === surname);
+    return hit ? INSPECTORS[hit] : (raw || 'Sanitation Inspector');
+}
+
 function printSanitary(id) {
     const record = cachedSanitaryRecords.find(r => r.id == id);
     if (!record) {
@@ -3006,6 +3024,18 @@ function printSanitary(id) {
     transform: translateX(-50%);
     top: 57.3%;
   }
+  .f-inspector {
+    position: absolute;
+    z-index: 2;
+    font-family: 'Times New Roman', Times, serif;
+    font-weight: bold;
+    font-size: 16px;
+    text-transform: uppercase;
+    color: #111;
+    white-space: nowrap;
+    left: 4%;
+    top: 88.6%;
+  }
   @media print {
     @page {
       size: A4 portrait;
@@ -3032,6 +3062,8 @@ function printSanitary(id) {
   <div class="f-owner">${esc(ownerName)}</div>
   <div class="f-business">${esc(record.businessName) || 'N/A'}</div>
   <div class="f-address">${esc(address)}</div>
+
+  <div class="f-inspector">${esc(permitInspectorName())}</div>
 
   <div style="position:absolute;z-index:2;top:74%;left:39%;font-family:'Times New Roman',Times,serif;font-size:12px;font-weight:bold;text-decoration:underline;text-transform:uppercase;color:#111;white-space:nowrap;">${esc(record.permitNo) || 'N/A'}</div>
   <div style="position:absolute;z-index:2;top:75.5%;left:39%;font-family:'Times New Roman',Times,serif;font-size:12px;font-weight:bold;text-decoration:underline;text-transform:uppercase;color:#111;white-space:nowrap;">${issuanceDate}</div>
