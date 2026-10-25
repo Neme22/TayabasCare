@@ -1,7 +1,7 @@
 <?php
 /**
  * TayabasCare Risk Scoring Engine — 5-Factor Formula (0-100 scale)
- * Shared utility used by predict.php, alerts.php, auto_schedule.php, pattern_analysis.php
+ * Shared utility used by predict.php, alerts.php, pattern_analysis.php
  */
 
 /**

@@ -261,6 +261,98 @@ body {
     outline: none;
 }
 
+/* Scope filter chips (All / New) */
+.scope-chip {
+    border: 1px solid var(--insp-border);
+    background: #fff;
+    color: #4b5563;
+    border-radius: 999px;
+    padding: 4px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--insp-transition);
+}
+
+.scope-chip:hover {
+    border-color: var(--insp-primary);
+    color: var(--insp-primary);
+}
+
+.scope-chip.active {
+    background: var(--insp-primary);
+    border-color: var(--insp-primary);
+    color: #fff;
+}
+
+/* Inspection report table — keep Permit No. and Barangay on one line,
+   narrow Remarks/Recommendation with ellipsis so the first two fit */
+.col-permit,
+.col-barangay,
+.col-remarks,
+.col-rec {
+    max-width: 9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.col-barangay {
+    max-width: 10rem;
+}
+
+/* Numbered pagination (sanitary records) */
+.pager-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 14px 0 4px;
+}
+
+.pager-btn {
+    min-width: 32px;
+    height: 32px;
+    padding: 0 8px;
+    border: 1px solid var(--insp-border);
+    border-radius: 8px;
+    background: #fff;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--insp-transition);
+}
+
+.pager-btn:hover:not(:disabled) {
+    border-color: var(--insp-primary);
+    color: var(--insp-primary);
+}
+
+.pager-btn.active {
+    background: var(--insp-primary);
+    border-color: var(--insp-primary);
+    color: #fff;
+}
+
+.pager-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.pager-ellipsis {
+    color: #9ca3af;
+    font-size: 13px;
+    padding: 0 2px;
+}
+
+.pager-summary {
+    font-size: 12px;
+    color: #6b7280;
+    margin-left: 8px;
+}
+
 /* ==================== PAGE HEADERS ==================== */
 .page-header {
     display: flex;
@@ -437,6 +529,18 @@ body {
 .schedule-status-badge.scheduled {
     background: #dbeafe;
     color: #2563eb;
+}
+
+/* Calendar chips show the establishment name — one line, ellipsized */
+.cal-estab-chip {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: left;
+    box-sizing: border-box;
 }
 
 /* Calendar Tag Tooltips */

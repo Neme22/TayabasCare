@@ -41,11 +41,13 @@ All state-changing endpoints (POST/PUT/DELETE) require a CSRF token via `X-CSRF-
 | `csrf_token.php` | GET endpoint returning the session's CSRF token. |
 | `auth.php` | Login (POST), session check (GET), logout (DELETE). Handles bcrypt, MD5, and plaintext password migration. |
 | `sanitary.php` | CRUD for `sanitary_records` table. |
-| `inspection.php` | CRUD for `inspection_reports`. On create/update, archives previous version to `inspection_history`. Inspector ownership enforced on updates. |
-| `inspection_schedules.php` | Upsert schedule entries (inspector + date). |
+| `inspection.php` | CRUD for `inspection_reports`. On create/update, archives previous version to `inspection_history`. Inspector ownership enforced on updates. GET is cluster-scoped for inspectors (only their cluster's `location` values); `?establishments=1` returns a citywide names-only index for the Sanitary "New" chip. |
+| `inspection_schedules.php` | Upsert schedule entries (inspector + date). GET allows both roles; POST lets inspectors schedule only for themselves and only for establishments in their cluster. |
+| `clusters.php` | **Cluster ↔ inspector assignments** (5 clusters). The 66 barangays are split into fixed clusters in `cluster_lib.php` — the admin only picks which inspector owns each cluster. GET returns `{clusters, myCluster}` for any logged-in user (`?barangays=1` for a flat map); POST is admin+CSRF replace-all of inspector owners (all 5 clusters required). |
+| `cluster_lib.php` | Shared cluster helpers: `fixedClusterBarangays()` (the fixed 66→5 partition, zone families never split), `clusterOwners()`, `clusterBarangaysForSession()`, `ensureClusterTables()`. Used by clusters/inspection/inspection_schedules. |
 | `burial.php` | CRUD for `burial_records` (cadaver/skeletal/exhumation). |
 | `archive.php` | Soft-delete store. Auto-purges expired items (30-day expiry). |
-| `risk_utils.php` | **Risk scoring engine.** 5-factor formula (0-100): violations, time since last inspection, establishment type, compliance rate, pending follow-ups. Shared by predict/alerts/auto_schedule/pattern_analysis. |
+| `risk_utils.php` | **Risk scoring engine.** 5-factor formula (0-100): violations, time since last inspection, establishment type, compliance rate, pending follow-ups. Shared by predict/alerts/pattern_analysis. |
 | `predict.php` | GET endpoint returning risk scores for all establishments. Uses `risk_utils.php` for scoring. |
 | `ai_analyze.php` | Calls OpenRouter API for AI risk narrative. Rate-limited (10/hr). |
 | `forgot_password.php` | OTP-based password reset (send_otp / verify_otp / reset_password). |
@@ -61,7 +63,6 @@ All state-changing endpoints (POST/PUT/DELETE) require a CSRF token via `X-CSRF-
 | `inspector.php` | Inspector account management (admin only). |
 | `import_sanitary.php` | Bulk CSV/Excel import into `sanitary_records`. |
 | `import_inspections.php` | Bulk inspection report import. |
-| `auto_schedule.php` | Risk-based auto-scheduling of inspections. |
 | `get_barangays.php` | Public barangay list (static data). |
 | `download.php` | File download with path traversal protection. |
 | `setup_database.php` | One-time DB + table creation. Run in browser. |
@@ -99,7 +100,9 @@ All tables use InnoDB + utf8mb4. Key tables:
 - **`sanitary_records`** — establishment records (main data table for prediction)
 - **`inspection_reports`** — current/latest inspection per establishment
 - **`inspection_history`** — archived versions of inspection reports (auto-populated on update)
-- **`inspection_schedules`** — inspector schedule entries
+- **`inspection_schedules`** — inspector schedule entries (stores `establishment` for calendar chips)
+- **`cluster_assignments`** — one row per cluster (1–5): which inspector owns it (the only admin-editable cluster data)
+- **`cluster_barangays`** — legacy table from the earlier editable-partition design; membership now lives in `fixedClusterBarangays()` — nothing reads this table
 - **`burial_records`** — burial/cadaver records
 - **`archive_data`** — soft-deleted items with 30-day expiry
 - **`password_resets`** — OTP-based password reset tokens
@@ -145,6 +148,7 @@ Inspection revisions (from `inspection_history`) are deduplicated by `report_dat
 - **CDN dependencies**: Tailwind, DaisyUI, Chart.js, Tesseract.js, Font Awesome, Bootstrap Icons — all loaded from CDN. No local copies.
 - **XSS protection**: `Utils.esc()` in admin.js and `esc()` in inspector.js escape HTML + quotes. Use these for ALL user data in `innerHTML` templates.
 - **Inspector column headers**: `buildAdminInspectorColumnMap()` fills the accomplishment report headers. On failure it retries when the report opens (and reuses `DataStore.inspectors` if cached); unused columns show `—` and a toast warns the user.
+- **Cluster scoping**: the 66 barangays are split into fixed Cluster 1–5 in code (`fixedClusterBarangays()` in `cluster_lib.php`, alphabetical blocks, zone families never split). In the Schedule module (`admin.html #clusterPanel` / `ClusterAssignments` in admin.js) the admin only assigns an inspector to each cluster — barangays are read-only chips, never editable. Inspectors fetch `php/clusters.php` once on load into `_myBarangays`; Inspection reports + History show only those barangays (server-enforced in `inspection.php` GET, client-filtered too), while Sanitary Records stay citywide. Reshuffle = admin re-saves the inspector dropdowns; views recompute on the inspector's next page load (nothing stored per inspector).
 
 ## Conventions
 

@@ -103,6 +103,12 @@
         <!-- Sidebar -->
         <div class="sidebar w-64 min-h-screen text-white no-print">
             <ul class="menu p-4 space-y-1">
+                <li id="clusterChipItem" class="hidden">
+                    <span class="sidebar-item" data-testid="cluster-chip" style="cursor:default;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.28);border-radius:8px;">
+                        <i class="fas fa-object-group"></i>
+                        <span id="clusterChipText">Cluster</span>
+                    </span>
+                </li>
                 <li class="sidebar-section-label">Records</li>
                 <li>
                     <a class="sidebar-item active" data-testid="nav-sanitary" onclick="showModule('sanitary')">
@@ -216,22 +222,26 @@
                                    id="sanitary-search" 
                                    placeholder="Search by Business Name, Owner, or Permit No..." 
                                    class="input input-bordered input-success w-full"
-                                   oninput="filterSanitaryRecords()" />
+                                   oninput="setSanitaryFilter()" />
                         </div>
                         <select id="sanitary-barangay-filter" 
                                 class="select select-bordered select-success"
-                                onchange="filterSanitaryRecords()">
+                                onchange="setSanitaryFilter()">
                             <option value="">All Barangays</option>
                         </select>
                         <select id="sanitary-sort" 
                                 class="select select-bordered select-success"
-                                onchange="filterSanitaryRecords()">
+                                onchange="setSanitaryFilter()">
                             <option value="newest">Newest Date</option>
                             <option value="oldest">Oldest Date</option>
                             <option value="name-az">Name A-Z</option>
                             <option value="name-za">Name Z-A</option>
                             <option value="risk">Risk Level</option>
                         </select>
+                    </div>
+                    <div class="flex gap-2 mt-2" id="sanitary-scope-chips">
+                        <button type="button" class="scope-chip active" data-testid="sanitary-scope-all" data-scope="all" onclick="setSanitaryScope('all')">All</button>
+                        <button type="button" class="scope-chip" data-testid="sanitary-scope-new" data-scope="new" onclick="setSanitaryScope('new')">New</button>
                     </div>
                     <div class="flex justify-between items-center mt-2">
                         <span id="sanitary-count" class="text-xs text-gray-400"></span>
@@ -260,6 +270,8 @@
                         </div>
                     </div>
                 </div>
+                <!-- Numbered pagination for the sanitary table (10 per page) -->
+                <div id="sanitary-pager" class="pager-bar" data-testid="sanitary-pager"></div>
             </div>
 
             <!-- INSPECTION REPORT MODULE -->
@@ -289,6 +301,10 @@
                             <option value="name-az">Establishment A-Z</option>
                             <option value="status">Status (Complied first)</option>
                         </select>
+                    </div>
+                    <div class="flex gap-2 mt-2" id="inspection-scope-chips">
+                        <button type="button" class="scope-chip active" data-testid="scope-chip-all" data-scope="all" onclick="setInspectionScope('all')">All (My Cluster)</button>
+                        <button type="button" class="scope-chip" data-testid="scope-chip-new" data-scope="new" onclick="setInspectionScope('new')">New</button>
                     </div>
                     <div class="flex justify-between items-center mt-2">
                         <span id="inspection-count" class="text-xs text-gray-400"></span>
@@ -404,7 +420,7 @@
 
                             <div class="form-control">
                                 <label class="label">
-                                    <span class="label-text font-semibold">Upload / Scan Inspection Paper</span>
+                                    <span class="label-text font-semibold">Upload Inspection Paper</span>
                                     <span class="label-text-alt text-emerald-600 font-medium">For documentation only</span>
                                 </label>
                                 <input type="file" class="file-input file-input-bordered file-input-success w-full"
@@ -1555,13 +1571,10 @@
                         </label>
                     </div>
 
-                                        <!-- Death Certificate with Auto AI Enhancement & OCR -->
-
                     <div class="form-control md:col-span-2">
 
                         <label class="label">
                             <span class="label-text font-semibold">Death Certificate</span>
-                            <span class="label-text-alt text-emerald-600 font-medium"><i class="fas fa-magic mr-1"></i>AI auto-enhances &amp; scans on upload</span>
                         </label>
                         <input type="file" class="file-input file-input-bordered file-input-success"
                                id="burial-death-cert"
@@ -1577,14 +1590,14 @@
                         <div id="ai-reading-status" class="mt-2" style="display:none;">
                             <div class="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
                                 <span class="loading loading-spinner loading-sm text-blue-500"></span>
-                                <span class="text-sm text-blue-600 font-medium">AI is enhancing &amp; reading certificate...</span>
+                                <span class="text-sm text-blue-600 font-medium">Reading certificate...</span>
                             </div>
                         </div>
 
                         <div id="ai-success-status" class="mt-2" style="display:none;">
                             <div class="flex items-center gap-2 p-2 bg-emerald-50 border border-emerald-200 rounded-lg">
                                 <i class="fas fa-check-circle text-emerald-500"></i>
-                                <span class="text-sm text-emerald-600 font-medium">Fields filled by AI. Please verify before saving.</span>
+                                <span class="text-sm text-emerald-600 font-medium">Fields filled from the certificate. Please verify before saving.</span>
                             </div>
                         </div>
 

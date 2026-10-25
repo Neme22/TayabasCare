@@ -3,27 +3,36 @@ const API_BASE_URL = 'php';
 
 // CSRF token management — auto-attach to all mutating requests
 let _csrfToken = null;
+// Bind the real fetch BEFORE any patch so token bootstrap can never re-enter
+// the patched wrapper (that caused a request stampede + PHP session lockup).
+const _origFetch = window.fetch.bind(window);
+let _csrfFetchPromise = null;
 async function _fetchCsrfToken() {
     if (_csrfToken) return _csrfToken;
-    try {
-        const r = await fetch(`${API_BASE_URL}/csrf_token.php`, { credentials: 'include' });
-        const j = await r.json();
-        _csrfToken = j?.data?.token || j?.csrf_token || null;
-        return _csrfToken;
-    } catch (e) { return null; }
+    if (_csrfFetchPromise) return _csrfFetchPromise;
+    _csrfFetchPromise = (async () => {
+        try {
+            const r = await _origFetch(`${API_BASE_URL}/csrf_token.php`, { credentials: 'include' });
+            const j = await r.json();
+            _csrfToken = j?.data?.token || j?.csrf_token || null;
+            return _csrfToken;
+        } catch (e) {
+            return null;
+        } finally {
+            _csrfFetchPromise = null;
+        }
+    })();
+    return _csrfFetchPromise;
 }
 // Initialize token on load
 _fetchCsrfToken();
 
-// Monkey-patch fetch to auto-attach CSRF header on POST/PUT/DELETE/PATCH
-const _origFetch = window.fetch.bind(window);
+// Monkey-patch fetch to auto-attach CSRF header (all methods — a few GET
+// endpoints such as notification_runner's send actions require the token)
 window.fetch = async function(url, opts = {}) {
-    const method = (opts.method || 'GET').toUpperCase();
-    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
-        const token = _csrfToken || await _fetchCsrfToken();
-        if (token) {
-            opts.headers = { ...opts.headers, 'X-CSRF-Token': token };
-        }
+    const token = _csrfToken || await _fetchCsrfToken();
+    if (token) {
+        opts.headers = { ...opts.headers, 'X-CSRF-Token': token };
     }
     return _origFetch(url, opts);
 };
@@ -247,6 +256,7 @@ const PageManager = {
         } else if (pageName === 'schedule') {
             await CalendarEvents.fetchAll();
             ScheduleManager.render();
+            ClusterAssignments.load().catch(() => {});
         } else if (pageName === 'archive') {
             ArchiveManager.render();
         } else if (pageName === 'dashboard') {
@@ -3033,6 +3043,36 @@ function populateInspectorColumns() {
 
 // Initialize App
 async function initApp() {
+    // Wire navigation BEFORE any network work so a slow session/API
+    // response cannot leave the sidebar unresponsive.
+    document.querySelectorAll('.sidebar-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            const page = item.dataset.page;
+            PageManager.switchPage(page);
+        });
+    });
+
+    const menuToggle = document.getElementById('menuToggle');
+    if (menuToggle) {
+        menuToggle.addEventListener('click', () => {
+            const sidebarEl = document.getElementById('sidebar');
+            if (sidebarEl) sidebarEl.classList.toggle('active');
+        });
+    }
+
+    const modalOverlay = document.getElementById('modalOverlay');
+    if (modalOverlay) {
+        modalOverlay.addEventListener('click', () => {
+            Utils.closeModal();
+        });
+    }
+
+    const addInspectorBtn = document.getElementById('addInspectorBtn');
+    if (addInspectorBtn) {
+        addInspectorBtn.addEventListener('click', InspectorManager.openAddModal);
+    }
+
     // --- Role guard: admin only ---
     let sessData = null;
     try {
@@ -3053,35 +3093,6 @@ async function initApp() {
         const savedName = localStorage.getItem('adminDisplayName') || sessData.data.fullName || sessData.data.username || 'Admin';
         usernameDisplay.textContent = savedName;
     }
-
-    // Set up navigation
-    document.querySelectorAll('.sidebar-item').forEach(item => {
-        item.addEventListener('click', (e) => {
-            e.preventDefault();
-            const page = item.dataset.page;
-            PageManager.switchPage(page);
-        });
-    });
-
-    // Menu toggle for mobile
-    const menuToggle = document.getElementById('menuToggle');
-    if (menuToggle) {
-        menuToggle.addEventListener('click', () => {
-            const sidebarEl = document.getElementById('sidebar');
-            if (sidebarEl) sidebarEl.classList.toggle('active');
-        });
-    }
-
-    // Modal overlay click to close
-    const modalOverlay = document.getElementById('modalOverlay');
-    if (modalOverlay) {
-        modalOverlay.addEventListener('click', () => {
-            Utils.closeModal();
-        });
-    }
-
-    // Add button handlers
-    document.getElementById('addInspectorBtn').addEventListener('click', InspectorManager.openAddModal);
     
     // Pre-fetch inspection reports from DB BEFORE drawing dashboard charts
     try {
@@ -4050,6 +4061,10 @@ async function handleChangePassword(e) {
 
 // ==================== NOTIFICATION / ALERT MANAGER ====================
 
+// Mirror of notif_state.php server-side sanitization: keep only [A-Za-z0-9_-:] and cap length.
+// Applied at ID-creation time so client IDs match what the server stores.
+const sanitizeNotifId = (id) => String(id).replace(/[^\w\-:]/g, '').slice(0, 255);
+
 const NotifManager = {
 
     alerts: [],
@@ -4062,6 +4077,8 @@ const NotifManager = {
         if (NotifManager.loading) return;
         NotifManager.loading = true;
         try {
+            // Rehydrate durable per-user dismiss/read state first (survives logout)
+            await NotifManager.loadServerState().catch(() => {});
             await fetch(`${API_BASE_URL}/alerts.php?action=generate`).catch(() => {});
             const resp = await fetch(`${API_BASE_URL}/alerts.php?action=list`);
             const text = await resp.text();
@@ -4078,6 +4095,38 @@ const NotifManager = {
         }
         NotifManager.loading = false;
         NotifManager.render();
+    },
+
+    // Load per-user read/dismiss state from php/notif_state.php and merge into localStorage.
+    // Source of truth across logins (localStorage is cleared on logout).
+    loadServerState: async () => {
+        try {
+            const r = await fetch(`${API_BASE_URL}/notif_state.php`, { credentials: 'include' });
+            const j = await r.json();
+            if (j.success && j.data) {
+                const serverRead = (j.data.read_ids || []).map(String);
+                const serverDis  = (j.data.dismissed_ids || []).map(String);
+                const mergedRead = [...new Set([...NotifManager.getReadIds(), ...serverRead])];
+                const mergedDis  = [...new Set([...NotifManager.getDismissedIds(), ...serverDis])];
+                localStorage.setItem('notifReadIds', JSON.stringify(mergedRead));
+                localStorage.setItem('notifDismissedIds', JSON.stringify(mergedDis));
+            }
+        } catch (e) {
+            console.warn('notif_state load failed', e);
+        }
+    },
+
+    // Fire-and-forget persist of read/dismiss flags to the durable per-user store
+    _postState: (action, ids) => {
+        if (!ids || !ids.length) return;
+        fetch(`${API_BASE_URL}/notif_state.php`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, notif_ids: ids.map(id => sanitizeNotifId(id)) })
+        }).then(r => r.json()).then(j => {
+            if (!j.success) console.warn('notif_state POST failed', j.message);
+        }).catch(e => console.warn('notif_state POST error', e));
     },
 
     // Local fallback: generates alerts from in-memory data
@@ -4123,10 +4172,10 @@ const NotifManager = {
         const readIds = NotifManager.getReadIds();
         const dismissedIds = NotifManager.getDismissedIds();
         alerts.forEach(a => {
-            if (readIds.includes(a.id)) a.read = true;
+            if (readIds.includes(sanitizeNotifId(a.id))) a.read = true;
         });
         // Filter out dismissed alerts
-        return alerts.filter(a => !dismissedIds.includes(String(a.id)));
+        return alerts.filter(a => !dismissedIds.includes(sanitizeNotifId(a.id)));
     },
 
     // Map server alert types to UI display properties
@@ -4159,7 +4208,7 @@ const NotifManager = {
     getReadIds: () => {
         const raw = localStorage.getItem('notifReadIds');
         try {
-            return raw ? JSON.parse(raw) : [];
+            return raw ? JSON.parse(raw).map(sanitizeNotifId) : [];
         } catch (e) {
             localStorage.removeItem('notifReadIds');
             return [];
@@ -4169,7 +4218,7 @@ const NotifManager = {
     getDismissedIds: () => {
         const raw = localStorage.getItem('notifDismissedIds');
         try {
-            return raw ? JSON.parse(raw) : [];
+            return raw ? JSON.parse(raw).map(sanitizeNotifId) : [];
         } catch (e) {
             localStorage.removeItem('notifDismissedIds');
             return [];
@@ -4177,7 +4226,8 @@ const NotifManager = {
     },
 
     markRead: async (id) => {
-        const alert = NotifManager.alerts.find(a => String(a.id) === String(id));
+        const strId = sanitizeNotifId(id);
+        const alert = NotifManager.alerts.find(a => sanitizeNotifId(a.id) === strId);
         if (alert && alert.serverId) {
             try {
                 await fetch(`${API_BASE_URL}/alerts.php`, {
@@ -4188,10 +4238,11 @@ const NotifManager = {
             } catch (e) { /* ignore */ }
         }
         const ids = NotifManager.getReadIds();
-        if (!ids.includes(id)) {
-            ids.push(id);
+        if (!ids.includes(strId)) {
+            ids.push(strId);
             localStorage.setItem('notifReadIds', JSON.stringify(ids));
         }
+        NotifManager._postState('read', [strId]);
         NotifManager.render();
     },
 
@@ -4204,8 +4255,9 @@ const NotifManager = {
             });
         } catch (e) { /* ignore */ }
         const alerts = NotifManager.alerts;
-        const ids    = alerts.map(a => a.id);
+        const ids    = alerts.map(a => sanitizeNotifId(a.id));
         localStorage.setItem('notifReadIds', JSON.stringify(ids));
+        NotifManager._postState('read', ids);
         NotifManager.alerts.forEach(a => a.read = true);
         NotifManager.render();
     },
@@ -4223,15 +4275,17 @@ const NotifManager = {
                 } catch (e) { /* ignore */ }
             }
         }
-        // Also save all IDs as dismissed in localStorage (for local fallback)
-        const allIds = alerts.map(a => String(a.id));
+        // Persist all IDs in localStorage + durable per-user store
+        const allIds = alerts.map(a => sanitizeNotifId(a.id));
         localStorage.setItem('notifDismissedIds', JSON.stringify(allIds));
+        NotifManager._postState('dismiss', allIds);
         NotifManager.alerts = [];
         NotifManager.render();
     },
 
     dismiss: async (id) => {
-        const alert = NotifManager.alerts.find(a => String(a.id) === String(id));
+        const strId = sanitizeNotifId(id);
+        const alert = NotifManager.alerts.find(a => sanitizeNotifId(a.id) === strId);
         if (alert && alert.serverId) {
             try {
                 await fetch(`${API_BASE_URL}/alerts.php`, {
@@ -4241,14 +4295,14 @@ const NotifManager = {
                 });
             } catch (e) { /* ignore */ }
         }
-        // Persist dismissed ID in localStorage
+        // Persist dismissed ID in localStorage + durable per-user store
         const dismissed = NotifManager.getDismissedIds();
-        const strId = String(id);
         if (!dismissed.includes(strId)) {
             dismissed.push(strId);
             localStorage.setItem('notifDismissedIds', JSON.stringify(dismissed));
         }
-        NotifManager.alerts = NotifManager.alerts.filter(a => String(a.id) !== String(id));
+        NotifManager._postState('dismiss', [strId]);
+        NotifManager.alerts = NotifManager.alerts.filter(a => sanitizeNotifId(a.id) !== strId);
         NotifManager.render();
     },
 
@@ -4293,7 +4347,7 @@ const NotifManager = {
         const dismissedIds = NotifManager.getDismissedIds();
         let displayAlerts = NotifManager.alerts
             .map(a => a.serverId ? NotifManager.mapAlert(a) : a)
-            .filter(a => !dismissedIds.includes(String(a.id)));
+            .filter(a => !dismissedIds.includes(sanitizeNotifId(a.id)));
         displayAlerts.sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0));
         const unread = displayAlerts.filter(a => !a.read);
         const badge  = document.getElementById('notifBadge');
@@ -4383,6 +4437,124 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// ==================== CLUSTER ASSIGNMENTS (admin, Schedule module) ====================
+
+const ClusterAssignments = {
+    _inspectors: [],       // [{fullName}]
+    _clusters: null,       // {1..5: {inspector, barangays: []}} — barangays are FIXED
+    _expanded: true,
+
+    load: async () => {
+        // Fetch inspectors + clusters (fixed barangays + current owners)
+        const [inspResp, clusResp] = await Promise.all([
+            fetch(`${API_BASE_URL}/inspector.php`).then(r => r.json()).catch(() => null),
+            fetch(`${API_BASE_URL}/clusters.php`).then(r => r.json()).catch(() => null)
+        ]);
+
+        ClusterAssignments._inspectors = (inspResp && inspResp.success && inspResp.data) || [];
+
+        ClusterAssignments._clusters = {};
+        const list = (clusResp && clusResp.success && clusResp.data && clusResp.data.clusters) || [];
+        for (const c of list) {
+            ClusterAssignments._clusters[c.cluster_number] = {
+                inspector: (c.inspector_full_name && c.inspector_full_name !== 'Unassigned') ? c.inspector_full_name : '',
+                barangays: c.barangays || []
+            };
+        }
+        for (let i = 1; i <= 5; i++) {
+            if (!ClusterAssignments._clusters[i]) {
+                ClusterAssignments._clusters[i] = { inspector: '', barangays: [] };
+            }
+        }
+
+        ClusterAssignments.render();
+    },
+
+    render: () => {
+        const wrap = document.getElementById('clusterCards');
+        if (!wrap) return;
+
+        let html = '';
+        for (let n = 1; n <= 5; n++) {
+            const c = ClusterAssignments._clusters[n];
+            const inspOptions = ['<option value="">— Unassigned —</option>']
+                .concat(ClusterAssignments._inspectors.map(i => {
+                    const name = i.fullName || i.full_name || '';
+                    return `<option value="${Utils.esc(name)}" ${name === c.inspector ? 'selected' : ''}>${Utils.esc(name)}</option>`;
+                })).join('');
+
+            // Barangays are fixed — read-only chips
+            const barangayChips = (c.barangays || []).map(b =>
+                `<span style="font-size:11px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:2px 6px;color:#374151;">${Utils.esc(b)}</span>`
+            ).join('');
+
+            html += `
+            <div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;background:#f9fafb;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <span style="font-weight:700;font-size:13px;color:#059669;">Cluster ${n}</span>
+                    <span style="font-size:11px;color:#6b7280;">${c.barangays.length} barangays (fixed)</span>
+                </div>
+                <select class="cluster-inspector-select" data-cluster="${n}" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;margin-bottom:8px;">
+                    ${inspOptions}
+                </select>
+                <div class="cluster-brgy-list" data-cluster="${n}" style="max-height:220px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:6px;background:#fff;padding:6px;">
+                    <div style="display:flex;flex-wrap:wrap;gap:4px;">${barangayChips}</div>
+                </div>
+            </div>`;
+        }
+        wrap.innerHTML = html;
+
+        // Bind inspector selects (the only editable part)
+        wrap.querySelectorAll('.cluster-inspector-select').forEach(sel => {
+            sel.addEventListener('change', () => {
+                const n = parseInt(sel.dataset.cluster, 10);
+                ClusterAssignments._clusters[n].inspector = sel.value;
+            });
+        });
+    },
+
+    toggle: () => {
+        const cards = document.getElementById('clusterCards');
+        const icon = document.getElementById('clusterToggleIcon');
+        if (!cards) return;
+        ClusterAssignments._expanded = !ClusterAssignments._expanded;
+        cards.style.display = ClusterAssignments._expanded ? 'grid' : 'none';
+        if (icon) icon.className = ClusterAssignments._expanded ? 'fas fa-chevron-down' : 'fas fa-chevron-right';
+    },
+
+    save: async () => {
+        if (!ClusterAssignments._clusters) {
+            adminShowNotification('Clusters not loaded yet.', 'error');
+            return;
+        }
+        // Barangays are fixed server-side — only inspector owners are saved
+        const payload = [];
+        for (let n = 1; n <= 5; n++) {
+            payload.push({
+                cluster_number: n,
+                inspector_full_name: ClusterAssignments._clusters[n].inspector || ''
+            });
+        }
+        try {
+            const resp = await fetch(`${API_BASE_URL}/clusters.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const json = await resp.json();
+            if (json.success) {
+                adminShowNotification('Cluster assignments saved.', 'success');
+                const status = document.getElementById('clusterStatus');
+                if (status) status.textContent = 'Saved ✓ ' + new Date().toLocaleTimeString();
+            } else {
+                adminShowNotification(json.message || 'Failed to save clusters.', 'error');
+            }
+        } catch (e) {
+            adminShowNotification('Failed to save clusters.', 'error');
+        }
+    }
+};
 
 // ==================== SCHEDULE MANAGER ====================
 
@@ -4725,11 +4897,10 @@ const ScheduleManager = {
                 const ss     = statusStyle[status] || { bg: '#f3f4f6', color: '#6b7280' };
                 return `
                 <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:8px;background:#fafafa;">
-                    <div>
-                        <div style="font-weight:600;font-size:14px;color:#111827;">${Utils.esc(s.inspector)}</div>
-                        <div style="font-size:12px;color:#6b7280;font-style:italic;">${s.rank || ''}</div>
-                        <div style="font-size:12px;color:#2563eb;margin-top:2px;">🏢 ${s.establishment || 'No establishment set'}${s.riskLevel ? ` <span style="background:${s.riskLevel === 'HIGH' ? '#fef2f2;color:#dc2626' : s.riskLevel === 'MODERATE' ? '#fffbeb;color:#d97706' : '#ecfdf5;color:#059669'};font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;">${s.riskLevel}</span>` : ''}</div>
-                        ${s.notes ? `<div style="font-size:12px;color:#374151;margin-top:4px;">📝 ${s.notes}</div>` : ''}
+                    <div style="min-width:0;">
+                        <div style="font-weight:600;font-size:14px;color:#111827;">${Utils.esc(s.establishment) || 'No establishment set'}${s.riskLevel ? ` <span style="background:${s.riskLevel === 'HIGH' ? '#fef2f2;color:#dc2626' : s.riskLevel === 'MODERATE' ? '#fffbeb;color:#d97706' : '#ecfdf5;color:#059669'};font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;">${s.riskLevel}</span>` : ''}</div>
+                        <div style="font-size:12px;color:#6b7280;margin-top:2px;">${Utils.esc(s.inspector)}${s.rank ? ` · ${Utils.esc(s.rank)}` : ''}</div>
+                        ${s.notes ? `<div style="font-size:12px;color:#374151;margin-top:4px;">📝 ${Utils.esc(s.notes)}</div>` : ''}
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
                         <span style="background:${ss.bg};color:${ss.color};font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;">${status}</span>
@@ -4898,117 +5069,6 @@ const CalendarEvents = {
 };
 
 // ==================== END CALENDAR EVENTS ====================
-
-// ==================== AUTO-SCHEDULER (Risk-Based) ====================
-
-const AutoScheduler = {
-    recommendations: [],
-
-    // Fetch recommendations from the server
-    preview: async () => {
-        const panel  = document.getElementById('autoSchedulePanel');
-        const list   = document.getElementById('autoScheduleList');
-        const status = document.getElementById('autoSchedStatus');
-        if (!panel) return;
-
-        panel.style.display = 'block';
-        list.innerHTML = '<p style="text-align:center;padding:20px;color:#6b7280;"><i class="fas fa-spinner fa-spin"></i> Analyzing establishments...</p>';
-        status.textContent = '';
-
-        // Populate inspector dropdown
-        const select = document.getElementById('autoSchedInspector');
-        if (select) {
-            const inspectors = await fetch(`${API_BASE_URL}/inspector.php`).then(r => r.json()).catch(() => ({ data: [] }));
-            const list = inspectors.data || [];
-            select.innerHTML = '<option value="">— Round-robin (all) —</option>' +
-                list.map(i => `<option value="${i.fullName || i.full_name}">${i.fullName || i.full_name}</option>`).join('');
-        }
-
-        try {
-            const resp = await fetch(`${API_BASE_URL}/auto_schedule.php`);
-            const text = await resp.text();
-            let json;
-            try { json = JSON.parse(text); } catch (e) { throw new Error('Server returned invalid response. Run setup_database.php to create the required tables.'); }
-            if (!json.success) throw new Error(json.message);
-
-            AutoScheduler.recommendations = json.data || [];
-            AutoScheduler.renderList();
-        } catch (err) {
-            list.innerHTML = `<p style="text-align:center;padding:20px;color:#ef4444;">Error: ${Utils.esc(err.message)}</p>`;
-        }
-    },
-
-    renderList: () => {
-        const list = document.getElementById('autoScheduleList');
-        if (!list) return;
-
-        const recs = AutoScheduler.recommendations;
-        if (recs.length === 0) {
-            list.innerHTML = '<p style="text-align:center;padding:20px;color:#059669;"><i class="fas fa-check-circle"></i> All establishments are up-to-date. No overdue inspections.</p>';
-            return;
-        }
-
-        const riskStyle = {
-            HIGH:     { bg: '#fef2f2', color: '#ef4444', border: '#fecaca', badge: '#dc2626' },
-            MODERATE: { bg: '#fffbeb', color: '#d97706', border: '#fde68a', badge: '#d97706' },
-            LOW:      { bg: '#ecfdf5', color: '#059669', border: '#a7f3d0', badge: '#059669' }
-        };
-
-        list.innerHTML = recs.map(r => {
-            const rs = riskStyle[r.riskLevel] || riskStyle.LOW;
-            return `
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid ${rs.border};border-radius:8px;margin-bottom:6px;background:${rs.bg};">
-                <div style="flex:1;min-width:0;">
-                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
-                        <span style="background:${rs.badge};color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">${r.riskLevel}</span>
-                        <span style="font-weight:600;font-size:13px;color:#111827;">${Utils.esc(r.establishment)}</span>
-                    </div>
-                    <div style="font-size:11px;color:#6b7280;">
-                        ${r.barangay ? '📍 ' + r.barangay + ' · ' : ''}Score: ${r.riskScore}/100 · Last: ${r.lastInspected} · ${r.reason}
-                    </div>
-                </div>
-            </div>`;
-        }).join('');
-
-        document.getElementById('autoSchedStatus').innerHTML = `<span style="color:#6b7280;">${recs.length} establishment(s) overdue for inspection.</span>`;
-    },
-
-    execute: async () => {
-        const status   = document.getElementById('autoSchedStatus');
-        const inspector = document.getElementById('autoSchedInspector')?.value || '';
-
-        status.innerHTML = '<span style="color:#7c3aed;"><i class="fas fa-spinner fa-spin"></i> Scheduling...</span>';
-
-        try {
-            const resp = await fetch(`${API_BASE_URL}/auto_schedule.php`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    inspector: inspector,
-                    startDate: new Date().toISOString().split('T')[0],
-                    maxPerDay: 3
-                })
-            });
-            const text = await resp.text();
-            let json;
-            try { json = JSON.parse(text); } catch (e) { throw new Error('Server returned invalid response. Run setup_database.php to create the required tables.'); }
-            if (!json.success) throw new Error(json.message);
-
-            const count = json.data?.scheduled || 0;
-            status.innerHTML = `<span style="color:#059669;font-weight:600;"><i class="fas fa-check-circle"></i> ${Utils.esc(json.message)}</span>`;
-
-            // Refresh the calendar
-            await ScheduleManager.render();
-
-            // Refresh alerts
-            setTimeout(() => NotifManager.fetchAlerts(), 500);
-        } catch (err) {
-            status.innerHTML = `<span style="color:#ef4444;"><i class="fas fa-times-circle"></i> Error: ${Utils.esc(err.message)}</span>`;
-        }
-    }
-};
-
-// ==================== END AUTO-SCHEDULER ====================
 
 // ==================== PREDICTION ENGINE ====================
 

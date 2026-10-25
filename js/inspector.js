@@ -3,27 +3,36 @@ const API_BASE_URL = 'php';
 
 // CSRF token management — auto-attach to all mutating requests
 let _csrfToken = null;
+// Bind the real fetch BEFORE any patch so token bootstrap can never re-enter
+// the patched wrapper (that caused a request stampede + PHP session lockup).
+const _origFetch = window.fetch.bind(window);
+let _csrfFetchPromise = null;
 async function _fetchCsrfToken() {
     if (_csrfToken) return _csrfToken;
-    try {
-        const r = await fetch(`${API_BASE_URL}/csrf_token.php`, { credentials: 'include' });
-        const j = await r.json();
-        _csrfToken = j?.data?.token || j?.csrf_token || null;
-        return _csrfToken;
-    } catch (e) { return null; }
+    if (_csrfFetchPromise) return _csrfFetchPromise;
+    _csrfFetchPromise = (async () => {
+        try {
+            const r = await _origFetch(`${API_BASE_URL}/csrf_token.php`, { credentials: 'include' });
+            const j = await r.json();
+            _csrfToken = j?.data?.token || j?.csrf_token || null;
+            return _csrfToken;
+        } catch (e) {
+            return null;
+        } finally {
+            _csrfFetchPromise = null;
+        }
+    })();
+    return _csrfFetchPromise;
 }
 // Initialize token on load
 _fetchCsrfToken();
 
-// Monkey-patch fetch to auto-attach CSRF header on POST/PUT/DELETE/PATCH
-const _origFetch = window.fetch.bind(window);
+// Monkey-patch fetch to auto-attach CSRF header (all methods — a few GET
+// endpoints such as notification_runner's send actions require the token)
 window.fetch = async function(url, opts = {}) {
-    const method = (opts.method || 'GET').toUpperCase();
-    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
-        const token = _csrfToken || await _fetchCsrfToken();
-        if (token) {
-            opts.headers = { ...opts.headers, 'X-CSRF-Token': token };
-        }
+    const token = _csrfToken || await _fetchCsrfToken();
+    if (token) {
+        opts.headers = { ...opts.headers, 'X-CSRF-Token': token };
     }
     return _origFetch(url, opts);
 };
@@ -63,8 +72,63 @@ const TablePaging = {
     _rerender(key) {
         const fn = this._handlers[key];
         if (typeof fn === 'function') fn();
+    },
+
+    // ---- Numbered-page mode (used by the sanitary table) ----
+    _pages: {},
+    setPage(key, n) {
+        this._pages[key] = Math.max(1, n | 0);
+    },
+    pageSlice(list, key, size = 10) {
+        const total = list.length;
+        const pages = Math.max(1, Math.ceil(total / size));
+        let p = this._pages[key] || 1;
+        if (p > pages) p = pages;
+        this._pages[key] = p;
+        const start = (p - 1) * size;
+        return { displayed: list.slice(start, start + size), page: p, pages, total, size };
     }
 };
+
+// Renders « 1 2 … 9 » page controls under a table card.
+// Buttons call TablePaging.setPage(key, n) then the registered re-render.
+function renderNumberedPager(elId, info, key) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    if (!info || info.total === 0) {
+        el.innerHTML = '';
+        el.style.display = 'none';
+        return;
+    }
+    el.style.display = '';
+    if (info.pages <= 1) {
+        el.innerHTML = `<span class="pager-summary">Showing all ${info.total} record${info.total === 1 ? '' : 's'}</span>`;
+        return;
+    }
+
+    const { page, pages, total } = info;
+    const nums = [...new Set([1, pages, page - 1, page, page + 1].filter(n => n >= 1 && n <= pages))]
+        .sort((a, b) => a - b);
+
+    let html = `<button type="button" class="pager-btn" data-page="${page - 1}" ${page === 1 ? 'disabled' : ''} aria-label="Previous page">&laquo;</button>`;
+    let prev = 0;
+    for (const n of nums) {
+        if (prev && n - prev > 1) html += `<span class="pager-ellipsis">&hellip;</span>`;
+        html += `<button type="button" class="pager-btn ${n === page ? 'active' : ''}" data-page="${n}">${n}</button>`;
+        prev = n;
+    }
+    html += `<button type="button" class="pager-btn" data-page="${page + 1}" ${page === pages ? 'disabled' : ''} aria-label="Next page">&raquo;</button>`;
+    html += `<span class="pager-summary">Page ${page} of ${pages} &middot; ${total} records</span>`;
+    el.innerHTML = html;
+
+    el.querySelectorAll('.pager-btn').forEach(btn => {
+        if (btn.disabled) return;
+        btn.addEventListener('click', () => {
+            TablePaging.setPage(key, parseInt(btn.dataset.page, 10));
+            TablePaging._rerender(key);
+        });
+    });
+}
 
 // --- Role guard: inspector only ---
 (async function() {
@@ -690,8 +754,72 @@ function generatePersonnelFields() {
     }
 }
 
+// ==================== CLUSTER SCOPE ====================
+// Admin-assigned barangay cluster, fetched once per page load from
+// php/clusters.php. Everything scope-related reads these globals:
+// reports/history show only _myBarangays, sanitary stays citywide.
+let _clusterLoaded = false;
+let _myCluster = null;        // {cluster_number, inspector_full_name, barangays[]} | null
+let _myClusterNumber = null;
+let _myBarangays = new Set(); // trimmed, lowercase barangay names
+let _inspectedNames = new Set(); // citywide: every establishment with a report (lowercase)
+
+function isInMyCluster(b) {
+    return _myBarangays.has(String(b || '').trim().toLowerCase());
+}
+
+async function loadMyCluster() {
+    try {
+        const resp = await fetch(`${API_BASE_URL}/clusters.php`);
+        const json = await resp.json();
+        if (json.success && json.data) {
+            _myCluster = json.data.myCluster || null;
+            _myClusterNumber = _myCluster ? _myCluster.cluster_number : null;
+            _myBarangays = new Set(
+                ((_myCluster && _myCluster.barangays) || []).map(b => String(b).trim().toLowerCase())
+            );
+        }
+    } catch (e) {
+        console.warn('Could not load cluster assignment:', e);
+    }
+    _clusterLoaded = true;
+    renderClusterChip();
+    return _myCluster;
+}
+
+function renderClusterChip() {
+    const item = document.getElementById('clusterChipItem');
+    const text = document.getElementById('clusterChipText');
+    if (!item || !text) return;
+    if (!_myClusterNumber) {
+        item.classList.add('hidden');
+        return;
+    }
+    const n = _myBarangays.size;
+    text.textContent = `Cluster ${_myClusterNumber} · ${n} barangay${n === 1 ? '' : 's'}`;
+    item.classList.remove('hidden');
+}
+
+// Citywide names of inspected establishments (drives the Sanitary "New" chip)
+async function loadInspectedNames() {
+    try {
+        const resp = await fetch(`${API_BASE_URL}/inspection.php?establishments=1`);
+        const json = await resp.json();
+        if (json.success && json.data && Array.isArray(json.data.establishments)) {
+            _inspectedNames = new Set(json.data.establishments.map(n => String(n || '').toLowerCase()));
+        }
+    } catch (e) {
+        console.warn('Could not load inspected-establishment index:', e);
+    }
+    return _inspectedNames;
+}
+
 // Load data on page load
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
+    // Cluster scope must be ready before any scoped list renders
+    await loadMyCluster();
+
+    loadInspectedNames();
     loadSanitaryRecords();
     loadBurialRecords('cadaver');
     updateSanitaryStatistics();
@@ -796,15 +924,6 @@ const InspSchedule = {
         return cachedSchedules;
     },
 
-    // Returns ALL possible name variants this inspector might be stored under
-    getMyNames: () => {
-        const fullName = (localStorage.getItem('inspectorFullName') || '').toLowerCase().trim();
-        const username = (localStorage.getItem('username') || '').toLowerCase().trim();
-        // Also try first name only (e.g. "mel" from "Mel Segrou")
-        const firstName = fullName.split(' ')[0];
-        return [fullName, username, firstName].filter(n => n.length > 0);
-    },
-
     render: () => {
         InspSchedule.renderCalendar();
     },
@@ -812,7 +931,6 @@ const InspSchedule = {
     renderCalendar: () => {
         const all    = InspSchedule.getAll();
         const events = cachedEvents || [];
-        const myNames = InspSchedule.getMyNames();
         const year   = InspSchedule.calYear;
         const month  = InspSchedule.calMonth;
         const label  = document.getElementById('inspCalMonthLabel');
@@ -827,13 +945,8 @@ const InspSchedule = {
 
         const schedMap = {};
         all.forEach(s => {
-            const inspLower = (s.inspector || '').toLowerCase();
-            const isMe = myNames.some(n => n && (
-                inspLower === n ||
-                inspLower.startsWith(n) ||
-                n.startsWith(inspLower)
-            ));
-            if (!isMe || !s.schedDate) return;
+            // Server already scopes the payload to this inspector's cluster
+            if (!s.schedDate) return;
             if (!schedMap[s.schedDate]) schedMap[s.schedDate] = [];
             schedMap[s.schedDate].push(s);
         });
@@ -886,13 +999,19 @@ const InspSchedule = {
                     `</div>`;
             }
             if (hasScheds) {
+                const shown = scheds.slice(0, 3);
+                const overflow = scheds.length - shown.length;
                 dotsHtml += `<div style="margin-top:4px;">` +
-                    scheds.slice(0, 2).map(s => {
+                    shown.map(s => {
                         const badgeClass = s.done ? 'done' : 'scheduled';
-                        const label = s.done ? 'Done' : 'Scheduled';
-                        const tip = `${esc(s.inspector)}${s.establishment ? '\\n🏢 ' + esc(s.establishment) : ''}${s.riskLevel ? '\\n⚠️ Risk: ' + s.riskLevel : ''}${s.notes ? '\\n📝 ' + esc(s.notes) : ''}`;
-                        return `<span class="cal-tooltip schedule-status-badge ${badgeClass}" style="cursor:pointer;">${label}<span class="cal-tooltip-text">${tip.replace(/\\n/g, '<br>')}</span></span>`;
+                        const raw = String(s.establishment || '').trim() || 'General inspection';
+                        const label = raw.length > 16 ? raw.slice(0, 16) + '…' : raw;
+                        const tip = `${esc(raw)}${s.riskLevel ? '\\n⚠️ Risk: ' + s.riskLevel : ''}${s.notes ? '\\n📝 ' + esc(s.notes) : ''}`;
+                        return `<span class="cal-tooltip schedule-status-badge cal-estab-chip ${badgeClass}" style="cursor:pointer;">${esc(label)}<span class="cal-tooltip-text">${tip.replace(/\\n/g, '<br>')}</span></span>`;
                     }).join('') +
+                    (overflow > 0
+                        ? `<span class="cal-tooltip schedule-status-badge cal-estab-chip" style="background:#6b7280;color:#fff;cursor:pointer;">+${overflow}<span class="cal-tooltip-text">${scheds.slice(3).map(s => esc(String(s.establishment || '').trim() || 'General inspection')).join('<br>')}</span></span>`
+                        : '') +
                     `</div>`;
             }
 
@@ -908,15 +1027,8 @@ const InspSchedule = {
 
     showDay: (dateKey) => {
         const all    = InspSchedule.getAll();
-        const myNames = InspSchedule.getMyNames();
-        const scheds = all.filter(s => {
-            const inspLower = (s.inspector || '').toLowerCase();
-            return s.schedDate === dateKey && myNames.some(n => n && (
-                inspLower === n ||
-                inspLower.startsWith(n) ||
-                n.startsWith(inspLower)
-            ));
-        });
+        // Payload is already cluster-scoped by the server
+        const scheds = all.filter(s => s.schedDate === dateKey);
         const dayEvents = (cachedEvents || []).filter(e => e.event_date === dateKey);
 
         const formatTime = (t) => {
@@ -970,9 +1082,11 @@ const InspSchedule = {
                 <div class="schedule-task-item">
                     <div class="schedule-task-dot ${statusClass}"></div>
                     <div style="flex:1;min-width:0;">
-                        <div class="font-semibold text-sm text-gray-900">${esc(s.inspector)}</div>
-                        ${s.rank ? `<div class="text-xs text-gray-500">${esc(s.rank)}</div>` : ''}
-                        <div class="text-xs text-blue-600 mt-1">${esc(s.establishment) || 'No establishment set'}${s.riskLevel ? ` <span class="risk-badge ${riskBadgeClass}">${s.riskLevel}</span>` : ''}</div>
+                        <div class="font-semibold text-sm text-gray-900">${esc(s.establishment) || 'No establishment set'}</div>
+                        <div class="text-xs text-gray-500 mt-1">
+                            ${s.riskLevel ? `<span class="risk-badge ${riskBadgeClass}">${esc(s.riskLevel)}</span>` : ''}
+                            ${s.rank ? `<span class="ml-1">${esc(s.rank)}</span>` : ''}
+                        </div>
                         ${s.notes ? `<div class="text-xs text-gray-600 mt-1">${esc(s.notes)}</div>` : ''}
                     </div>
                     <span class="risk-badge risk-${statusClass}">${status}</span>
@@ -2323,6 +2437,7 @@ async function loadSanitaryRecords() {
 
         if (cachedSanitaryRecords.length === 0) {
             tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-gray-500">No records found.</td></tr>`;
+            renderNumberedPager('sanitary-pager', { page: 1, pages: 0, total: 0, size: 10 }, 'insp-sanitary');
             return;
         }
 
@@ -2334,6 +2449,24 @@ async function loadSanitaryRecords() {
     }
 }
 
+// Scope chip state for Sanitary Records ('new' = never-inspected, citywide)
+let sanScope = 'all';
+
+function setSanitaryScope(scope) {
+    sanScope = scope === 'new' ? 'new' : 'all';
+    document.querySelectorAll('#sanitary-scope-chips .scope-chip').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.scope === sanScope);
+    });
+    TablePaging.setPage('insp-sanitary', 1);
+    filterSanitaryRecords();
+}
+
+// Any filter change (search / barangay / sort) resets to page 1
+function setSanitaryFilter() {
+    TablePaging.setPage('insp-sanitary', 1);
+    filterSanitaryRecords();
+}
+
 // Search, Sort and Filter Sanitary Records
 function filterSanitaryRecords() {
     const searchTerm = (document.getElementById('sanitary-search')?.value || '').toLowerCase();
@@ -2342,7 +2475,6 @@ function filterSanitaryRecords() {
     const countEl = document.getElementById('sanitary-count');
     
     const records = cachedSanitaryRecords || [];
-    const hasFilter = searchTerm || barangayFilter;
     
     let filtered = records.filter(record => {
         const ownerName = record.owner 
@@ -2359,6 +2491,15 @@ function filterSanitaryRecords() {
         
         return matchesSearch && matchesBarangay;
     });
+
+    // NEW scope: citywide establishments that have never been inspected
+    if (sanScope === 'new') {
+        const seen = _inspectedNames.size
+            ? _inspectedNames
+            : new Set((cachedInspectionReports || []).map(r => String(r.establishment || '').toLowerCase()));
+        filtered = filtered.filter(record =>
+            !seen.has(String(record.businessName || record.business_name || '').toLowerCase()));
+    }
     
     // Sort
     filtered = [...filtered].sort((a, b) => {
@@ -2376,16 +2517,24 @@ function filterSanitaryRecords() {
         }
     });
     
-    // Show latest N when no filter active
-    const page = hasFilter ? { displayed: filtered, hasMore: false, remaining: 0 } : TablePaging.slice(filtered, 'insp-sanitary', 10);
+    // Numbered pages (10 per page) — no endless scrolling
+    const page = TablePaging.pageSlice(filtered, 'insp-sanitary', 10);
     const displayed = page.displayed;
-    if (countEl) countEl.textContent = hasFilter ? `${displayed.length} matching records` : `Showing ${displayed.length} of ${records.length} records`;
+    if (countEl) {
+        const scopeNote = sanScope === 'new' ? ' new' : '';
+        countEl.textContent = page.pages > 1 || page.total !== records.length
+            ? `${displayed.length} of ${page.total}${scopeNote} records (page ${page.page} of ${page.pages})`
+            : `Showing ${page.total} of ${records.length} records`;
+    }
 
     const tbody = document.getElementById('sanitary-table-body');
     if (!tbody) return;
 
+    renderNumberedPager('sanitary-pager', page, 'insp-sanitary');
+
     if (displayed.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-500">No matching records found.</td></tr>';
+        const emptyMsg = sanScope === 'new' ? 'No new establishments found.' : 'No matching records found.';
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-gray-500">${emptyMsg}</td></tr>`;
         return;
     }
     
@@ -2416,7 +2565,7 @@ function filterSanitaryRecords() {
                 </td>
             </tr>
         `;
-    }).join('') + (page.hasMore ? TablePaging.moreRow('insp-sanitary', page.remaining, 7, 10) : '');
+    }).join('');
 }
 
 // Update Sanitary Statistics
@@ -3193,7 +3342,8 @@ async function handleInspectionSubmit(e) {
             autoScheduleToAdminCalendar(
                 report.inspector,
                 report.compliance_deadline,
-                report.establishment
+                report.establishment,
+                report.remarks
             );
         }
 
@@ -3327,6 +3477,8 @@ async function loadInspectionReports() {
     // Cache for use by view/edit/print functions
     cachedInspectionReports = reports;
     window._inspectionReports = reports;
+    // Newly filed reports keep the citywide "inspected" index fresh
+    reports.forEach(r => _inspectedNames.add(String(r.establishment || '').toLowerCase()));
 
     // Fetch sanitary records for permit lookup
     let sanitaryRecords = [];
@@ -3344,6 +3496,46 @@ async function loadInspectionReports() {
     filterInspectionReports();
 }
 
+// Scope chip state for the Inspection module ('all' = my cluster's reports)
+let inspScope = 'all';
+
+function setInspectionScope(scope) {
+    inspScope = scope === 'new' ? 'new' : 'all';
+    document.querySelectorAll('#inspection-scope-chips .scope-chip').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.scope === inspScope);
+    });
+    TablePaging.reset('insp-reports');
+    filterInspectionReports();
+}
+
+// Sanitary records that have never been inspected anywhere (no inspection report).
+// clusterOnly=true restricts the list to this inspector's assigned barangays.
+function getNewEstablishments(clusterOnly) {
+    const seen = _inspectedNames.size
+        ? _inspectedNames
+        : new Set((cachedInspectionReports || []).map(r => String(r.establishment || '').toLowerCase()));
+    const out = [];
+    (cachedSanitaryRecords || []).forEach((s, i) => {
+        const name = String(s.businessName || s.business_name || '').toLowerCase();
+        if (!name || seen.has(name)) return;
+        if (clusterOnly && !isInMyCluster(s.barangay)) return;
+        out.push({ record: s, index: i });
+    });
+    return out;
+}
+
+// Open the Add Report form pre-filled from the New list
+function startNewInspection(idx) {
+    const rec = (cachedSanitaryRecords || [])[idx];
+    if (!rec) return;
+    openInspectionModal();
+    selectEstablishment(
+        rec.businessName || rec.business_name || '',
+        rec.barangay || '',
+        ((rec.permitNo || rec.permit_no || '').split('-')[2]) || ''
+    );
+}
+
 // Search, Sort and Filter Inspection Reports
 function filterInspectionReports() {
     const searchTerm = (document.getElementById('inspection-search')?.value || '').toLowerCase();
@@ -3356,9 +3548,23 @@ function filterInspectionReports() {
 
     const hasFilter = !!searchTerm;
 
-    let filtered = reports;
+    // Cluster scope: reports come only from this inspector's assigned barangays.
+    // "New" scope: never-inspected establishments in those same barangays.
+    let filtered;
+    if (inspScope === 'new') {
+        filtered = getNewEstablishments(true).map(({ record, index }) => ({
+            __new: true,
+            _ni: index,
+            establishment: record.businessName || record.business_name || '',
+            location: record.barangay || '',
+            permitNo: record.permitNo || record.permit_no || 'N/A'
+        }));
+    } else {
+        filtered = reports.filter(r => isInMyCluster(r.location));
+    }
+    const scopedTotal = filtered.length;
     if (searchTerm) {
-        filtered = reports.filter(r =>
+        filtered = filtered.filter(r =>
             (r.establishment || '').toLowerCase().includes(searchTerm) ||
             (r.location || '').toLowerCase().includes(searchTerm)
         );
@@ -3381,14 +3587,53 @@ function filterInspectionReports() {
 
     const page = hasFilter ? { displayed: filtered, hasMore: false, remaining: 0 } : TablePaging.slice(filtered, 'insp-reports', 10);
     const displayed = page.displayed;
-    if (countEl) countEl.textContent = hasFilter ? `${displayed.length} matching reports` : `Showing ${displayed.length} of ${reports.length} reports`;
+    if (countEl) {
+        if (inspScope === 'new') {
+            countEl.textContent = `${displayed.length} new establishment${displayed.length === 1 ? '' : 's'} (my cluster)`;
+        } else if (hasFilter) {
+            countEl.textContent = `${displayed.length} matching reports`;
+        } else if (_clusterLoaded && _myBarangays.size === 0) {
+            countEl.textContent = 'No cluster assigned yet';
+        } else {
+            countEl.textContent = `Showing ${displayed.length} of ${scopedTotal} reports`;
+        }
+    }
 
     if (displayed.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-gray-500">No inspection reports found</td></tr>`;
+        let msg = 'No inspection reports found';
+        if (inspScope === 'new') {
+            msg = 'No new establishments in your cluster.';
+        } else if (_clusterLoaded && _myBarangays.size === 0) {
+            msg = 'No barangays assigned to your cluster yet. Ask the admin to assign you a cluster.';
+        }
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-gray-500">${msg}</td></tr>`;
         return;
     }
 
     tbody.innerHTML = displayed.map((report) => {
+        // Never-inspected establishment from the New scope
+        if (report.__new) {
+            return `
+            <tr>
+                <td><div class="col-permit text-xs text-gray-500">${esc(report.permitNo)}</div></td>
+                <td class="font-semibold">${esc(report.establishment) || 'N/A'}</td>
+                <td><div class="col-barangay">${esc(report.location) || 'N/A'}</div></td>
+                <td><div class="col-remarks text-sm text-gray-400">&mdash;</div></td>
+                <td><div class="col-rec text-sm text-gray-400">&mdash;</div></td>
+                <td><span class="badge badge-info text-white">New</span></td>
+                <td class="text-gray-400">&mdash;</td>
+                <td>
+                    <button class="btn btn-sm btn-success text-white"
+                            onclick="startNewInspection(${report._ni})"
+                            data-testid="new-inspect-${report._ni}"
+                            title="Start Inspection Report">
+                        <i class="fas fa-file-medical"></i> Inspect
+                    </button>
+                </td>
+            </tr>
+            `;
+        }
+
         const complied = report.complied === true || report.complied === 'true' || report.complied === 1;
         const statusBadge = complied
             ? `<span class="badge badge-success text-white">Complied</span>`
@@ -3408,11 +3653,11 @@ function filterInspectionReports() {
 
         return `
         <tr>
-            <td class="text-xs text-gray-500">${esc(permitNo)}</td>
+            <td><div class="col-permit text-xs text-gray-500">${esc(permitNo)}</div></td>
             <td class="font-semibold">${esc(report.establishment) || 'N/A'}</td>
-            <td>${esc(report.location) || 'N/A'}</td>
-            <td class="max-w-xs truncate text-sm">${esc(report.remarks) || 'N/A'}</td>
-            <td class="max-w-xs truncate text-sm">${esc(report.recommendation) || 'N/A'}</td>
+            <td><div class="col-barangay">${esc(report.location) || 'N/A'}</div></td>
+            <td><div class="col-remarks text-sm">${esc(report.remarks) || 'N/A'}</div></td>
+            <td><div class="col-rec text-sm">${esc(report.recommendation) || 'N/A'}</div></td>
             <td>${statusBadge}</td>
             <td>${dateStr}</td>
             <td>
@@ -3705,7 +3950,8 @@ function editInspectionReportById(id) {
                     autoScheduleToAdminCalendar(
                         localStorage.getItem('inspectorFullName') || localStorage.getItem('username') || 'Inspector',
                         newDeadline,
-                        report.establishment
+                        report.establishment,
+                        newRemarks
                     );
                 }
             } else {
@@ -4535,7 +4781,7 @@ async function runDeathCertOCR() {
     document.getElementById('ai-success-status').style.display = 'none';
     document.getElementById('ai-error-status').style.display   = 'none';
     statusDiv.style.display = 'block';
-    statusSpan.textContent  = 'AI enhancing & reading certificate — please wait...';
+    statusSpan.textContent  = 'Reading certificate — please wait...';
 
     try {
         const { data: { text } } = await Tesseract.recognize(canvas, 'eng', {
@@ -5504,6 +5750,10 @@ async function loadPSGCTransferProvinces() {
 // 2. Establishments they inspected that are now overdue (30+ days)
 // 3. Their submitted reports that were not complied with after 7+ days
 
+// Mirror of notif_state.php server-side sanitization: keep only [A-Za-z0-9_-:] and cap length.
+// Applied at ID-creation time so client IDs match what the server stores.
+const sanitizeNotifId = (id) => String(id).replace(/[^\w\-:]/g, '').slice(0, 255);
+
 const InspNotifManager = {
 
     // --- Pull schedule-assigned notifications from admin (existing behavior, kept) ---
@@ -5529,15 +5779,10 @@ const InspNotifManager = {
         const username = localStorage.getItem('username') || '';
 
         // ALERT TYPE 1: Scheduled inspection is today or tomorrow
+        // (payload is already cluster-scoped by the server)
         const schedules = cachedSchedules.length > 0 ? cachedSchedules : InspSchedule.getAll();
         schedules.forEach(s => {
-            const isMySchedule = (
-                s.inspector === fullName ||
-                s.inspector === username ||
-                (fullName && s.inspector.toLowerCase().startsWith(fullName.toLowerCase())) ||
-                (username && s.inspector.toLowerCase().includes(username.toLowerCase()))
-            );
-            if (!isMySchedule || s.done) return;
+            if (s.done) return;
             const schedDate = new Date(s.schedDate);
             schedDate.setHours(0, 0, 0, 0);
             const diffDays = Math.round((schedDate - today) / (1000 * 60 * 60 * 24));
@@ -5588,7 +5833,7 @@ const InspNotifManager = {
             const daysSince = Math.round((today - lastDate) / (1000 * 60 * 60 * 24));
             if (daysSince >= 30) {
                 alerts.push({
-                    id: 'overdue-insp-' + estab.replace(/\s+/g, '-'),
+                    id: sanitizeNotifId('overdue-insp-' + estab.replace(/\s+/g, '-')),
                     type: 'overdue',
                     icon: 'bi-clock-history',
                     iconClr: '#d97706',
@@ -5636,8 +5881,8 @@ const InspNotifManager = {
             const r = await fetch(`${API_BASE_URL}/notif_state.php`, { credentials: 'include' });
             const j = await r.json();
             if (j.success && j.data) {
-                InspNotifManager._serverReadIds      = (j.data.read_ids || []).map(String);
-                InspNotifManager._serverDismissedIds = (j.data.dismissed_ids || []).map(String);
+                InspNotifManager._serverReadIds      = (j.data.read_ids || []).map(sanitizeNotifId);
+                InspNotifManager._serverDismissedIds = (j.data.dismissed_ids || []).map(sanitizeNotifId);
                 InspNotifManager._serverLoaded = true;
                 // Union with localStorage so optimistic writes before load are kept
                 const mergedRead = [...new Set([...InspNotifManager.getReadIds(), ...InspNotifManager._serverReadIds])];
@@ -5658,7 +5903,7 @@ const InspNotifManager = {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action, notif_ids: ids.map(String) })
+            body: JSON.stringify({ action, notif_ids: ids.map(sanitizeNotifId) })
         }).then(r => r.json()).then(j => {
             if (!j.success) console.warn('notif_state POST failed', j.message);
         }).catch(e => console.warn('notif_state POST error', e));
@@ -5681,7 +5926,7 @@ const InspNotifManager = {
 
     getReadIds: () => {
         try {
-            return JSON.parse(localStorage.getItem('inspNotifReadIds') || '[]');
+            return JSON.parse(localStorage.getItem('inspNotifReadIds') || '[]').map(sanitizeNotifId);
         } catch (e) {
             return [];
         }
@@ -5689,7 +5934,7 @@ const InspNotifManager = {
 
     getDismissedIds: () => {
         try {
-            return JSON.parse(localStorage.getItem('inspNotifDismissedIds') || '[]');
+            return JSON.parse(localStorage.getItem('inspNotifDismissedIds') || '[]').map(sanitizeNotifId);
         } catch (e) {
             return [];
         }
@@ -5697,7 +5942,7 @@ const InspNotifManager = {
 
     dismiss: (id) => {
         const ids = InspNotifManager.getDismissedIds();
-        const strId = String(id);
+        const strId = sanitizeNotifId(id);
         if (!ids.includes(strId)) {
             ids.push(strId);
             localStorage.setItem('inspNotifDismissedIds', JSON.stringify(ids));
@@ -5708,7 +5953,7 @@ const InspNotifManager = {
 
     markRead: (id) => {
         const ids = InspNotifManager.getReadIds();
-        const strId = String(id);
+        const strId = sanitizeNotifId(id);
         if (!ids.includes(strId)) {
             ids.push(strId);
             localStorage.setItem('inspNotifReadIds', JSON.stringify(ids));
@@ -5721,8 +5966,8 @@ const InspNotifManager = {
         const schedNotifs = InspNotifManager.getScheduleNotifs();
         const sysAlerts   = InspNotifManager.generateSystemAlerts();
         const allIds = [
-            ...schedNotifs.map(n => String(n.id)),
-            ...sysAlerts.map(a => a.id)
+            ...schedNotifs.map(n => sanitizeNotifId(n.id)),
+            ...sysAlerts.map(a => sanitizeNotifId(a.id))
         ];
         localStorage.setItem('inspNotifReadIds', JSON.stringify(allIds));
         InspNotifManager._postState('read', allIds);
@@ -5733,7 +5978,7 @@ const InspNotifManager = {
         const readIds      = InspNotifManager.getReadIds();
         const dismissedIds = InspNotifManager.getDismissedIds();
         const schedNotifs = InspNotifManager.getScheduleNotifs().map(n => ({
-            id:      String(n.id),
+            id:      sanitizeNotifId(n.id),
             type:    n.type,
             icon:    n.type === 'reschedule' ? 'bi-arrow-repeat' : 'bi-calendar-check',
             iconClr: n.type === 'reschedule' ? '#f59e0b' : '#2563eb',
@@ -5741,23 +5986,23 @@ const InspNotifManager = {
             message: n.message,
             date:    n.date,
             schedDate: n.schedDate,
-            read:    readIds.includes(String(n.id))
+            read:    readIds.includes(sanitizeNotifId(n.id))
         }));
         const sysAlerts = InspNotifManager.generateSystemAlerts().map(a => ({
             ...a,
-            id:   a.id,
-            read: readIds.includes(a.id)
+            id:   sanitizeNotifId(a.id),
+            read: readIds.includes(sanitizeNotifId(a.id))
         }));
 
         // Filter out dismissed notifications
         const allNotifs = [...sysAlerts, ...schedNotifs]
-            .filter(n => !dismissedIds.includes(String(n.id)))
+            .filter(n => !dismissedIds.includes(sanitizeNotifId(n.id)))
             .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
         const unread    = allNotifs.filter(n => !n.read).length;
 
         // Cache by id so a click on a row can look up its full data.
         InspNotifManager._cache = {};
-        allNotifs.forEach(n => { InspNotifManager._cache[String(n.id)] = n; });
+        allNotifs.forEach(n => { InspNotifManager._cache[sanitizeNotifId(n.id)] = n; });
 
         const badge  = document.getElementById('inspNotifBadge');
         const listEl = document.getElementById('inspNotifList');
@@ -5928,6 +6173,9 @@ async function loadIHEstablishments() {
         _ihAllReports = cachedInspectionReports.length > 0 ? cachedInspectionReports : (window._inspectionReports || []);
     }
 
+    // Cluster scope: history follows this inspector's assigned barangays
+    _ihAllReports = _ihAllReports.filter(r => isInMyCluster(r.location));
+
     // Build unique establishment list
     const estabMap = {};
     _ihAllReports.forEach(r => {
@@ -5977,7 +6225,7 @@ function renderIHEstablishments(list) {
                 <div class="flex items-start justify-between">
                     <h4 class="font-bold text-base text-gray-800 leading-tight">${esc(e.name)}</h4>
                     <span class="badge ${hasViolation ? 'badge-error' : 'badge-success'} text-white text-xs ml-2 shrink-0">
-                        ${hasViolation ? e.violations + ' Violation' + (e.violations > 1 ? 's' : '') : 'Compliant'}
+                        ${hasViolation ? e.violations + ' Violation' + (e.violations > 1 ? 's' : '') : 'Complied'}
                     </span>
                 </div>
                 <p class="text-xs text-gray-500 mt-1"><i class="fas fa-map-marker-alt mr-1 text-emerald-500"></i>${esc(e.barangay)}</p>
@@ -6124,8 +6372,9 @@ function ihBackToList() {
 }
 
 // ==================== AUTO-SCHEDULE TO ADMIN CALENDAR ====================
-async function autoScheduleToAdminCalendar(inspectorName, deadlineDate, establishmentName) {
+async function autoScheduleToAdminCalendar(inspectorName, deadlineDate, establishmentName, remarks = '') {
     try {
+        const reinspectNote = remarks ? 'Re-Inspect: ' + remarks : 'Re-Inspect';
         // Create schedule via API
         const resp = await fetch(`${API_BASE_URL}/inspection_schedules.php`, {
             method: 'POST',
@@ -6135,7 +6384,7 @@ async function autoScheduleToAdminCalendar(inspectorName, deadlineDate, establis
                 schedDate: deadlineDate,
                 establishment: establishmentName || 'Unknown Establishment',
                 riskLevel: '',
-                notes: 'Auto-scheduled from Inspection Report compliance deadline.'
+                notes: reinspectNote
             })
         });
         const result = await resp.json();

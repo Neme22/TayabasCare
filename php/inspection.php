@@ -2,6 +2,7 @@
 require_once 'auth_check.php';
 require_once 'activity_log.php';
 require_once 'csrf.php';
+require_once 'cluster_lib.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 
@@ -45,6 +46,8 @@ switch($method) {
     case 'GET':
         if (isset($_GET['history_id'])) {
             getHistory($_GET['history_id']);
+        } elseif (isset($_GET['establishments'])) {
+            getEstablishmentIndex();
         } else {
             getReports();
         }
@@ -78,9 +81,22 @@ switch($method) {
 function getReports() {
     global $db;
     try {
-        $stmt = $db->query("SELECT * FROM inspection_reports ORDER BY created_at DESC");
-        $reports = $stmt->fetchAll();
-        
+        // Inspectors only receive reports from their assigned cluster's barangays
+        if (($_SESSION['role'] ?? '') === 'inspector') {
+            ensureClusterTables($db);
+            $barangays = clusterBarangaysForSession($db);
+            if (!$barangays) {
+                $reports = [];
+            } else {
+                $ph = implode(',', array_fill(0, count($barangays), '?'));
+                $stmt = $db->prepare("SELECT * FROM inspection_reports WHERE location IN ($ph) ORDER BY created_at DESC");
+                $stmt->execute($barangays);
+                $reports = $stmt->fetchAll();
+            }
+        } else {
+            $stmt = $db->query("SELECT * FROM inspection_reports ORDER BY created_at DESC");
+            $reports = $stmt->fetchAll();
+        }
         $formatted = array_map(function($r) {
             $aiAnalysis = null;
             if (!empty($r['ai_analysis'])) {
@@ -108,6 +124,27 @@ function getReports() {
     } catch(PDOException $e) {
         error_log('getReports error: ' . $e->getMessage());
         errorResponse('Failed to load reports. Please try again.', 500);
+    }
+}
+
+/**
+ * Lightweight citywide index of inspected establishment names (names only).
+ * The Sanitary "New" chip is citywide by design, so inspectors need to know
+ * which establishments have ever been inspected anywhere — names carry no
+ * report details from other clusters.
+ */
+function getEstablishmentIndex() {
+    global $db;
+    try {
+        $names = $db->query(
+            "SELECT DISTINCT establishment FROM inspection_reports
+             WHERE establishment IS NOT NULL AND establishment <> ''
+             ORDER BY establishment"
+        )->fetchAll(PDO::FETCH_COLUMN);
+        jsonResponse(true, ['establishments' => $names]);
+    } catch (PDOException $e) {
+        error_log('getEstablishmentIndex error: ' . $e->getMessage());
+        errorResponse('Failed to load establishment index. Please try again.', 500);
     }
 }
 
