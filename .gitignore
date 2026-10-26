@@ -23,3 +23,12 @@ Desktop.ini
 
 # Logs
 *.log
+
+# Runtime uploads (user-generated attachments — never commit)
+uploads/
+
+# Local logo source backup (Logo.png is the served asset)
+LogoOriginal.png
+
+# Debug screenshots
+screenshot_*.png
