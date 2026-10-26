@@ -19,8 +19,6 @@ switch($method) {
 function getArchive() {
     global $db;
     try {
-        $db->query("DELETE FROM archive_data WHERE expiry_date < NOW()");
-        
         $stmt = $db->query("SELECT * FROM archive_data ORDER BY archived_at DESC");
         $items = $stmt->fetchAll();
         
@@ -31,8 +29,7 @@ function getArchive() {
                 'subType' => $i['sub_type'],
                 'data' => json_decode($i['data_json'], true),
                 'reason' => $i['reason'],
-                'archivedDate' => $i['archived_at'],
-                'expiryDate' => $i['expiry_date']
+                'archivedDate' => $i['archived_at']
             ];
         }, $items);
         
@@ -124,12 +121,48 @@ function restoreItem() {
             $stmt2->execute([
                 $data['username'] ?? '', $password, $data['email'] ?? ''
             ]);
+        } elseif ($type === 'schedule') {
+            try {
+                $stmt = $db->prepare("INSERT INTO inspection_schedules
+                    (inspector_name, establishment, risk_level, schedDate, notes, done)
+                    VALUES (?, ?, ?, ?, ?, ?)");
+                $stmt->execute([
+                    $data['inspector_name'] ?? '',
+                    $data['establishment'] ?? null,
+                    $data['risk_level'] ?? null,
+                    $data['schedDate'] ?? null,
+                    $data['notes'] ?? '',
+                    isset($data['done']) ? (int)$data['done'] : 0
+                ]);
+            } catch (PDOException $e) {
+                // Fallback: old schema without establishment/risk_level/done columns
+                $stmt = $db->prepare("INSERT INTO inspection_schedules
+                    (inspector_name, schedDate, notes)
+                    VALUES (?, ?, ?)");
+                $stmt->execute([
+                    $data['inspector_name'] ?? '',
+                    $data['schedDate'] ?? null,
+                    $data['notes'] ?? ''
+                ]);
+            }
+        } elseif ($type === 'calendar_event') {
+            $stmt = $db->prepare("INSERT INTO calendar_events
+                (title, event_date, start_time, end_time, place, notes)
+                VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->execute([
+                $data['title'] ?? '',
+                $data['event_date'] ?? null,
+                $data['start_time'] ?? null,
+                $data['end_time'] ?? null,
+                $data['place'] ?? null,
+                $data['notes'] ?? ''
+            ]);
         }
-        
+
         $deleteStmt = $db->prepare("DELETE FROM archive_data WHERE id = ?");
         $deleteStmt->execute([$id]);
 
-        logActivity($db, 'RESTORE', 'archive', $id, $data['business_name'] ?? $data['deceased'] ?? $data['establishment'] ?? $data['full_name'] ?? '', "Restored $type record");
+        logActivity($db, 'RESTORE', 'archive', $id, $data['business_name'] ?? $data['deceased'] ?? $data['establishment'] ?? $data['full_name'] ?? $data['title'] ?? $data['inspector_name'] ?? '', "Restored $type record");
         jsonResponse(true, null, 'Item restored');
     } catch(PDOException $e) {
         error_log('archive.php error: ' . $e->getMessage());

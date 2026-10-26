@@ -258,7 +258,7 @@ function deleteRecord() {
 
         $archiveStmt = $db->prepare("
             INSERT INTO archive_data (archive_type, sub_type, data_json, reason, expiry_date)
-            VALUES ('burial', ?, ?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))
+            VALUES ('burial', ?, ?, ?, NULL)
         ");
         $archiveStmt->execute([$record['type'], json_encode($record), $reason]);
 

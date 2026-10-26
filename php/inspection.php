@@ -680,7 +680,7 @@ function deleteReport() {
 
         $archiveStmt = $db->prepare("
             INSERT INTO archive_data (archive_type, data_json, reason, expiry_date)
-            VALUES ('report', ?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))
+            VALUES ('report', ?, ?, NULL)
         ");
         $archiveStmt->execute([json_encode($report), $reason]);
 

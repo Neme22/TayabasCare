@@ -98,17 +98,30 @@ if ($method === 'PUT') {
     }
 }
 
-// ---- DELETE: Remove event (admin only) ----
+// ---- DELETE: Archive event (admin only) ----
 if ($method === 'DELETE') {
     requireRole('admin');
     try {
         $id = intval($_GET['id'] ?? 0);
         if (!$id) errorResponse('Event ID required');
+        $reason = trim($_GET['reason'] ?? '');
 
+        $stmt = $db->prepare("SELECT * FROM calendar_events WHERE id = ?");
+        $stmt->execute([$id]);
+        $event = $stmt->fetch();
+        if (!$event) errorResponse('Event not found.', 404);
+
+        $db->beginTransaction();
+        $db->prepare("INSERT INTO archive_data (archive_type, data_json, reason, expiry_date) VALUES ('calendar_event', ?, ?, NULL)")
+            ->execute([json_encode($event), $reason]);
         $db->prepare("DELETE FROM calendar_events WHERE id = ?")->execute([$id]);
-        logActivity($db, 'DELETE', 'calendar_event', $id, '', 'Event deleted');
-        jsonResponse(true, null, 'Event deleted.');
+        $db->commit();
+
+        logActivity($db, 'ARCHIVE', 'calendar_event', $id, '',
+            "Archived event: " . ($event['title'] ?? '') . ($reason !== '' ? ": $reason" : ''));
+        jsonResponse(true, null, 'Event archived.');
     } catch (PDOException $e) {
+        if ($db->inTransaction()) $db->rollBack();
         error_log('calendar_events DELETE error: ' . $e->getMessage());
         errorResponse('Database error.', 500);
     }

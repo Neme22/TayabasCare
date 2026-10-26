@@ -245,6 +245,39 @@ const Utils = {
             onConfirm();
             Utils.closeModal();
         };
+    },
+
+    showArchiveConfirmDialog: ({ title, message, onConfirm }) => {
+        const content = `
+            <div class="modal-header">
+                <h3>${Utils.esc(title)}</h3>
+                <button class="modal-close" onclick="Utils.closeModal()" data-testid="archive-close-btn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 15px; color: #374151; margin-bottom: 16px;">${Utils.esc(message)}</p>
+                <label for="archiveReasonInput" style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">Reason</label>
+                <input type="text" id="archiveReasonInput" data-testid="archive-reason-input"
+                    placeholder="Reason (optional)"
+                    style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; box-sizing: border-box;"
+                    onkeydown="if(event.key==='Enter'){document.getElementById('archiveConfirmBtn').click();}">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="Utils.closeModal()" data-testid="archive-cancel-btn">Cancel</button>
+                <button class="btn btn-danger" id="archiveConfirmBtn" data-testid="archive-confirm-btn">
+                    <i class="bi bi-archive"></i> Archive
+                </button>
+            </div>
+        `;
+        Utils.openModal(content);
+        const input = document.getElementById('archiveReasonInput');
+        if (input) input.focus();
+        document.getElementById('archiveConfirmBtn').onclick = () => {
+            const reason = (input?.value || '').trim() || 'No reason provided';
+            Utils.closeModal();
+            onConfirm(reason);
+        };
     }
 };
 
@@ -1238,8 +1271,8 @@ const InspectorManager = {
                         <button class="action-btn action-btn-edit" onclick="InspectorManager.openEditModal(${inspector.id})" data-testid="edit-inspector-${inspector.id}">
                             <i class="bi bi-pencil-square"></i>
                         </button>
-                        <button class="action-btn action-btn-delete" onclick="InspectorManager.deleteInspector(${inspector.id})" data-testid="delete-inspector-${inspector.id}">
-                            <i class="bi bi-trash"></i>
+                        <button class="action-btn action-btn-delete" onclick="InspectorManager.deleteInspector(${inspector.id})" data-testid="delete-inspector-${inspector.id}" title="Archive">
+                            <i class="bi bi-archive"></i>
                         </button>
                     </div>
                 </td>
@@ -1422,29 +1455,31 @@ const InspectorManager = {
         }
     },
 
-    deleteInspector: async (id) => {
-        if (!confirm('Are you sure you want to delete this inspector?')) return;
-        
-        const reason = prompt('Reason for deletion (optional):') || 'No reason provided';
-        
-        try {
-            const response = await fetch(`${API_BASE_URL}/inspector.php?id=${id}&reason=${encodeURIComponent(reason)}`, {
-                method: 'DELETE'
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                Utils.showToast('Inspector deleted successfully', 'success');
-                await InspectorManager.render();
-                Dashboard.updateStats();
-            } else {
-                Utils.showToast('Failed to delete inspector', 'error');
+    deleteInspector: (id) => {
+        Utils.showArchiveConfirmDialog({
+            title: 'Archive Inspector',
+            message: 'This inspector will be moved to the Archive module. You can restore it later from the Archive page.',
+            onConfirm: async (reason) => {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/inspector.php?id=${id}&reason=${encodeURIComponent(reason)}`, {
+                        method: 'DELETE'
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        Utils.showToast('Inspector archived successfully', 'success');
+                        await InspectorManager.render();
+                        Dashboard.updateStats();
+                    } else {
+                        Utils.showToast('Failed to archive inspector', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error archiving inspector:', error);
+                    Utils.showToast('Error: ' + error.message, 'error');
+                }
             }
-        } catch (error) {
-            console.error('Error deleting inspector:', error);
-            Utils.showToast('Error: ' + error.message, 'error');
-        }
+        });
     }
 };
 
@@ -1705,8 +1740,8 @@ const SanitaryManager = {
                         <button class="action-btn action-btn-view" onclick="SanitaryManager.openViewModal(${index})" data-testid="view-sanitary-${index}">
                             <i class="bi bi-eye"></i>
                         </button>
-                        <button class="action-btn action-btn-delete" onclick="SanitaryManager.deleteRecord(${record.id})" data-testid="delete-sanitary-${index}">
-                            <i class="bi bi-trash"></i>
+                        <button class="action-btn action-btn-delete" onclick="SanitaryManager.deleteRecord(${record.id})" data-testid="delete-sanitary-${index}" title="Archive">
+                            <i class="bi bi-archive"></i>
                         </button>
                     </div>
                 </td>
@@ -1818,28 +1853,29 @@ const SanitaryManager = {
         Utils.openModal(content);
     },
 
-    deleteRecord: async (id) => {
-        const reason = prompt('Reason for archiving? (Optional)', '');
-        if (reason === null) return;
-
-        if (confirm('Are you sure you want to archive this record?')) {
-            try {
-                const response = await fetch(
-                    `${API_BASE_URL}/sanitary.php?id=${id}&reason=${encodeURIComponent(reason || 'No reason provided')}`,
-                    { method: 'DELETE' }
-                );
-                const result = await response.json();
-                if (result.success) {
-                    await SanitaryManager.render();
-                    Dashboard.updateStats();
-                    Utils.showToast('Record archived successfully');
-                } else {
-                    Utils.showToast('Failed to archive record', 'error');
+    deleteRecord: (id) => {
+        Utils.showArchiveConfirmDialog({
+            title: 'Archive Record',
+            message: 'This sanitary record will be moved to the Archive module. You can restore it later from the Archive page.',
+            onConfirm: async (reason) => {
+                try {
+                    const response = await fetch(
+                        `${API_BASE_URL}/sanitary.php?id=${id}&reason=${encodeURIComponent(reason)}`,
+                        { method: 'DELETE' }
+                    );
+                    const result = await response.json();
+                    if (result.success) {
+                        await SanitaryManager.render();
+                        Dashboard.updateStats();
+                        Utils.showToast('Record archived successfully');
+                    } else {
+                        Utils.showToast('Failed to archive record', 'error');
+                    }
+                } catch (error) {
+                    Utils.showToast('Error: ' + error.message, 'error');
                 }
-            } catch (error) {
-                Utils.showToast('Error: ' + error.message, 'error');
             }
-        }
+        });
     },
 
     permitInspectorName() {
@@ -2106,8 +2142,8 @@ const BurialManager = {
                         <button class="action-btn action-btn-view" onclick="BurialManager.openViewModal('${record.categoryType}', ${record.id})" data-testid="view-burial-${index}">
                             <i class="bi bi-eye"></i>
                         </button>
-                        <button class="action-btn action-btn-delete" onclick="BurialManager.deleteRecord('${record.categoryType}', ${record.id})" data-testid="delete-burial-${index}">
-                            <i class="bi bi-trash"></i>
+                        <button class="action-btn action-btn-delete" onclick="BurialManager.deleteRecord('${record.categoryType}', ${record.id})" data-testid="delete-burial-${index}" title="Archive">
+                            <i class="bi bi-archive"></i>
                         </button>
                     </div>
                 </td>
@@ -2248,29 +2284,32 @@ const BurialManager = {
         Utils.openModal(content);
     },
 
-    deleteRecord: async (categoryType, recordId) => {
-        const reason = prompt('Reason for archiving? (Optional)', '');
-        if (reason === null) return; // user cancelled
+    deleteRecord: (categoryType, recordId) => {
+        Utils.showArchiveConfirmDialog({
+            title: 'Archive Burial Record',
+            message: 'This burial record will be moved to the Archive module. You can restore it later from the Archive page.',
+            onConfirm: async (reason) => {
+                try {
+                    const response = await fetch(
+                        `${API_BASE_URL}/burial.php?id=${recordId}&reason=${encodeURIComponent(reason)}`,
+                        { method: 'DELETE' }
+                    );
+                    const result = await response.json();
 
-        try {
-            const response = await fetch(
-                `${API_BASE_URL}/burial.php?id=${recordId}&reason=${encodeURIComponent(reason || 'No reason provided')}`,
-                { method: 'DELETE' }
-            );
-            const result = await response.json();
-
-            if (result.success) {
-                Utils.showToast('Record archived successfully', 'success');
-                await BurialManager.render();
-                await Dashboard.updateStats();
-                Dashboard.renderActivity();
-            } else {
-                Utils.showToast('Failed to delete: ' + result.message, 'error');
+                    if (result.success) {
+                        Utils.showToast('Record archived successfully', 'success');
+                        await BurialManager.render();
+                        await Dashboard.updateStats();
+                        Dashboard.renderActivity();
+                    } else {
+                        Utils.showToast('Failed to archive: ' + result.message, 'error');
+                    }
+                } catch (error) {
+                    console.error('Archive error:', error);
+                    Utils.showToast('Failed to archive record', 'error');
+                }
             }
-        } catch (error) {
-            console.error('Delete error:', error);
-            Utils.showToast('Failed to delete record', 'error');
-        }
+        });
     },
 
     printRecord: () => {
@@ -2353,8 +2392,8 @@ const ReportsManager = {
                         <button class="action-btn action-btn-view" onclick="ReportsManager.openViewModal(${report.id})" data-testid="view-report-${report.id}">
                             <i class="bi bi-eye"></i>
                         </button>
-                        <button class="action-btn action-btn-delete" onclick="ReportsManager.deleteReport(${report.id})" data-testid="delete-report-${report.id}">
-                            <i class="bi bi-trash"></i>
+                        <button class="action-btn action-btn-delete" onclick="ReportsManager.deleteReport(${report.id})" data-testid="delete-report-${report.id}" title="Archive">
+                            <i class="bi bi-archive"></i>
                         </button>
                     </div>
                 </td>
@@ -2441,29 +2480,30 @@ const ReportsManager = {
         Utils.openModal(content);
     },
 
-    deleteReport: async (id) => {
-        const reason = prompt('Reason for archiving? (Optional)', '');
-        if (reason === null) return;
-
-        if (confirm('Are you sure you want to archive this inspection report?')) {
-            try {
-                const response = await fetch(
-                    `${API_BASE_URL}/inspection.php?id=${id}&reason=${encodeURIComponent(reason || 'No reason provided')}`,
-                    { method: 'DELETE' }
-                );
-                const result = await response.json();
-                if (result.success) {
-                    await ReportsManager.loadAndRender();
-                    Dashboard.updateStats();
-                    Dashboard.renderActivity();
-                    Utils.showToast('Report archived successfully');
-                } else {
-                    Utils.showToast('Failed to archive report', 'error');
+    deleteReport: (id) => {
+        Utils.showArchiveConfirmDialog({
+            title: 'Archive Inspection Report',
+            message: 'This inspection report will be moved to the Archive module. You can restore it later from the Archive page.',
+            onConfirm: async (reason) => {
+                try {
+                    const response = await fetch(
+                        `${API_BASE_URL}/inspection.php?id=${id}&reason=${encodeURIComponent(reason)}`,
+                        { method: 'DELETE' }
+                    );
+                    const result = await response.json();
+                    if (result.success) {
+                        await ReportsManager.loadAndRender();
+                        Dashboard.updateStats();
+                        Dashboard.renderActivity();
+                        Utils.showToast('Report archived successfully');
+                    } else {
+                        Utils.showToast('Failed to archive report', 'error');
+                    }
+                } catch (error) {
+                    Utils.showToast('Error: ' + error.message, 'error');
                 }
-            } catch (error) {
-                Utils.showToast('Error: ' + error.message, 'error');
             }
-        }
+        });
     },
 
     printReport: (id) => {
@@ -3214,12 +3254,10 @@ async function initApp() {
     // Setup archive filter listeners
     const archiveSearch = document.getElementById('archiveSearch');
     const archiveTypeFilter = document.getElementById('archiveTypeFilter');
-    const archiveDaysFilter = document.getElementById('archiveDaysFilter');
     const archiveSortFilter = document.getElementById('archiveSortFilter');
     
     if (archiveSearch)     archiveSearch.addEventListener('input',  () => ArchiveManager.renderFiltered());
     if (archiveTypeFilter) archiveTypeFilter.addEventListener('change', () => ArchiveManager.renderFiltered());
-    if (archiveDaysFilter) archiveDaysFilter.addEventListener('change', () => ArchiveManager.renderFiltered());
     if (archiveSortFilter) archiveSortFilter.addEventListener('change', () => ArchiveManager.renderFiltered());
 
     // Build dynamic inspector column map and populate report headers
@@ -3272,7 +3310,6 @@ if (document.readyState === 'loading') {
 
 const ArchiveManager = {
     ARCHIVE_KEY: 'archiveData',
-    RETENTION_DAYS: 30,
 
     // Initialize Archive
     init: () => {
@@ -3289,7 +3326,7 @@ const ArchiveManager = {
         const tbody = document.getElementById('archiveTableBody');
         if (!tbody) return;
 
-        tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Loading...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Loading...</td></tr>`;
 
         try {
             const response = await fetch(`${API_BASE_URL}/archive.php`);
@@ -3307,7 +3344,7 @@ const ArchiveManager = {
 
         } catch (error) {
             console.error('Error loading archive:', error);
-            tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Failed to load archive</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Failed to load archive</td></tr>`;
         }
     },
 
@@ -3322,11 +3359,11 @@ const ArchiveManager = {
         if (filtered.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="7" class="empty-state">
+                    <td colspan="6" class="empty-state">
                         <div class="empty-archive-state">
                             <i class="bi bi-archive" style="font-size: 48px; color: #9CA3AF;"></i>
                             <p>${allArchived.length === 0 ? 'No archived items' : 'No items match your filters'}</p>
-                            <span>${allArchived.length === 0 ? 'Deleted items will appear here and be kept for 30 days' : 'Try adjusting your search or filters'}</span>
+                            <span>${allArchived.length === 0 ? 'Archived items will appear here until permanently deleted' : 'Try adjusting your search or filters'}</span>
                         </div>
                     </td>
                 </tr>`;
@@ -3335,22 +3372,27 @@ const ArchiveManager = {
 
         tbody.innerHTML = filtered.map((item, index) => {
             const archivedDate = new Date(item.archivedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-            const expiryDate   = new Date(item.expiryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-            const daysRemaining = Math.max(0, Math.ceil((new Date(item.expiryDate) - new Date()) / (1000 * 60 * 60 * 24)));
-            const statusClass   = daysRemaining > 20 ? 'safe' : daysRemaining > 10 ? 'warning' : 'critical';
 
             const typeLabel = {
-                sanitary:   'SANITARY',
-                burial:     'BURIAL',
-                inspectors: 'INSPECTOR',
-                reports:    'REPORT'
-            }[item.type] || item.type.toUpperCase();
+                sanitary:       'SANITARY',
+                burial:         'BURIAL',
+                inspectors:     'INSPECTOR',
+                inspector:      'INSPECTOR',
+                report:         'REPORT',
+                reports:        'REPORT',
+                schedule:       'SCHEDULE',
+                calendar_event: 'CALENDAR EVENT'
+            }[item.type] || String(item.type || '').toUpperCase();
 
             const typeCssClass = {
-                sanitary:   'type-sanitary',
-                burial:     'type-burial',
-                inspectors: 'type-inspectors',
-                reports:    'type-reports'
+                sanitary:       'type-sanitary',
+                burial:         'type-burial',
+                inspectors:     'type-inspectors',
+                inspector:      'type-inspectors',
+                report:         'type-reports',
+                reports:        'type-reports',
+                schedule:       'type-schedule',
+                calendar_event: 'type-calendar-event'
             }[item.type] || '';
 
             const name = item.data?.businessName  ||
@@ -3358,7 +3400,11 @@ const ArchiveManager = {
                          item.data?.deceased_name ||
                          item.data?.deceased      ||
                          item.data?.fullName      ||
-                         item.data?.name          || 'N/A';
+                         item.data?.full_name     ||
+                         item.data?.name          ||
+                         item.data?.title         ||
+                         item.data?.establishment ||
+                         item.data?.inspector_name || 'N/A';
 
             return `
                 <tr data-archive-id="${item.id}">
@@ -3367,8 +3413,6 @@ const ArchiveManager = {
                     <td>${Utils.esc(name)}</td>
                     <td>${Utils.esc(item.reason) || 'No reason provided'}</td>
                     <td>${archivedDate}</td>
-                    <td>${expiryDate}</td>
-                    <td><span class="days-badge days-${statusClass}">${daysRemaining} DAYS LEFT</span></td>
                     <td>
                         <div class="action-buttons">
                             <button class="action-btn action-btn-view" onclick="ArchiveManager.restoreItem(${item.id})" title="Restore">
@@ -3387,13 +3431,19 @@ const ArchiveManager = {
     getItemDescription: (item) => {
         switch(item.type) {
             case 'inspectors':
-                return `${item.data.fullName} (${item.data.email})`;
+            case 'inspector':
+                return `${item.data.fullName || item.data.full_name} (${item.data.email})`;
             case 'sanitary':
-                return `${item.data.establishmentName} - ${item.data.address}`;
+                return `${item.data.business_name || item.data.establishmentName} - ${item.data.building_street || item.data.address}`;
             case 'burial':
-                return `${item.data.deceasedName} - ${item.data.cemetery}`;
+                return `${item.data.deceased} - ${item.data.cemetery_origin}`;
+            case 'report':
             case 'reports':
-                return `${item.data.location} - ${item.data.inspector}`;
+                return `${item.data.establishment} - ${item.data.inspector_name}`;
+            case 'schedule':
+                return `${item.data.inspector_name} - ${item.data.schedDate}`;
+            case 'calendar_event':
+                return `${item.data.title} - ${item.data.event_date}`;
             default:
                 return 'Unknown item';
         }
@@ -3403,7 +3453,6 @@ const ArchiveManager = {
     applyFilters: (items) => {
         const searchTerm = (document.getElementById('archiveSearch')?.value || '').toLowerCase().trim();
         const typeFilter = document.getElementById('archiveTypeFilter')?.value || 'all';
-        const daysFilter = document.getElementById('archiveDaysFilter')?.value || 'all';
         const sortFilter = document.getElementById('archiveSortFilter')?.value || 'newest';
 
         let filtered = [...items];
@@ -3417,7 +3466,11 @@ const ArchiveManager = {
                     item.data?.deceased_name ||
                     item.data?.deceased      ||
                     item.data?.fullName      ||
-                    item.data?.name          || ''
+                    item.data?.full_name     ||
+                    item.data?.name          ||
+                    item.data?.title         ||
+                    item.data?.establishment ||
+                    item.data?.inspector_name || ''
                 ).toLowerCase();
                 const reason = (item.reason || '').toLowerCase();
                 const type   = (item.type   || '').toLowerCase();
@@ -3430,52 +3483,23 @@ const ArchiveManager = {
             filtered = filtered.filter(item => item.type === typeFilter);
         }
 
-        // Days remaining filter (uses expiryDate from API)
-        if (daysFilter !== 'all') {
-            filtered = filtered.filter(item => {
-                const days = Math.max(0, Math.ceil((new Date(item.expiryDate) - new Date()) / (1000 * 60 * 60 * 24)));
-                if (daysFilter === 'critical') return days <= 10;
-                if (daysFilter === 'warning')  return days > 10 && days <= 20;
-                if (daysFilter === 'safe')     return days > 20;
-                return true;
-            });
-        }
-
         // Sort
         filtered.sort((a, b) => {
             if (sortFilter === 'newest')   return new Date(b.archivedDate) - new Date(a.archivedDate);
             if (sortFilter === 'oldest')   return new Date(a.archivedDate) - new Date(b.archivedDate);
-            if (sortFilter === 'expiring') {
-                const daysA = Math.ceil((new Date(a.expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
-                const daysB = Math.ceil((new Date(b.expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
-                return daysA - daysB;
-            }
             return 0;
         });
 
         return filtered;
     },
 
-    // Calculate days remaining until expiry
-    getDaysRemaining: (dateStr) => {
-        return Math.max(0, Math.ceil((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24)));
-    },
-
     // Update statistics
     updateStats: (items) => {
         try {
             const totalEl = document.getElementById('totalArchived');
-            const expiringEl = document.getElementById('expiringSoon');
             const sizeEl = document.getElementById('archiveSize');
 
             if (totalEl) totalEl.textContent = items.length;
-
-            const expiring = items.filter(item => {
-                const days = ArchiveManager.getDaysRemaining(item.expiryDate);
-                return days <= 7;
-            }).length;
-
-            if (expiringEl) expiringEl.textContent = expiring;
 
             const size = new Blob([JSON.stringify(items)]).size;
             const sizeKB = (size / 1024).toFixed(2);
@@ -3606,13 +3630,6 @@ updateBadgeCount: (count) => {
         Utils.showToast(`${checked.length} item(s) permanently deleted`);
         await ArchiveManager.render();
         ArchiveManager.clearSelection();
-    },
-
-    // View expiring soon
-    viewExpiring: () => {
-        document.getElementById('archiveDaysFilter').value = 'critical';
-        ArchiveManager.render();
-        Utils.showToast('Showing items expiring in 1-10 days');
     },
 
     // Export archive data
@@ -4690,20 +4707,28 @@ const ScheduleManager = {
         }
     },
 
-    deleteRecord: async (id) => {
-        if (!confirm('Delete this schedule entry?')) return;
-        try {
-            await fetch(`${API_BASE_URL}/inspection_schedules.php?id=${id}`, {
-                method: 'DELETE'
-            });
-            const rec = ScheduleManager._cache.find(s => s.id === id);
-            ScheduleManager._cache = ScheduleManager._cache.filter(s => s.id !== id);
-            await ScheduleManager.render();
-            const panel = document.getElementById('calDayPanel');
-            if (panel && panel.style.display !== 'none' && rec) ScheduleManager.showDay(rec.schedDate);
-        } catch (e) {
-            adminShowNotification('Failed to delete schedule.', 'error');
-        }
+    deleteRecord: (id) => {
+        Utils.showArchiveConfirmDialog({
+            title: 'Archive Schedule',
+            message: 'This schedule entry will be moved to the Archive module. You can restore it later from the Archive page.',
+            onConfirm: async (reason) => {
+                try {
+                    const resp = await fetch(`${API_BASE_URL}/inspection_schedules.php?id=${id}&reason=${encodeURIComponent(reason)}`, {
+                        method: 'DELETE'
+                    });
+                    const result = await resp.json();
+                    if (!result.success) throw new Error(result.message || 'Failed to archive schedule');
+                    const rec = ScheduleManager._cache.find(s => s.id === id);
+                    ScheduleManager._cache = ScheduleManager._cache.filter(s => s.id !== id);
+                    await ScheduleManager.render();
+                    const panel = document.getElementById('calDayPanel');
+                    if (panel && panel.style.display !== 'none' && rec) ScheduleManager.showDay(rec.schedDate);
+                    adminShowNotification('Schedule archived.', 'success');
+                } catch (e) {
+                    adminShowNotification('Failed to archive schedule.', 'error');
+                }
+            }
+        });
     },
 
     showAddForm: async () => {
@@ -4948,7 +4973,7 @@ const ScheduleManager = {
                         ${ev.place ? `<div style="font-size:12px;color:#b45309;margin-top:2px;">📍 ${Utils.esc(ev.place)}</div>` : ''}
                         ${ev.notes ? `<div style="font-size:12px;color:#374151;margin-top:4px;">${Utils.esc(ev.notes)}</div>` : ''}
                     </div>
-                    <button onclick="CalendarEvents.deleteEvent(${ev.id})" style="font-size:11px;padding:4px 10px;border:1px solid #dc2626;color:#dc2626;background:#fee2e2;border-radius:6px;cursor:pointer;flex-shrink:0;">Delete</button>
+                    <button onclick="CalendarEvents.deleteEvent(${ev.id})" title="Archive" style="font-size:11px;padding:4px 10px;border:1px solid #dc2626;color:#dc2626;background:#fee2e2;border-radius:6px;cursor:pointer;flex-shrink:0;">Archive</button>
                 </div>
             `).join('') + `</div>`;
         }
@@ -4976,7 +5001,7 @@ const ScheduleManager = {
                     <div style="display:flex;align-items:center;gap:8px;">
                         <span style="background:${ss.bg};color:${ss.color};font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;">${status}</span>
                         ${!s.done ? `<button onclick="ScheduleManager.markDone(${s.id})" style="font-size:11px;padding:4px 10px;border:1px solid #059669;color:#059669;background:#d1fae5;border-radius:6px;cursor:pointer;">Done</button>` : ''}
-                        <button onclick="ScheduleManager.deleteRecord(${s.id})" style="font-size:11px;padding:4px 10px;border:1px solid #dc2626;color:#dc2626;background:#fee2e2;border-radius:6px;cursor:pointer;">Delete</button>
+                        <button onclick="ScheduleManager.deleteRecord(${s.id})" title="Archive" style="font-size:11px;padding:4px 10px;border:1px solid #dc2626;color:#dc2626;background:#fee2e2;border-radius:6px;cursor:pointer;">Archive</button>
                     </div>
                 </div>`;
             }).join('');
@@ -5103,26 +5128,24 @@ const CalendarEvents = {
         }
     },
 
-    deleteEvent: async (id) => {
-        if (!confirm('Delete this event?')) return;
-        try {
-            await fetch(`${API_BASE_URL}/calendar_events.php?id=${id}`, { method: 'DELETE' });
-            CalendarEvents._cache = CalendarEvents._cache.filter(e => e.id !== id);
-            await ScheduleManager.fetchAll();
-            ScheduleManager.renderCalendar();
-            // Refresh day panel if open
-            const panel = document.getElementById('calDayPanel');
-            if (panel && panel.style.display !== 'none') {
-                const title = document.getElementById('calDayTitle')?.textContent;
-                if (title) {
-                    // Find the date key from current view
-                    const all = ScheduleManager._cache;
-                    // Re-open the day panel for the same date
+    deleteEvent: (id) => {
+        Utils.showArchiveConfirmDialog({
+            title: 'Archive Event',
+            message: 'This calendar event will be moved to the Archive module. You can restore it later from the Archive page.',
+            onConfirm: async (reason) => {
+                try {
+                    const resp = await fetch(`${API_BASE_URL}/calendar_events.php?id=${id}&reason=${encodeURIComponent(reason)}`, { method: 'DELETE' });
+                    const result = await resp.json();
+                    if (!result.success) throw new Error(result.message || 'Failed to archive event');
+                    CalendarEvents._cache = CalendarEvents._cache.filter(e => e.id !== id);
+                    await ScheduleManager.fetchAll();
+                    ScheduleManager.renderCalendar();
+                    adminShowNotification('Event archived.', 'success');
+                } catch (e) {
+                    adminShowNotification('Failed to archive event.', 'error');
                 }
             }
-        } catch (e) {
-            adminShowNotification('Failed to delete event.', 'error');
-        }
+        });
     },
 
     getEventsForDate: (dateKey) => {

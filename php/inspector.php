@@ -197,7 +197,7 @@ function deleteInspector() {
         // Archive it
         $archiveStmt = $db->prepare("
             INSERT INTO archive_data (archive_type, data_json, reason, expiry_date)
-            VALUES ('inspectors', ?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))
+            VALUES ('inspectors', ?, ?, NULL)
         ");
         $archiveStmt->execute([json_encode($inspector), $reason]);
 

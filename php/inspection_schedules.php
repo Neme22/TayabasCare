@@ -203,21 +203,30 @@ if ($method === 'PUT') {
     }
 }
 
-// ---- DELETE: Cancel/remove schedule (admin only) ----
+// ---- DELETE: Archive schedule (admin only) ----
 if ($method === 'DELETE') {
     requireRole('admin');
     try {
         $id = intval($_GET['id'] ?? 0);
         if (!$id) errorResponse('Schedule ID required');
+        $reason = trim($_GET['reason'] ?? '');
 
-        $labelStmt = $db->prepare("SELECT inspector_name, schedDate FROM inspection_schedules WHERE id = ?");
-        $labelStmt->execute([$id]);
-        $label = $labelStmt->fetch();
+        $stmt = $db->prepare("SELECT * FROM inspection_schedules WHERE id = ?");
+        $stmt->execute([$id]);
+        $schedule = $stmt->fetch();
+        if (!$schedule) errorResponse('Schedule not found.', 404);
 
+        $db->beginTransaction();
+        $db->prepare("INSERT INTO archive_data (archive_type, data_json, reason, expiry_date) VALUES ('schedule', ?, ?, NULL)")
+            ->execute([json_encode($schedule), $reason]);
         $db->prepare("DELETE FROM inspection_schedules WHERE id = ?")->execute([$id]);
-        logActivity($db, 'DELETE', 'schedule', $id, $label['inspector_name'] ?? '', "Deleted schedule for " . ($label['schedDate'] ?? ''));
-        jsonResponse(true, null, 'Schedule cancelled.');
+        $db->commit();
+
+        logActivity($db, 'ARCHIVE', 'schedule', $id, $schedule['inspector_name'] ?? '',
+            "Archived schedule for " . ($schedule['schedDate'] ?? '') . ($reason !== '' ? ": $reason" : ''));
+        jsonResponse(true, null, 'Schedule archived.');
     } catch (PDOException $e) {
+        if ($db->inTransaction()) $db->rollBack();
         error_log('inspection_schedules.php error: ' . $e->getMessage());
         errorResponse('Database error. Please try again.', 500);
     }

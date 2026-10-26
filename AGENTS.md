@@ -46,7 +46,7 @@ All state-changing endpoints (POST/PUT/DELETE) require a CSRF token via `X-CSRF-
 | `clusters.php` | **Cluster ↔ inspector assignments** (5 clusters). The 66 barangays are split into fixed clusters in `cluster_lib.php` — the admin only picks which inspector owns each cluster. GET returns `{clusters, myCluster}` for any logged-in user (`?barangays=1` for a flat map); POST is admin+CSRF replace-all of inspector owners (all 5 clusters required). |
 | `cluster_lib.php` | Shared cluster helpers: `fixedClusterBarangays()` (the fixed 66→5 partition, zone families never split), `clusterOwners()`, `clusterBarangaysForSession()`, `ensureClusterTables()`. Used by clusters/inspection/inspection_schedules. |
 | `burial.php` | CRUD for `burial_records` (cadaver/skeletal/exhumation). |
-| `archive.php` | Soft-delete store. Auto-purges expired items (30-day expiry). |
+| `archive.php` | Soft-delete store. No auto-expiry — archived items stay until an admin restores or permanently deletes them. |
 | `risk_utils.php` | **Risk scoring engine.** 5-factor formula (0-100): violations, time since last inspection, establishment type, compliance rate, pending follow-ups. Shared by predict/alerts/pattern_analysis. |
 | `predict.php` | GET endpoint returning risk scores for all establishments. Uses `risk_utils.php` for scoring. |
 | `ai_analyze.php` | Calls OpenRouter API for AI risk narrative. Rate-limited (10/hr). |
@@ -104,7 +104,7 @@ All tables use InnoDB + utf8mb4. Key tables:
 - **`cluster_assignments`** — one row per cluster (1–5): which inspector owns it (the only admin-editable cluster data)
 - **`cluster_barangays`** — legacy table from the earlier editable-partition design; membership now lives in `fixedClusterBarangays()` — nothing reads this table
 - **`burial_records`** — burial/cadaver records
-- **`archive_data`** — soft-deleted items with 30-day expiry
+- **`archive_data`** — soft-deleted items (no auto-expiry; permanent delete only via the Archive module)
 - **`password_resets`** — OTP-based password reset tokens
 - **`alerts`** — system alerts with fingerprint dedup
 - **`activity_log`** — audit trail
@@ -149,6 +149,7 @@ Inspection revisions (from `inspection_history`) are deduplicated by `report_dat
 - **XSS protection**: `Utils.esc()` in admin.js and `esc()` in inspector.js escape HTML + quotes. Use these for ALL user data in `innerHTML` templates.
 - **Inspector column headers**: `buildAdminInspectorColumnMap()` fills the accomplishment report headers. On failure it retries when the report opens (and reuses `DataStore.inspectors` if cached); unused columns show `—` and a toast warns the user.
 - **Cluster scoping**: the 66 barangays are split into fixed Cluster 1–5 in code (`fixedClusterBarangays()` in `cluster_lib.php`, alphabetical blocks, zone families never split). In the Schedule module (`admin.html #clusterPanel` / `ClusterAssignments` in admin.js) the admin only assigns an inspector to each cluster — barangays are read-only chips, never editable. Inspectors fetch `php/clusters.php` once on load into `_myBarangays`; Inspection reports + History show only those barangays (server-enforced in `inspection.php` GET, client-filtered too), while Sanitary Records stay citywide. Reshuffle = admin re-saves the inspector dropdowns; views recompute on the inspector's next page load (nothing stored per inspector).
+- **archive_type column**: `archive_data.archive_type` was originally `ENUM('inspectors','sanitary','burial','reports')` — new types (`report`, `schedule`, `calendar_event`) were silently coerced to `''` (non-strict SQL mode). It is now `VARCHAR(50)`. Do not reintroduce an enum here; archive writers are sanitary/burial/inspection/inspector/inspection_schedules/calendar_events DELETE handlers, all admin+CSRF.
 
 ## Conventions
 
@@ -157,4 +158,4 @@ Inspection revisions (from `inspection_history`) are deduplicated by `report_dat
 - JS fetches use `API_BASE_URL + '/endpoint.php'` pattern.
 - No TypeScript, no linting, no formatting config.
 - Session-based auth (PHP `$_SESSION`), not token-based.
-- Soft-delete via `archive_data` table with 30-day auto-expiry.
+- Soft-delete via `archive_data` table — no auto-expiry; admin restores or permanently deletes from the Archive module.

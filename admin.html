@@ -1310,16 +1310,6 @@
                     </div>
 
                     <div class="stat-card archive-stat">
-                        <div class="stat-icon" style="background-color: #FEE2E2;">
-                            <i class="bi bi-exclamation-triangle" style="color: #DC2626;"></i>
-                        </div>
-                        <div class="stat-details">
-                            <h3 class="stat-value" id="expiringSoon">0</h3>
-                            <p class="stat-label">Expiring in 7 Days</p>
-                        </div>
-                    </div>
-
-                    <div class="stat-card archive-stat">
                         <div class="stat-icon" style="background-color: #DBEAFE;">
                             <i class="bi bi-clock-history" style="color: #2563EB;"></i>
                         </div>
@@ -1330,9 +1320,6 @@
                     </div>
 
                     <div class="stat-card archive-stat archive-action-card">
-                        <button class="btn btn-danger btn-small" onclick="ArchiveManager.viewExpiring()" data-testid="view-expiring-btn">
-                            <i class="bi bi-funnel"></i> View Expiring Soon
-                        </button>
                         <button class="btn btn-secondary btn-small" onclick="ArchiveManager.exportArchive()" data-testid="export-archive-btn">
                             <i class="bi bi-download"></i> Export Data
                         </button>
@@ -1352,20 +1339,14 @@
                             <option value="inspectors">Inspectors</option>
                             <option value="sanitary">Sanitary Records</option>
                             <option value="burial">Burial Records</option>
-                            <option value="reports">Inspection Reports</option>
-                        </select>
-
-                        <select id="archiveDaysFilter" class="form-select" data-testid="archive-days-filter">
-                            <option value="all">All Days</option>
-                            <option value="critical">Critical (1-10 days)</option>
-                            <option value="warning">Warning (11-20 days)</option>
-                            <option value="safe">Safe (21-30 days)</option>
+                            <option value="report">Inspection Reports</option>
+                            <option value="schedule">Schedules</option>
+                            <option value="calendar_event">Calendar Events</option>
                         </select>
 
                         <select id="archiveSortFilter" class="form-select" data-testid="archive-sort-filter">
                             <option value="newest">Newest First</option>
                             <option value="oldest">Oldest First</option>
-                            <option value="expiring">Expiring Soon</option>
                         </select>
                     </div>
 
@@ -1401,18 +1382,16 @@
                                     <th>Name/Description</th>
                                     <th>Reason</th>
                                     <th>Archived Date</th>
-                                    <th>Expiry Date</th>
-                                    <th>Days Remaining</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="archiveTableBody">
                                 <tr>
-                                    <td colspan="8" class="empty-state">
+                                    <td colspan="6" class="empty-state">
                                         <div class="empty-archive-state">
                                             <i class="bi bi-archive" style="font-size: 48px; color: #9CA3AF;"></i>
                                             <p>No archived items</p>
-                                            <span>Deleted items will appear here and be kept for 30 days</span>
+                                            <span>Archived items will appear here until permanently deleted</span>
                                         </div>
                                     </td>
                                 </tr>
