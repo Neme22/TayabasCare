@@ -291,11 +291,11 @@
                                    id="inspection-search" 
                                    placeholder="Search by Establishment or Barangay..." 
                                    class="input input-bordered input-success w-full"
-                                   oninput="filterInspectionReports()" />
+                                   oninput="TablePaging.setPage('insp-reports',1); filterInspectionReports()" />
                         </div>
-                        <select id="inspection-sort" 
+                        <select id="inspection-sort"
                                 class="select select-bordered select-success"
-                                onchange="filterInspectionReports()">
+                                onchange="TablePaging.setPage('insp-reports',1); filterInspectionReports()">
                             <option value="newest">Newest Date</option>
                             <option value="oldest">Oldest Date</option>
                             <option value="name-az">Establishment A-Z</option>
@@ -336,6 +336,7 @@
                                     </tr>
                                 </tbody>
                             </table>
+                            <div id="inspection-pager" class="pager-bar"></div>
                         </div>
                     </div>
                 </div>
@@ -353,7 +354,7 @@
                         <div class="card-body">
                             <h3 class="text-lg font-semibold text-gray-800 mb-4">All Establishments</h3>
                             <div class="mb-4 flex gap-3 items-center flex-wrap">
-                                <input type="text" id="ih-search" class="input input-bordered input-success w-full max-w-md" placeholder="Search establishment..." oninput="filterIHEstablishments()" />
+                                <input type="text" id="ih-search" class="input input-bordered input-success w-full max-w-md" placeholder="Search establishment..." oninput="TablePaging.setPage('insp-ih',1); filterIHEstablishments()" />
                                 <select id="ih-sort" class="select select-bordered select-success" onchange="sortIHEstablishments()">
                                     <option value="recent">Most Recent</option>
                                     <option value="name-az">Name A-Z</option>
@@ -370,6 +371,7 @@
                                     <p class="mt-2">Loading establishments...</p>
                                 </div>
                             </div>
+                            <div id="insp-ih-pager" class="pager-bar"></div>
                         </div>
                     </div>
                 </div>
@@ -595,8 +597,8 @@
                                    id="cadaver-search" 
                                    placeholder="Search by Deceased Name or Informant..." 
                                    class="input input-bordered input-success w-full"
-                                   oninput="filterBurialRecords('cadaver')" />
-                            <select id="cadaver-sort" class="select select-bordered select-success" onchange="filterBurialRecords('cadaver')">
+                                   oninput="TablePaging.setPage('insp-burial-cadaver',1); filterBurialRecords('cadaver')" />
+                            <select id="cadaver-sort" class="select select-bordered select-success" onchange="TablePaging.setPage('insp-burial-cadaver',1); filterBurialRecords('cadaver')">
                                 <option value="newest">Newest Date</option>
                                 <option value="oldest">Oldest Date</option>
                                 <option value="name-az">Name A-Z</option>
@@ -622,6 +624,7 @@
                                     </tbody>
                                 </table>
                             </div>
+                            <div id="cadaver-pager" class="pager-bar"></div>
                         </div>
                     </div>
                 </div>
@@ -642,8 +645,8 @@
                                    id="skeletal-search" 
                                    placeholder="Search by Deceased Name or Cemetery..." 
                                    class="input input-bordered input-success w-full"
-                                   oninput="filterBurialRecords('skeletal')" />
-                            <select id="skeletal-sort" class="select select-bordered select-success" onchange="filterBurialRecords('skeletal')">
+                                   oninput="TablePaging.setPage('insp-burial-skeletal',1); filterBurialRecords('skeletal')" />
+                            <select id="skeletal-sort" class="select select-bordered select-success" onchange="TablePaging.setPage('insp-burial-skeletal',1); filterBurialRecords('skeletal')">
                                 <option value="newest">Newest Date</option>
                                 <option value="oldest">Oldest Date</option>
                                 <option value="name-az">Name A-Z</option>
@@ -670,6 +673,7 @@
                                     </tbody>
                                 </table>
                             </div>
+                            <div id="skeletal-pager" class="pager-bar"></div>
                         </div>
                     </div>
                 </div>
@@ -690,8 +694,8 @@
                                    id="exhumation-search" 
                                    placeholder="Search by Deceased Name or Cemetery..." 
                                    class="input input-bordered input-success w-full"
-                                   oninput="filterBurialRecords('exhumation')" />
-                            <select id="exhumation-sort" class="select select-bordered select-success" onchange="filterBurialRecords('exhumation')">
+                                   oninput="TablePaging.setPage('insp-burial-exhumation',1); filterBurialRecords('exhumation')" />
+                            <select id="exhumation-sort" class="select select-bordered select-success" onchange="TablePaging.setPage('insp-burial-exhumation',1); filterBurialRecords('exhumation')">
                                 <option value="newest">Newest Date</option>
                                 <option value="oldest">Oldest Date</option>
                                 <option value="name-az">Name A-Z</option>
@@ -718,6 +722,7 @@
                                     </tbody>
                                 </table>
                             </div>
+                            <div id="exhumation-pager" class="pager-bar"></div>
                         </div>
                     </div>
                 </div>
@@ -1615,6 +1620,16 @@
                         <input type="text" id="burial-deceased" class="input input-bordered input-success" data-testid="burial-deceased" required />
                     </div>
 
+                    <!-- Sex of Deceased (used for monthly accomplishment M/F counts) -->
+                    <div class="form-control">
+                        <label class="label"><span class="label-text font-semibold">Sex of Deceased <span class="text-red-500">*</span></span></label>
+                        <select id="burial-sex" class="select select-bordered select-success" data-testid="burial-sex" required>
+                            <option value="">-- Select Sex --</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                        </select>
+                    </div>
+
                     <!-- Date of Death -->
                     <div class="form-control">
                         <label class="label">
@@ -1785,7 +1800,7 @@
                         <div class="form-control">
                             <label class="label"><span class="label-text font-semibold">Month <span class="text-red-500">*</span></span></label>
                             <input type="hidden" id="acc-month">
-                            <select id="acc-month-display" class="select select-bordered select-success" onchange="document.getElementById('acc-month').value = this.value;" required>
+                            <select id="acc-month-display" class="select select-bordered select-success" onchange="document.getElementById('acc-month').value = this.value; refreshAccomplishmentAutoFields();" required>
                                 <option value="">-- Select Month --</option>
                                 <option value="1">January</option>
                                 <option value="2">February</option>
@@ -1805,7 +1820,7 @@
                         <!-- Year -->
                         <div class="form-control">
                             <label class="label"><span class="label-text font-semibold">Year <span class="text-red-500">*</span></span></label>
-                            <input type="number" id="acc-year" class="input input-bordered input-success" min="2000" max="2099" placeholder="e.g. 2024" required>
+                            <input type="number" id="acc-year" class="input input-bordered input-success" min="2000" max="2099" placeholder="e.g. 2024" onchange="refreshAccomplishmentAutoFields();" required>
                         </div>
 
                         <!-- Activity Fields -->
@@ -1829,12 +1844,12 @@
                                     <input type="number" id="acc-f4" class="input input-bordered input-success input-sm w-24" min="0" value="0">
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">3.1 Food Establishments</label>
-                                    <input type="number" id="acc-f5" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <label class="w-80 text-gray-700">3.1 Food Establishments <i class="fas fa-lock text-gray-400" title="Auto-recorded from inspection reports — cannot be edited"></i></label>
+                                    <input type="number" id="acc-f5" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from inspection reports — cannot be edited">
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">3.2 Non-Food Establishments</label>
-                                    <input type="number" id="acc-f6" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <label class="w-80 text-gray-700">3.2 Non-Food Establishments <i class="fas fa-lock text-gray-400" title="Auto-recorded from inspection reports — cannot be edited"></i></label>
+                                    <input type="number" id="acc-f6" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from inspection reports — cannot be edited">
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <label class="w-80 text-gray-700">4. Distribution of Toilet Bowl with Cement</label>
@@ -1861,52 +1876,52 @@
                                     <input type="number" id="acc-f12" class="input input-bordered input-success input-sm w-24" min="0" value="0">
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">8.1 Issuance Sanitary Permit - Food Est.</label>
-                                    <input type="number" id="acc-f13" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <label class="w-80 text-gray-700">8.1 Issuance Sanitary Permit - Food Est. <i class="fas fa-lock text-gray-400" title="Auto-recorded from sanitary permit records — cannot be edited"></i></label>
+                                    <input type="number" id="acc-f13" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from sanitary permit records — cannot be edited">
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">8.2 Issuance Sanitary Permit - Non-Food Est.</label>
-                                    <input type="number" id="acc-f14" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <label class="w-80 text-gray-700">8.2 Issuance Sanitary Permit - Non-Food Est. <i class="fas fa-lock text-gray-400" title="Auto-recorded from sanitary permit records — cannot be edited"></i></label>
+                                    <input type="number" id="acc-f14" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from sanitary permit records — cannot be edited">
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">9.1 Health Card - Food Est. (M)</label>
-                                    <input type="number" id="acc-f15" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <label class="w-80 text-gray-700">9.1 Health Card - Food Est. (M) <i class="fas fa-lock text-gray-400" title="Auto-recorded from sanitary (health card) records — cannot be edited"></i></label>
+                                    <input type="number" id="acc-f15" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from sanitary (health card) records — cannot be edited">
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">9.1 Health Card - Food Est. (F)</label>
-                                    <input type="number" id="acc-f16" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <label class="w-80 text-gray-700">9.1 Health Card - Food Est. (F) <i class="fas fa-lock text-gray-400" title="Auto-recorded from sanitary (health card) records — cannot be edited"></i></label>
+                                    <input type="number" id="acc-f16" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from sanitary (health card) records — cannot be edited">
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">9.2 Health Card - Non-Food Est. (M)</label>
-                                    <input type="number" id="acc-f17" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <label class="w-80 text-gray-700">9.2 Health Card - Non-Food Est. (M) <i class="fas fa-lock text-gray-400" title="Auto-recorded from sanitary (health card) records — cannot be edited"></i></label>
+                                    <input type="number" id="acc-f17" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from sanitary (health card) records — cannot be edited">
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">9.2 Health Card - Non-Food Est. (F)</label>
-                                    <input type="number" id="acc-f18" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <label class="w-80 text-gray-700">9.2 Health Card - Non-Food Est. (F) <i class="fas fa-lock text-gray-400" title="Auto-recorded from sanitary (health card) records — cannot be edited"></i></label>
+                                    <input type="number" id="acc-f18" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from sanitary (health card) records — cannot be edited">
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">10.1 Certificate of Exhumation (M)</label>
-                                    <input type="number" id="acc-f19" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <label class="w-80 text-gray-700">10.1 Certificate of Exhumation (M) <i class="fas fa-lock text-gray-400" title="Auto-recorded from burial records — cannot be edited"></i></label>
+                                    <input type="number" id="acc-f19" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from burial records — cannot be edited">
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">10.1 Certificate of Exhumation (F)</label>
-                                    <input type="number" id="acc-f20" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <label class="w-80 text-gray-700">10.1 Certificate of Exhumation (F) <i class="fas fa-lock text-gray-400" title="Auto-recorded from burial records — cannot be edited"></i></label>
+                                    <input type="number" id="acc-f20" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from burial records — cannot be edited">
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">10.2 Transfer of Skeletal (M)</label>
-                                    <input type="number" id="acc-f21" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <label class="w-80 text-gray-700">10.2 Transfer of Skeletal (M) <i class="fas fa-lock text-gray-400" title="Auto-recorded from burial records — cannot be edited"></i></label>
+                                    <input type="number" id="acc-f21" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from burial records — cannot be edited">
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">10.2 Transfer of Skeletal (F)</label>
-                                    <input type="number" id="acc-f22" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <label class="w-80 text-gray-700">10.2 Transfer of Skeletal (F) <i class="fas fa-lock text-gray-400" title="Auto-recorded from burial records — cannot be edited"></i></label>
+                                    <input type="number" id="acc-f22" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from burial records — cannot be edited">
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">10.3 Transfer of Cadaver (M)</label>
-                                    <input type="number" id="acc-f23" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <label class="w-80 text-gray-700">10.3 Transfer of Cadaver (M) <i class="fas fa-lock text-gray-400" title="Auto-recorded from burial records — cannot be edited"></i></label>
+                                    <input type="number" id="acc-f23" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from burial records — cannot be edited">
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">10.3 Transfer of Cadaver (F)</label>
-                                    <input type="number" id="acc-f24" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <label class="w-80 text-gray-700">10.3 Transfer of Cadaver (F) <i class="fas fa-lock text-gray-400" title="Auto-recorded from burial records — cannot be edited"></i></label>
+                                    <input type="number" id="acc-f24" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from burial records — cannot be edited">
                                 </div>
                             </div>
                         </div>

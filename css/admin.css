@@ -2571,3 +2571,79 @@ dialog.modal::backdrop {
 }
 
 /* ===== END DARK THEME ===== */
+
+/* ============================================
+   Numbered pagination (list modules)
+   ============================================ */
+.pager-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 14px 12px;
+    border-top: 1px solid var(--gray-200);
+}
+
+.pager-btn {
+    min-width: 32px;
+    height: 32px;
+    padding: 0 8px;
+    border: 1px solid var(--gray-300);
+    border-radius: 8px;
+    background: #fff;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.pager-btn:hover:not(:disabled) {
+    border-color: var(--brand-mid);
+    color: var(--brand-deep);
+}
+
+.pager-btn.active {
+    background: var(--brand-deep);
+    border-color: var(--brand-deep);
+    color: #fff;
+}
+
+.pager-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.pager-ellipsis {
+    color: #9ca3af;
+    font-size: 13px;
+    padding: 0 2px;
+}
+
+.pager-summary {
+    font-size: 12px;
+    color: #6b7280;
+    margin-left: 8px;
+}
+
+[data-theme="dark"] .pager-btn {
+    background: #1e293b;
+    border-color: #334155;
+    color: #e2e8f0;
+}
+
+[data-theme="dark"] .pager-btn.active {
+    background: var(--brand-mid);
+    border-color: var(--brand-mid);
+    color: #fff;
+}
+
+[data-theme="dark"] .pager-summary,
+[data-theme="dark"] .pager-ellipsis {
+    color: #94a3b8;
+}
+
+[data-theme="dark"] .pager-bar {
+    border-top-color: #334155;
+}

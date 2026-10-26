@@ -1,10 +1,17 @@
 <?php
 require_once 'auth_check.php';
-requireRole('admin');
 require_once 'activity_log.php';
 require_once 'csrf.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
+
+// GET only lists inspector names/full names — needed by the inspector's own
+// report column map and burial dropdown. Mutations stay admin-only.
+if ($method === 'GET') {
+    requireRole(['admin', 'inspector']);
+} else {
+    requireRole('admin');
+}
 
 if (csrfNeeded()) {
     requireCsrf();

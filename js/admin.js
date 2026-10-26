@@ -37,7 +37,9 @@ window.fetch = async function(url, opts = {}) {
     return _origFetch(url, opts);
 };
 
-// Shared table "Load more" paging for list views that default to a short slice
+// Shared table paging. Numbered-page mode (pageSlice + renderNumberedPager)
+// is the standard for list views; legacy slice/moreRow remain for any
+// call sites that have not been converted yet.
 const TablePaging = {
     _limits: {},
     getLimit(key, def = 10) {
@@ -49,7 +51,7 @@ const TablePaging = {
     reset(key) {
         delete this._limits[key];
     },
-    // Use when no search filter is active. When filtering, callers show all matches.
+    // Legacy "Load more" slice — keep only for unconverted views
     slice(list, key, def = 10) {
         const limit = this.getLimit(key, def);
         return {
@@ -74,8 +76,63 @@ const TablePaging = {
     _rerender(key) {
         const fn = this._handlers[key];
         if (typeof fn === 'function') fn();
+    },
+
+    // ---- Numbered-page mode (used by all converted list modules) ----
+    _pages: {},
+    setPage(key, n) {
+        this._pages[key] = Math.max(1, n | 0);
+    },
+    pageSlice(list, key, size = 10) {
+        const total = list.length;
+        const pages = Math.max(1, Math.ceil(total / size));
+        let p = this._pages[key] || 1;
+        if (p > pages) p = pages;
+        this._pages[key] = p;
+        const start = (p - 1) * size;
+        return { displayed: list.slice(start, start + size), page: p, pages, total, size };
     }
 };
+
+// Renders « 1 2 … 9 » page controls under a table card.
+// Buttons call TablePaging.setPage(key, n) then the registered re-render.
+function renderNumberedPager(elId, info, key) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    if (!info || info.total === 0) {
+        el.innerHTML = '';
+        el.style.display = 'none';
+        return;
+    }
+    el.style.display = '';
+    if (info.pages <= 1) {
+        el.innerHTML = `<span class="pager-summary">Showing all ${info.total} record${info.total === 1 ? '' : 's'}</span>`;
+        return;
+    }
+
+    const { page, pages, total } = info;
+    const nums = [...new Set([1, pages, page - 1, page, page + 1].filter(n => n >= 1 && n <= pages))]
+        .sort((a, b) => a - b);
+
+    let html = `<button type="button" class="pager-btn" data-page="${page - 1}" ${page === 1 ? 'disabled' : ''} aria-label="Previous page">&laquo;</button>`;
+    let prev = 0;
+    for (const n of nums) {
+        if (prev && n - prev > 1) html += `<span class="pager-ellipsis">&hellip;</span>`;
+        html += `<button type="button" class="pager-btn ${n === page ? 'active' : ''}" data-page="${n}">${n}</button>`;
+        prev = n;
+    }
+    html += `<button type="button" class="pager-btn" data-page="${page + 1}" ${page === pages ? 'disabled' : ''} aria-label="Next page">&raquo;</button>`;
+    html += `<span class="pager-summary">Page ${page} of ${pages} &middot; ${total} records</span>`;
+    el.innerHTML = html;
+
+    el.querySelectorAll('.pager-btn').forEach(btn => {
+        if (btn.disabled) return;
+        btn.addEventListener('click', () => {
+            TablePaging.setPage(key, parseInt(btn.dataset.page, 10));
+            TablePaging._rerender(key);
+        });
+    });
+}
 
 // Data Store — in-memory cache populated from API (no localStorage)
 let _cacheInspectors = [];
@@ -1619,11 +1676,15 @@ const SanitaryManager = {
             }
         });
 
-        // Show latest N when no search active (Load more expands the window)
-        const page = q ? { displayed: sorted, hasMore: false, remaining: 0 } : TablePaging.slice(sorted, 'sanitary', 10);
+        // Numbered pages (10 per page) — sort runs first so pages stay in order
+        TablePaging.register('sanitary', () => SanitaryManager.applyFilters());
+        const page = TablePaging.pageSlice(sorted, 'sanitary', 10);
         const displayed = page.displayed;
         SanitaryManager._displayed = displayed;
-        if (countEl) countEl.textContent = q ? `${displayed.length} matching records` : `Showing ${displayed.length} of ${records.length} records`;
+        renderNumberedPager('admin-sanitary-pager', page, 'sanitary');
+        if (countEl) countEl.textContent = page.pages > 1 || page.total !== records.length
+            ? `Showing ${displayed.length} of ${records.length} records (page ${page.page} of ${page.pages})`
+            : `Showing ${page.total} of ${records.length} records`;
 
         if (displayed.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No sanitary records found</td></tr>';
@@ -1650,7 +1711,7 @@ const SanitaryManager = {
                     </div>
                 </td>
             </tr>
-        `}).join('') + (page.hasMore ? TablePaging.moreRow('sanitary', page.remaining, 5, 10) : '');
+        `}).join('');
     },
 
     openViewModal: (index) => {
@@ -2020,9 +2081,14 @@ const BurialManager = {
             }
         });
 
-        const page = q ? { displayed: sorted, hasMore: false, remaining: 0 } : TablePaging.slice(sorted, 'burial', 10);
+        // Numbered pages (10 per page) — sort runs first so pages stay in order
+        TablePaging.register('burial', () => BurialManager.applyFilters());
+        const page = TablePaging.pageSlice(sorted, 'burial', 10);
         const displayed = page.displayed;
-        if (countEl) countEl.textContent = q ? `${displayed.length} matching records` : `Showing ${displayed.length} of ${BurialManager._allRecords.length} records`;
+        renderNumberedPager('admin-burial-pager', page, 'burial');
+        if (countEl) countEl.textContent = page.pages > 1 || page.total !== BurialManager._allRecords.length
+            ? `Showing ${displayed.length} of ${BurialManager._allRecords.length} records (page ${page.page} of ${page.pages})`
+            : `Showing ${page.total} of ${BurialManager._allRecords.length} records`;
 
         if (displayed.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No burial records found</td></tr>';
@@ -2046,7 +2112,7 @@ const BurialManager = {
                     </div>
                 </td>
             </tr>
-        `).join('') + (page.hasMore ? TablePaging.moreRow('burial', page.remaining, 5, 10) : '');
+        `).join('');
     },
 
     openViewModal: (categoryType, recordId) => {
@@ -2265,9 +2331,14 @@ const ReportsManager = {
             }
         });
 
-        const page = q ? { displayed: sorted, hasMore: false, remaining: 0 } : TablePaging.slice(sorted, 'reports', 10);
+        // Numbered pages (10 per page) — sort runs first so pages stay in order
+        TablePaging.register('reports', () => ReportsManager.applyFilters());
+        const page = TablePaging.pageSlice(sorted, 'reports', 10);
         const displayed = page.displayed;
-        if (countEl) countEl.textContent = q ? `${displayed.length} matching reports` : `Showing ${displayed.length} of ${allReports.length} reports`;
+        renderNumberedPager('admin-reports-pager', page, 'reports');
+        if (countEl) countEl.textContent = page.pages > 1 || page.total !== allReports.length
+            ? `Showing ${displayed.length} of ${allReports.length} reports (page ${page.page} of ${page.pages})`
+            : `Showing ${page.total} of ${allReports.length} reports`;
 
         tbody.innerHTML = displayed.map(report => `
             <tr data-testid="report-row-${report.id}">
@@ -2288,7 +2359,7 @@ const ReportsManager = {
                     </div>
                 </td>
             </tr>
-        `).join('') + (page.hasMore ? TablePaging.moreRow('reports', page.remaining, 7, 10) : '');
+        `).join('');
     },
 
     openViewModal: (id) => {
@@ -5140,15 +5211,15 @@ const PredictionEngine = {
             }
         });
 
-        const hasFilter = risk || search;
-        const page = hasFilter ? { displayed: filtered, hasMore: false, remaining: 0 } : TablePaging.slice(filtered, 'prediction', 15);
+        // Numbered pages (10 per page) — sort runs first so pages stay in order
+        TablePaging.register('prediction', () => PredictionEngine.filter());
+        const page = TablePaging.pageSlice(filtered, 'prediction', 10);
         const displayed = page.displayed;
-        if (countEl) countEl.textContent = hasFilter ? `${displayed.length} matching` : `Showing ${displayed.length} of ${allResults.length} establishments`;
+        renderNumberedPager('pred-pager', page, 'prediction');
+        if (countEl) countEl.textContent = page.pages > 1 || page.total !== allResults.length
+            ? `Showing ${displayed.length} of ${allResults.length} establishments (page ${page.page} of ${page.pages})`
+            : `Showing ${page.total} of ${allResults.length} establishments`;
         PredictionEngine.renderTable(displayed);
-        if (page.hasMore) {
-            const tbody = document.getElementById('predTableBody');
-            if (tbody) tbody.insertAdjacentHTML('beforeend', TablePaging.moreRow('prediction', page.remaining, 8, 15));
-        }
     },
 
     renderTable: (results) => {
@@ -6106,35 +6177,16 @@ function adminFilterIHEstablishments() {
     // Re-apply current sort
     const sortBy = document.getElementById('admin-ih-sort')?.value || 'recent';
     filtered = adminSortIHList(filtered, sortBy);
-    const page = q ? { displayed: filtered, hasMore: false, remaining: 0 } : TablePaging.slice(filtered, 'admin-ih', 12);
+    // Numbered pages (10 per page) — sort runs first so pages stay in order
+    TablePaging.register('admin-ih', () => adminFilterIHEstablishments());
+    const page = TablePaging.pageSlice(filtered, 'admin-ih', 10);
     adminRenderIHEstablishments(page.displayed);
-    if (page.hasMore) {
-        const container = document.getElementById('admin-ih-list');
-        if (container && !container.querySelector('.load-more-ih')) {
-            container.insertAdjacentHTML('beforeend',
-                `<div class="load-more-ih" style="text-align:center;padding:12px;">
-                    <button type="button" class="btn btn-sm btn-outline" onclick="TablePaging.showMore('admin-ih', 12); adminFilterIHEstablishments();">Load more (${page.remaining} more)</button>
-                </div>`);
-        }
-    }
+    renderNumberedPager('admin-ih-pager', page, 'admin-ih');
 }
 
 function adminSortIHEstablishments() {
-    const sortBy = document.getElementById('admin-ih-sort')?.value || 'recent';
-    const q = (document.getElementById('admin-ih-search')?.value || '').trim().toLowerCase();
-    let list = q ? _adminIHEstablishments.filter(e => e.name.toLowerCase().includes(q) || e.barangay.toLowerCase().includes(q)) : _adminIHEstablishments;
-    list = adminSortIHList(list, sortBy);
-    const page = q ? { displayed: list, hasMore: false, remaining: 0 } : TablePaging.slice(list, 'admin-ih', 12);
-    adminRenderIHEstablishments(page.displayed);
-    if (page.hasMore) {
-        const container = document.getElementById('admin-ih-list');
-        if (container && !container.querySelector('.load-more-ih')) {
-            container.insertAdjacentHTML('beforeend',
-                `<div class="load-more-ih" style="text-align:center;padding:12px;">
-                    <button type="button" class="btn btn-sm btn-outline" onclick="TablePaging.showMore('admin-ih', 12); adminSortIHEstablishments();">Load more (${page.remaining} more)</button>
-                </div>`);
-        }
-    }
+    TablePaging.setPage('admin-ih', 1);
+    adminFilterIHEstablishments();
 }
 
 function adminSortIHList(list, sortBy) {

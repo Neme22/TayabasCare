@@ -236,6 +236,7 @@ const FormDrafts = {
             deathPlace: (document.getElementById('burial-death-place') || {}).value || '',
             informant: (document.getElementById('burial-informant') || {}).value || '',
             inspector: (document.getElementById('burial-inspector') || {}).value || '',
+            sex: (document.getElementById('burial-sex') || {}).value || '',
             originMunicipality: (document.getElementById('burial-origin-municipality') || {}).value || '',
             transferProvince: (document.getElementById('burial-transfer-province') || {}).value || '',
             transferMunicipality: (document.getElementById('burial-transfer-municipality') || {}).value || '',
@@ -374,6 +375,7 @@ const FormDrafts = {
             if (d.deathPlace) document.getElementById('burial-death-place').value = d.deathPlace;
             if (d.informant) document.getElementById('burial-informant').value = d.informant;
             if (d.inspector) document.getElementById('burial-inspector').value = d.inspector;
+            if (d.sex) { const el = document.getElementById('burial-sex'); if (el) el.value = d.sex; }
             if (d.originMunicipality) { const el = document.getElementById('burial-origin-municipality'); if (el) el.value = d.originMunicipality; }
             if (d.transferProvince) { const el = document.getElementById('burial-transfer-province'); if (el) el.value = d.transferProvince; }
             if (d.transferMunicipality) { const el = document.getElementById('burial-transfer-municipality'); if (el) el.value = d.transferMunicipality; }
@@ -397,11 +399,13 @@ const FormDrafts = {
             if (d.month) document.getElementById('acc-month').value = d.month;
             if (d.year) document.getElementById('acc-year').value = d.year;
             if (d.fields) {
-                for (let i = 1; i <= 24; i++) {
+                // Only restore manually-editable fields; auto fields come from the server
+                ACC_MANUAL_FIELDS.forEach(i => {
                     const el = document.getElementById('acc-f' + i);
                     if (el && d.fields['f' + i] !== undefined) el.value = d.fields['f' + i];
-                }
+                });
             }
+            refreshAccomplishmentAutoFields(); // month/year may have changed from the draft
         }, 300);
 
         localStorage.removeItem(this.KEYS.accomplishment);
@@ -693,13 +697,27 @@ function generatePersonnelFields() {
     if (!container) return;
 
     if (personnelNo <= 0) {
-        container.innerHTML = '';
+        // Keep rows in the DOM so retyping a count restores the entered data
         section.style.display = 'none';
         return;
     }
 
     section.style.display = 'block';
-    
+
+    // Snapshot existing rows so changing the count keeps entered data
+    // (e.g. establishment reduces 4 → 2: first 2 people are kept)
+    const existing = [];
+    container.querySelectorAll('.personnel-row').forEach(row => {
+        existing.push({
+            first:  row.querySelector('.first-name')?.value  || '',
+            middle: row.querySelector('.middle-name')?.value || '',
+            last:   row.querySelector('.last-name')?.value   || '',
+            sex:    row.querySelector('.personnel-sex:checked')?.value || '',
+            xray:   !!row.querySelector('.personnel-xray')?.checked,
+            stool:  !!row.querySelector('.personnel-stool')?.checked
+        });
+    });
+
     // Clear existing fields
     container.innerHTML = '';
     
@@ -749,7 +767,21 @@ function generatePersonnelFields() {
                 </div>
             </div>
         `;
-        
+
+        // Restore previously entered values for this row (if any)
+        const prev = existing[i - 1];
+        if (prev && (prev.first || prev.last || prev.sex)) {
+            personnelRow.querySelector('.first-name').value  = prev.first;
+            personnelRow.querySelector('.middle-name').value = prev.middle;
+            personnelRow.querySelector('.last-name').value   = prev.last;
+            if (prev.sex) {
+                const sexInput = personnelRow.querySelector(`.personnel-sex[value="${prev.sex}"]`);
+                if (sexInput) sexInput.checked = true;
+            }
+            personnelRow.querySelector('.personnel-xray').checked  = prev.xray;
+            personnelRow.querySelector('.personnel-stool').checked = prev.stool;
+        }
+
         container.appendChild(personnelRow);
     }
 }
@@ -1784,6 +1816,22 @@ function populateBurialInspectorDropdown() {
     container.innerHTML = html;
 }
 
+// Auto-recorded form fields (1-based): the system computes these from records.
+// 3.1/3.2 inspections · 8.1/8.2 permits · 9.x health cards · 10.x burial
+const ACC_AUTO_FIELDS = [5, 6, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
+const ACC_MANUAL_FIELDS = [1, 2, 3, 4, 7, 8, 9, 10, 11, 12];
+
+function lockAccAutoFields() {
+    ACC_AUTO_FIELDS.forEach(n => {
+        const el = document.getElementById(`acc-f${n}`);
+        if (el) {
+            el.readOnly = true;
+            el.style.background = '#f1f5f9';
+            el.style.cursor = 'not-allowed';
+        }
+    });
+}
+
 async function openAccomplishmentModal(recordId = null) {
     const modal = document.getElementById('accomplishment-modal');
     const title = document.getElementById('accomplishment-modal-title');
@@ -1795,8 +1843,10 @@ async function openAccomplishmentModal(recordId = null) {
     const currentMonth = now.getMonth() + 1; // 1-based
     const currentYear  = now.getFullYear();
 
+    const saveBtn = form.querySelector('button[type="submit"]');
+
     if (recordId) {
-        title.textContent = 'Edit Accomplishment Record';
+        title.textContent = 'View Accomplishment Record';
         const records = await getAllAccomplishmentRecords();
         const rec = records.find(r => String(r.id) === String(recordId));
         if (rec) {
@@ -1811,8 +1861,14 @@ async function openAccomplishmentModal(recordId = null) {
                 if (el) el.value = rec.fields[i-1] || 0;
             }
         }
+        // Saved records are view-only for the inspector — no editing, no save
+        form.querySelectorAll('input, select').forEach(el => { el.disabled = true; });
+        if (saveBtn) saveBtn.style.display = 'none';
     } else {
         title.textContent = 'Add Accomplishment Record';
+        // Ensure everything is editable again (form.reset does not clear disabled)
+        form.querySelectorAll('input, select').forEach(el => { el.disabled = false; });
+        if (saveBtn) saveBtn.style.display = '';
         // Auto-fill current month and year
         document.getElementById('acc-month').value = currentMonth;
         document.getElementById('acc-month-display').value = currentMonth;
@@ -1823,14 +1879,50 @@ async function openAccomplishmentModal(recordId = null) {
         }
     }
 
-    // Always auto-fill inspector from logged-in user (both add and edit)
+    // Always auto-fill inspector from logged-in user (both add and view)
     const loggedName = localStorage.getItem('inspectorFullName') || localStorage.getItem('username') || '';
     const inspHidden  = document.getElementById('acc-inspector');
     const inspDisplay = document.getElementById('acc-inspector-display');
-    if (inspHidden)  inspHidden.value  = loggedName;
-    if (inspDisplay) inspDisplay.value = loggedName;
+    if (recordId) {
+        // keep the record's own inspector (inputs are disabled anyway)
+        if (inspDisplay && !inspDisplay.value && inspHidden) inspDisplay.value = inspHidden.value;
+    } else {
+        if (inspHidden)  inspHidden.value  = loggedName;
+        if (inspDisplay) inspDisplay.value = loggedName;
+    }
+
+    // Auto-recorded fields (3.1/3.2, 8.1/8.2, 9.x, 10.x) — locked for inspectors
+    lockAccAutoFields();
+
+    // Pull the month's records into the locked fields (inspections, permits, health cards, burial)
+    refreshAccomplishmentAutoFields();
 
     modal.showModal();
+}
+
+// Fetches computed auto-recorded values for the modal's selected month/year
+// and fills the locked inputs. Server returns { "5": n, "6": n, "13": …, "15": … }
+// keyed by 1-based form field number.
+async function refreshAccomplishmentAutoFields() {
+    const month = document.getElementById('acc-month').value;
+    const year  = document.getElementById('acc-year').value;
+    if (!month || !year) return;
+    try {
+        const resp = await fetch(`${API_BASE_URL}/accomplishment.php?autoFields=1&month=${encodeURIComponent(month)}&year=${encodeURIComponent(year)}`);
+        const result = await resp.json();
+        if (!result.success || !result.data || typeof result.data.auto !== 'object' || result.data.auto === null) return;
+        const auto = result.data.auto;
+        Object.entries(auto).forEach(([fnum, val]) => {
+            const el = document.getElementById(`acc-f${fnum}`);
+            if (!el) return;
+            // Only overwrite when the source has records for this month;
+            // otherwise keep whatever is already shown (historical rows).
+            if (Number(val) > 0) el.value = val;
+        });
+        lockAccAutoFields();
+    } catch (e) {
+        console.warn('Could not load auto accomplishment fields:', e);
+    }
 }
 
 function closeAccomplishmentModal() {
@@ -1898,19 +1990,6 @@ async function saveAccomplishmentRecord() {
     loadAccomplishmentRecords();
 }
 
-async function deleteAccomplishmentRecord(recordId) {
-    if (!confirm('Delete this accomplishment record?')) return;
-    try {
-        const resp = await fetch(`${API_BASE_URL}/accomplishment.php?id=${recordId}`, { method: 'DELETE' });
-        const result = await resp.json();
-        if (!result.success) throw new Error(result.message);
-        loadAccomplishmentRecords();
-        showNotification('Record deleted.', 'success');
-    } catch (e) {
-        showNotification('Error deleting record: ' + e.message, 'error');
-    }
-}
-
 async function loadAccomplishmentRecords() {
     const tbody = document.getElementById('accomplishment-table-body');
     if (!tbody) return;
@@ -1950,11 +2029,8 @@ async function loadAccomplishmentRecords() {
             <td>${r.year}</td>
             <td>${r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}</td>
             <td class="text-center">
-                <button class="btn btn-xs btn-info text-white mr-1" onclick="openAccomplishmentModal('${r.id}')">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-xs btn-error text-white" onclick="deleteAccomplishmentRecord('${r.id}')">
-                    <i class="fas fa-trash"></i>
+                <button class="btn btn-xs btn-info text-white" title="View record" onclick="openAccomplishmentModal('${r.id}')">
+                    <i class="fas fa-eye"></i>
                 </button>
             </td>
         </tr>
@@ -2020,6 +2096,13 @@ function buildInspectorFieldMap(inspectorIdx) {
 }
 
 async function getAccomplishmentDataForPeriod(months, year) {
+    // Ensure the inspector column map is loaded (retry if the initial fetch failed —
+    // without it the record→column matching finds nothing and reports look empty)
+    if (!Object.keys(INSPECTOR_COL_MAP).length) {
+        await buildInspectorColumnMap();
+        populateInspectorReportHeaders();
+    }
+
     // Returns totals array (length = total report-inputs count) from saved accomplishment records
     const records = await getAllAccomplishmentRecords();
     const totalInputs = document.querySelectorAll('#accomplishment-report .report-input').length;
@@ -2647,8 +2730,7 @@ function filterBurialRecords(type) {
     const sortBy = document.getElementById(`${type}-sort`)?.value || 'newest';
     const countEl = document.getElementById(`${type}-count`);
     const records = cachedBurialRecords[type] || [];
-    const hasFilter = !!searchTerm;
-    
+
     let filtered = records;
     if (searchTerm) {
         filtered = records.filter(record => {
@@ -2669,15 +2751,17 @@ function filterBurialRecords(type) {
         }
     });
 
-    const page = hasFilter ? { displayed: filtered, hasMore: false, remaining: 0 } : TablePaging.slice(filtered, `insp-burial-${type}`, 10);
+    // Numbered pages (10 per page) — sort runs first so pages stay in order
+    const pagingKey = `insp-burial-${type}`;
+    TablePaging.register(pagingKey, () => filterBurialRecords(type));
+    const page = TablePaging.pageSlice(filtered, pagingKey, 10);
     const displayed = page.displayed;
-    if (countEl) countEl.textContent = hasFilter ? `${displayed.length} matching records` : `Showing ${displayed.length} of ${records.length} records`;
+    renderNumberedPager(`${type}-pager`, page, pagingKey);
+    if (countEl) countEl.textContent = page.pages > 1 || page.total !== records.length
+        ? `Showing ${displayed.length} of ${records.length} records (page ${page.page} of ${page.pages})`
+        : `Showing ${page.total} of ${records.length} records`;
 
     displayBurialRecords(type, displayed);
-    if (page.hasMore) {
-        const tbody = document.getElementById(`${type}-table-body`);
-        if (tbody) tbody.insertAdjacentHTML('beforeend', TablePaging.moreRow(`insp-burial-${type}`, page.remaining, type === 'cadaver' ? 5 : 6, 10));
-    }
 }
 
 // Display Burial Records (helper function)
@@ -2775,14 +2859,17 @@ function openSanitaryModal(mode, index = null) {
         title.textContent = 'Edit Sanitary Record';
         submitBtn.style.display = 'inline-flex';
         printBtn.style.display = 'none';
-        disableFormInputs(false);
         loadSanitaryData(index);
+        lockSanitaryExceptResults();
     } else if (mode === 'view') {
-        title.textContent = 'View Sanitary Record';
-        submitBtn.style.display = 'none';
+        // Editable, but only the owner's Result and the personnel block may change.
+        // Saving performs a PUT (mode switched to 'edit').
+        title.textContent = 'Edit Sanitary Record';
+        submitBtn.style.display = 'inline-flex';
         printBtn.style.display = 'none';
         loadSanitaryData(index);
-        disableFormInputs(true);
+        lockSanitaryExceptResults();
+        document.getElementById('sanitary-mode').value = 'edit';
     }
     
     modal.showModal();
@@ -2799,6 +2886,8 @@ function loadSanitaryData(id) {
     
     document.getElementById('sanitary-id').value = id;
     document.getElementById('sanitary-date').value = record.date || '';
+    // Keep the record's own date for edits (openSanitaryModal sets this to today)
+    if (record.date) document.getElementById('sanitary-date').setAttribute('data-db-date', record.date);
     document.getElementById('sanitary-personnel-no').value = record.personnelNo || '';
     document.getElementById('sanitary-corporation').value = record.corporationName || '';
     document.getElementById('sanitary-business').value = record.businessName || '';
@@ -2935,6 +3024,10 @@ function loadSanitaryData(id) {
     `;
     container.appendChild(row);
     }
+
+    // Personnel rows were rendered into a hidden section — show them now
+    const pSection = document.getElementById('personnelSection');
+    if (pSection) pSection.style.display = container.children.length > 0 ? 'block' : 'none';
 }
 
 async function handleSanitarySubmit(e) {
@@ -3243,6 +3336,18 @@ function disableFormInputs(disable) {
     }
 }
 
+// Existing records: permit no, business, barangay, building, corporation,
+// owner name and sex are LOCKED. Only the owner's Result (x-ray/stool) and
+// the whole personnel block (count + rows) stay editable.
+function lockSanitaryExceptResults() {
+    disableFormInputs(true);
+    ['result-xray', 'result-stool', 'sanitary-personnel-no'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = false;
+    });
+    document.querySelectorAll('#personnelContainer input').forEach(el => { el.disabled = false; });
+}
+
 // ==================== INSPECTION REPORT MODULE ====================
 
 async function handleInspectionSubmit(e) {
@@ -3546,8 +3651,6 @@ function filterInspectionReports() {
     const tbody = document.getElementById('inspection-table-body');
     if (!tbody) return;
 
-    const hasFilter = !!searchTerm;
-
     // Cluster scope: reports come only from this inspector's assigned barangays.
     // "New" scope: never-inspected establishments in those same barangays.
     let filtered;
@@ -3585,17 +3688,20 @@ function filterInspectionReports() {
         }
     });
 
-    const page = hasFilter ? { displayed: filtered, hasMore: false, remaining: 0 } : TablePaging.slice(filtered, 'insp-reports', 10);
+    // Numbered pages (10 per page) — sort runs first so pages stay in order
+    TablePaging.register('insp-reports', () => filterInspectionReports());
+    const page = TablePaging.pageSlice(filtered, 'insp-reports', 10);
     const displayed = page.displayed;
+    renderNumberedPager('inspection-pager', page, 'insp-reports');
     if (countEl) {
         if (inspScope === 'new') {
             countEl.textContent = `${displayed.length} new establishment${displayed.length === 1 ? '' : 's'} (my cluster)`;
-        } else if (hasFilter) {
-            countEl.textContent = `${displayed.length} matching reports`;
         } else if (_clusterLoaded && _myBarangays.size === 0) {
             countEl.textContent = 'No cluster assigned yet';
         } else {
-            countEl.textContent = `Showing ${displayed.length} of ${scopedTotal} reports`;
+            countEl.textContent = page.pages > 1 || page.total !== scopedTotal
+                ? `Showing ${displayed.length} of ${scopedTotal} reports (page ${page.page} of ${page.pages})`
+                : `Showing ${page.total} of ${scopedTotal} reports`;
         }
     }
 
@@ -3678,7 +3784,7 @@ function filterInspectionReports() {
             </td>
         </tr>
         `;
-    }).join('') + (page.hasMore ? TablePaging.moreRow('insp-reports', page.remaining, 8, 10) : '');
+    }).join('');
 }
 
 // View inspection report by DB id — includes checkbox to mark complied
@@ -4344,6 +4450,18 @@ function openBurialModal(mode, type, id = null) {
         printBtn.style.display = 'none';
         disableBurialInputs(false);
         startBurialRealtimeClock(); // ← Make sure this line exists!
+
+        // Prefill inspector with the logged-in user so accomplishment
+        // attribution (burial.inspector) is always filled
+        const loggedName = localStorage.getItem('inspectorFullName') || localStorage.getItem('username') || '';
+        if (loggedName && _inspectorNamesList.length > 0) {
+            const match = _inspectorNamesList.find(n => n === loggedName || n.toLowerCase() === loggedName.toLowerCase()) || loggedName;
+            selectInspector(match, match, 'Sanitary Inspector');
+        } else if (loggedName) {
+            document.getElementById('burial-inspector').value = loggedName;
+            const label = document.querySelector('#inspector-dropdown-selected .selected-text');
+            if (label) label.textContent = loggedName;
+        }
     } else if (mode === 'edit') {
         title.textContent = `Edit ${type.charAt(0).toUpperCase() + type.slice(1)} Record`;
         submitBtn.style.display = 'inline-flex'; // Show save in edit
@@ -4398,7 +4516,9 @@ function loadBurialData(type, index) {
     document.getElementById('burial-death-date').value = record.deathDate || '';
     document.getElementById('burial-death-place').value = record.deathPlace || '';
     document.getElementById('burial-informant').value = record.informant || '';
-    document.getElementById('burial-inspector').value = record.inspector || '';
+    selectInspector(record.inspector || '', record.inspector || '', 'Sanitary Inspector');
+    const sexSelect = document.getElementById('burial-sex');
+    if (sexSelect) sexSelect.value = record.sex || '';
     
     // 4. Fill type-specific fields
     if (type === 'cadaver') {
@@ -4475,15 +4595,23 @@ async function handleBurialSubmit(e) {
     const burialId = document.getElementById('burial-id').value;
     const datetimeInput = document.getElementById('burial-datetime');
 
+    // Sex is required — it drives the M/F split in the monthly accomplishment
+    const sex = (document.getElementById('burial-sex') || { value: '' }).value;
+    if (!sex) {
+        showNotification('Please select the Sex of the Deceased.', 'error');
+        return;
+    }
+
     // Build the data object with keys matching your PHP $input names
     const record = {
-        type: type, 
+        type: type,
         datetime: datetimeInput.getAttribute('data-db-value') || datetimeInput.value,
         deceased: document.getElementById('burial-deceased').value.trim(),
         deathDate: document.getElementById('burial-death-date').value,
         deathPlace: document.getElementById('burial-death-place').value.trim(),
         informant: document.getElementById('burial-informant').value.trim(),
         inspector: document.getElementById('burial-inspector').value.trim(),
+        sex: sex,
         
         // These fields are essential for Skeletal and Exhumation
         origin: (() => {
@@ -4517,6 +4645,7 @@ async function handleBurialSubmit(e) {
         formData.append('deathPlace', record.deathPlace);
         formData.append('informant', record.informant);
         formData.append('inspector', record.inspector);
+        formData.append('sex', record.sex);
         formData.append('origin', record.origin);
         formData.append('transfer', record.transfer);
         formData.append('funeral', record.funeral);
@@ -6243,20 +6372,15 @@ function filterIHEstablishments() {
     const sortBy = document.getElementById('ih-sort')?.value || 'recent';
     let filtered = q ? _ihEstablishments.filter(e => e.name.toLowerCase().includes(q) || e.barangay.toLowerCase().includes(q)) : _ihEstablishments;
     filtered = sortIHList(filtered, sortBy);
-    const page = q ? { displayed: filtered, hasMore: false, remaining: 0 } : TablePaging.slice(filtered, 'insp-ih', 12);
+    // Numbered pages (10 per page) — sort runs first so pages stay in order
+    TablePaging.register('insp-ih', () => filterIHEstablishments());
+    const page = TablePaging.pageSlice(filtered, 'insp-ih', 10);
     renderIHEstablishments(page.displayed);
-    if (page.hasMore) {
-        const container = document.getElementById('ih-establishment-list');
-        if (container && !container.querySelector('.load-more-ih')) {
-            container.insertAdjacentHTML('beforeend',
-                `<div class="load-more-ih" style="text-align:center;padding:12px;">
-                    <button type="button" class="btn btn-sm btn-outline" onclick="TablePaging.showMore('insp-ih', 12); filterIHEstablishments();">Load more (${page.remaining} more)</button>
-                </div>`);
-        }
-    }
+    renderNumberedPager('insp-ih-pager', page, 'insp-ih');
 }
 
 function sortIHEstablishments() {
+    TablePaging.setPage('insp-ih', 1);
     filterIHEstablishments();
 }
 

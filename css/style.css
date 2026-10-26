@@ -314,9 +314,10 @@ a {
 
 .hero-image {
     width: 100%;
-    max-width: 400px;
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-xl);
+    max-width: 250px;
+    border-radius: 50%;
+    /* drop-shadow follows the circular alpha silhouette (not the square box) */
+    filter: drop-shadow(0 20px 25px rgba(0, 0, 0, 0.15));
 }
 
 /* ============================================
@@ -1105,7 +1106,7 @@ a {
     }
 
     .hero-image {
-        max-width: 280px;
+        max-width: 220px;
     }
 
     .section {

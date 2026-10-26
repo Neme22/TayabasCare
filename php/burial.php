@@ -20,6 +20,23 @@ if (csrfNeeded()) {
     requireCsrf();
 }
 
+// Lazy migration: older DBs lack the sex column used for M/F accomplishment counting
+function ensureBurialSexColumn() {
+    global $db;
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $stmt = $db->query("SHOW COLUMNS FROM burial_records LIKE 'sex'");
+        if (!$stmt->fetch()) {
+            $db->exec("ALTER TABLE burial_records ADD COLUMN sex VARCHAR(10) NOT NULL DEFAULT '' AFTER inspector");
+        }
+    } catch (PDOException $e) {
+        error_log('ensureBurialSexColumn: ' . $e->getMessage());
+    }
+}
+ensureBurialSexColumn();
+
 switch($method) {
     case 'GET': getRecords(); break;
     case 'POST':
@@ -83,6 +100,7 @@ function getRecords() {
                 'deathPlace' => $r['death_place'],
                 'informant' => $r['informant'],
                 'inspector' => $r['inspector'],
+                'sex' => $r['sex'] ?? '',
                 'origin' => $r['origin'],
                 'transfer' => $r['transfer'],
                 'funeral' => $r['funeral'],
@@ -119,12 +137,13 @@ function createRecord() {
         $stmt = $db->prepare("
             INSERT INTO burial_records
             (type, datetime, deceased, death_date, death_place,
-             informant, inspector, origin, transfer,
+             informant, inspector, sex, origin, transfer,
              funeral, cemetery_origin, cemetery_transfer, or_number,
              file_name, file_path)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
 
+        $sexInput = $input['sex'] ?? '';
         $stmt->execute([
             $input['type'] ?? 'cadaver',
             $input['datetime'] ?? date('Y-m-d H:i:s'),
@@ -133,6 +152,7 @@ function createRecord() {
             $input['deathPlace'] ?? '',
             $input['informant'] ?? '',
             $input['inspector'] ?? '',
+            $sexInput,
             $input['origin'] ?? '',
             $input['transfer'] ?? '',
             $input['funeral'] ?? '',
@@ -145,6 +165,11 @@ function createRecord() {
 
         $newId = $db->lastInsertId();
         logActivity($db, 'CREATE', 'burial', $newId, $input['deceased'] ?? '', "Type: {$input['type']}");
+
+        // Note: accomplishment fields are NOT incremented here. They are computed
+        // from burial_records when the inspector opens the accomplishment modal
+        // (see accomplishment_auto.php).
+
         jsonResponse(true, ['id' => $newId], 'Record created');
     } catch(PDOException $e) {
         error_log('burial.php error: ' . $e->getMessage());
@@ -191,7 +216,7 @@ function updateRecord() {
         $stmt = $db->prepare("
             UPDATE burial_records SET
             type=?, datetime=?, deceased=?, death_date=?,
-            death_place=?, informant=?, inspector=?,
+            death_place=?, informant=?, inspector=?, sex=?,
             origin=?, transfer=?, funeral=?,
             cemetery_origin=?, cemetery_transfer=?, or_number=?,
             file_name=?, file_path=?
@@ -201,6 +226,7 @@ function updateRecord() {
         $stmt->execute([
             $input['type'] ?? 'cadaver', $input['datetime'] ?? '', $input['deceased'] ?? '', $input['deathDate'] ?? null,
             $input['deathPlace'] ?? '', $input['informant'] ?? '', $input['inspector'] ?? '',
+            $input['sex'] ?? ($current['sex'] ?? ''),
             $input['origin'] ?? '', $input['transfer'] ?? '', $input['funeral'] ?? '',
             $input['cemeteryOrigin'] ?? '', $input['cemeteryTransfer'] ?? '', $input['orNumber'] ?? '',
             $fileName, $filePath,

@@ -2,19 +2,40 @@
 require_once 'auth_check.php';
 require_once 'activity_log.php';
 require_once 'csrf.php';
+require_once 'accomplishment_auto.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 
-// Inspectors and admins can add records; only admins can edit or delete
+// Inspectors and admins can add AND edit records; only admins can delete
 if ($method === 'POST') {
     requireRole(['admin', 'inspector']);
-} elseif (in_array($method, ['PUT', 'DELETE'])) {
+} elseif ($method === 'PUT') {
+    requireRole(['admin', 'inspector']);
+} elseif ($method === 'DELETE') {
     requireRole('admin');
 }
 
 if (csrfNeeded()) {
     requireCsrf();
 }
+
+// Lazy migration: created_by stamps which inspector created the record,
+// used to compute health-card counts in their monthly accomplishment.
+function ensureSanitaryCreatedByColumn() {
+    global $db;
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $stmt = $db->query("SHOW COLUMNS FROM sanitary_records LIKE 'created_by'");
+        if (!$stmt->fetch()) {
+            $db->exec("ALTER TABLE sanitary_records ADD COLUMN created_by VARCHAR(255) NOT NULL DEFAULT '' AFTER remarks");
+        }
+    } catch (PDOException $e) {
+        error_log('ensureSanitaryCreatedByColumn: ' . $e->getMessage());
+    }
+}
+ensureSanitaryCreatedByColumn();
 
 switch($method) {
     case 'GET':
@@ -59,7 +80,8 @@ function getRecords() {
                 'barangay' => $r['barangay'],
                 'corporationName' => $r['corporation_name'] ?? '',
                 'remarks' => $r['remarks'] ?? '',
-                'businessType' => $r['business_type'] ?? 'Other'
+                'businessType' => $r['business_type'] ?? 'Other',
+                'createdBy' => $r['created_by'] ?? ''
             ];
         }, $records);
         
@@ -86,8 +108,8 @@ function createRecord() {
             INSERT INTO sanitary_records 
             (record_no, date, permit_no, personnel_no, business_name, 
              owner_first_name, owner_middle_name, owner_last_name, 
-             personnel_list, sex, result_xray, result_stool, barangay, building_street, corporation_name, remarks, business_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             personnel_list, sex, result_xray, result_stool, barangay, building_street, corporation_name, remarks, business_type, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         
         $stmt->execute([
@@ -107,11 +129,17 @@ function createRecord() {
             $input['buildingStreet'] ?? 'N/A',
             $input['corporationName'] ?? '',
             $input['remarks'] ?? '',
-            $input['businessType'] ?? 'Other'
+            $input['businessType'] ?? 'Other',
+            accomplishmentSessionFullName($db)  // inspector attribution for accomplishment auto-counts
         ]);
 
         $newId = $db->lastInsertId();
         logActivity($db, 'CREATE', 'sanitary', $newId, $input['businessName'] ?? '', 'New sanitary record');
+
+        // Note: accomplishment fields are NOT incremented here. They are computed
+        // from sanitary_records when the inspector opens the accomplishment modal
+        // (see accomplishment_auto.php).
+
         jsonResponse(true, ['id' => $newId], 'Record created');
     } catch(PDOException $e) {
         error_log('sanitary.php error: ' . $e->getMessage());
@@ -130,34 +158,64 @@ function updateRecord() {
     if ($dateVal && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateVal)) $errors[] = 'Date must be in YYYY-MM-DD format.';
     if (!empty($errors)) { errorResponse(implode(' ', $errors), 400); return; }
 
+    // Existing row: preserves fields the client doesn't send (record_no,
+    // business_type) and heals created_by so old records become attributable
+    $cur = $db->prepare("SELECT * FROM sanitary_records WHERE id = ?");
+    $cur->execute([$input['id'] ?? 0]);
+    $current = $cur->fetch();
+    if (!$current) { errorResponse('Record not found.', 404); return; }
+
+    // Inspectors may only change the owner's Result (x-ray/stool) and the
+    // personnel data — permit, business, barangay, building, corporation,
+    // owner name/sex, date and remarks are locked server-side.
+    if (($_SESSION['role'] ?? '') === 'inspector') {
+        $input['date']            = $current['date'];
+        $input['no']              = $current['record_no'];
+        $input['permitNo']        = $current['permit_no'];
+        $input['businessName']    = $current['business_name'];
+        $input['barangay']        = $current['barangay'];
+        $input['buildingStreet']  = $current['building_street'];
+        $input['corporationName'] = $current['corporation_name'];
+        $input['owner'] = [
+            'first'  => $current['owner_first_name'],
+            'middle' => $current['owner_middle_name'],
+            'last'   => $current['owner_last_name'],
+        ];
+        $input['sex']      = $current['sex'];
+        $input['remarks']  = $current['remarks'];
+        $input['businessType'] = $current['business_type'];
+    }
+
     try {
         $stmt = $db->prepare("
             UPDATE sanitary_records SET
             record_no=?, date=?, permit_no=?, personnel_no=?,
             business_name=?, owner_first_name=?, owner_middle_name=?,
             owner_last_name=?, personnel_list=?, sex=?,
-            result_xray=?, result_stool=?, barangay=?, building_street=?, corporation_name=?, remarks=?, business_type=?
+            result_xray=?, result_stool=?, barangay=?, building_street=?, corporation_name=?, remarks=?, business_type=?,
+            created_by = IF(created_by = '', ?, created_by)
             WHERE id=?
         ");
-        
+
         $stmt->execute([
-            $input['no'] ?? '', 
-            $input['date'] ?? '', 
-            $input['permitNo'] ?? '', 
+            $input['no'] ?? $current['record_no'],
+            $input['date'] ?? '',
+            $input['permitNo'] ?? '',
             $input['personnelNo'] ?? '',
-            $input['businessName'] ?? '', 
-            $input['owner']['first'] ?? '', 
+            $input['businessName'] ?? '',
+            $input['owner']['first'] ?? '',
             $input['owner']['middle'] ?? '',
-            $input['owner']['last'] ?? '', 
-            json_encode($input['personnel_list'] ?? $input['personnel'] ?? []), 
+            $input['owner']['last'] ?? '',
+            json_encode($input['personnel_list'] ?? $input['personnel'] ?? []),
             $input['sex'] ?? '',
-            $input['result']['xray'] ?? 0, 
-            $input['result']['stool'] ?? 0, 
+            $input['result']['xray'] ?? 0,
+            $input['result']['stool'] ?? 0,
             $input['barangay'] ?? '',
             $input['buildingStreet'] ?? 'N/A',
             $input['corporationName'] ?? '',
             $input['remarks'] ?? '',
-            $input['businessType'] ?? 'Other', 
+            $input['businessType'] ?? $current['business_type'],
+            accomplishmentSessionFullName($db),
             $input['id']
         ]);
 

@@ -567,8 +567,8 @@
                     </div>
                 </div>
                 <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
-                    <input type="text" id="admin-sanitary-search" placeholder="Search by Establishment, Permit No, or Owner..." oninput="SanitaryManager.applyFilters()" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;min-width:260px;">
-                    <select id="admin-sanitary-sort" onchange="SanitaryManager.applyFilters()" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;background:#fff;">
+                    <input type="text" id="admin-sanitary-search" placeholder="Search by Establishment, Permit No, or Owner..." oninput="TablePaging.setPage('sanitary',1); SanitaryManager.applyFilters()" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;min-width:260px;">
+                    <select id="admin-sanitary-sort" onchange="TablePaging.setPage('sanitary',1); SanitaryManager.applyFilters()" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;background:#fff;">
                         <option value="newest">Newest Date</option>
                         <option value="oldest">Oldest Date</option>
                         <option value="name-az">Name A-Z</option>
@@ -593,6 +593,7 @@
                                 <tr><td colspan="5" class="empty-state">No sanitary records found</td></tr>
                             </tbody>
                         </table>
+                        <div id="admin-sanitary-pager" class="pager-bar"></div>
                     </div>
                 </div>
             </div>
@@ -606,8 +607,8 @@
                     </div>
                 </div>
                 <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
-                    <input type="text" id="admin-burial-search" placeholder="Search by Deceased Name, Informant, or Category..." oninput="BurialManager.applyFilters()" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;min-width:260px;">
-                    <select id="admin-burial-sort" onchange="BurialManager.applyFilters()" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;background:#fff;">
+                    <input type="text" id="admin-burial-search" placeholder="Search by Deceased Name, Informant, or Category..." oninput="TablePaging.setPage('burial',1); BurialManager.applyFilters()" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;min-width:260px;">
+                    <select id="admin-burial-sort" onchange="TablePaging.setPage('burial',1); BurialManager.applyFilters()" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;background:#fff;">
                         <option value="newest">Newest Date</option>
                         <option value="oldest">Oldest Date</option>
                         <option value="name-az">Deceased Name A-Z</option>
@@ -631,10 +632,11 @@
                                 <tr><td colspan="5" class="empty-state">No burial records found</td></tr>
                             </tbody>
                         </table>
+                        <div id="admin-burial-pager" class="pager-bar"></div>
                     </div>
                 </div>
             </div>
-
+`
 <!-- Inspection History View -->
             <div class="view" id="inspectionHistoryView" style="display: none;">
                 <div class="page-header">
@@ -650,7 +652,7 @@
                         <div style="padding:16px 20px; border-bottom:1px solid #e5e7eb; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
                             <input type="text" id="admin-ih-search" placeholder="Search establishment..."
                                 style="border:1px solid #d1d5db; border-radius:8px; padding:8px 14px; font-size:14px; width:280px; outline:none;"
-                                oninput="adminFilterIHEstablishments()" />
+                                oninput="TablePaging.setPage('admin-ih',1); adminFilterIHEstablishments()" />
                             <select id="admin-ih-sort" onchange="adminSortIHEstablishments()" style="border:1px solid #d1d5db; border-radius:8px; padding:8px 14px; font-size:14px; background:#fff; outline:none;">
                                 <option value="recent">Most Recent</option>
                                 <option value="name-az">Name A-Z</option>
@@ -665,6 +667,7 @@
                                 <p style="margin-top:12px;">Loading establishments...</p>
                             </div>
                         </div>
+                        <div id="admin-ih-pager" class="pager-bar"></div>
                     </div>
                 </div>
 
@@ -729,8 +732,8 @@
                     </div>
                 </div>
                 <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
-                    <input type="text" id="admin-reports-search" placeholder="Search by Establishment, Inspector, or Location..." oninput="ReportsManager.applyFilters()" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;min-width:260px;">
-                    <select id="admin-reports-sort" onchange="ReportsManager.applyFilters()" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;background:#fff;">
+                    <input type="text" id="admin-reports-search" placeholder="Search by Establishment, Inspector, or Location..." oninput="TablePaging.setPage('reports',1); ReportsManager.applyFilters()" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;min-width:260px;">
+                    <select id="admin-reports-sort" onchange="TablePaging.setPage('reports',1); ReportsManager.applyFilters()" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;background:#fff;">
                         <option value="newest">Newest Date</option>
                         <option value="oldest">Oldest Date</option>
                         <option value="name-az">Establishment A-Z</option>
@@ -756,6 +759,7 @@
                                 <tr><td colspan="7" class="empty-state">No inspection reports found</td></tr>
                             </tbody>
                         </table>
+                        <div id="admin-reports-pager" class="pager-bar"></div>
                     </div>
                 </div>
             </div>
@@ -1209,6 +1213,9 @@
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
                     <h2 style="font-size:20px;font-weight:700;color:#111827;">Inspection Schedule</h2>
                     <div style="display:flex;gap:8px;">
+                        <button onclick="AutoScheduler.preview()" style="background:#7c3aed;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+                            <i class="fas fa-robot"></i> Risk-Based Auto-Schedule
+                        </button>
                         <button onclick="CalendarEvents.showAddForm()" style="background:#f59e0b;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
                             <i class="fas fa-calendar-day"></i> Add Event
                         </button>
@@ -1226,12 +1233,33 @@
                             <button onclick="ClusterAssignments.toggle()" style="background:none;border:1px solid #e5e7eb;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;color:#374151;">
                                 <i class="fas fa-chevron-down" id="clusterToggleIcon"></i> Show / Hide
                             </button>
-                            <button onclick="ClusterAssignments.save()" id="clusterSaveBtn" data-testid="cluster-save-btn" style="background:#059669;color:#fff;border:none;padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+                            <button onclick="ClusterAssignments.save()" data-testid="cluster-save-btn" style="background:#059669;color:#fff;border:none;padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
                                 <i class="fas fa-save" style="margin-right:4px;"></i> Save Clusters
                             </button>
                         </div>
                     </div>
+                    <p style="font-size:12px;color:#6b7280;margin:0 0 12px 0;">Divide the 66 barangays into 5 clusters, one per inspector. Zone families (e.g. Angeles Zones I–IV) always stay together in one cluster. Saved assignments control which establishments each inspector can inspect.</p>
                     <div id="clusterCards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;"></div>
+                </div>
+
+                <!-- Auto-Schedule Recommendations Panel -->
+                <div id="autoSchedulePanel" style="display:none;margin-bottom:16px;background:#fff;border-radius:12px;border:1px solid #e5e7eb;padding:20px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                        <h3 style="font-size:15px;font-weight:700;color:#111827;margin:0;">
+                            <i class="fas fa-robot" style="color:#7c3aed;margin-right:6px;"></i> Auto-Schedule Recommendations
+                        </h3>
+                        <button onclick="document.getElementById('autoSchedulePanel').style.display='none'" style="background:none;border:none;font-size:18px;cursor:pointer;color:#6b7280;">&times;</button>
+                    </div>
+                    <p style="font-size:12px;color:#6b7280;margin-bottom:12px;">Establishments overdue for inspection based on their risk level. HIGH = every 30 days, MODERATE = every 90 days, LOW = every 180 days.</p>
+                    <div id="autoScheduleList" style="max-height:300px;overflow-y:auto;"></div>
+                    <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
+                        <label style="font-size:13px;color:#374151;font-weight:600;">Assign to:</label>
+                        <select id="autoSchedInspector" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:13px;flex:1;"></select>
+                        <button onclick="AutoScheduler.execute()" style="background:#059669;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+                            <i class="fas fa-calendar-plus" style="margin-right:4px;"></i> Schedule All
+                        </button>
+                    </div>
+                    <div id="autoSchedStatus" style="margin-top:8px;font-size:12px;"></div>
                 </div>
 
                 <!-- Calendar Navigation -->
@@ -1432,14 +1460,14 @@
 
                 <!-- Filter bar -->
                 <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
-                    <select id="predFilterRisk" onchange="PredictionEngine.filter()" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;background:#fff;">
+                    <select id="predFilterRisk" onchange="TablePaging.setPage('prediction',1); PredictionEngine.filter()" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;background:#fff;">
                         <option value="">All Risk Levels</option>
                         <option value="HIGH">HIGH Only</option>
                         <option value="MODERATE">MODERATE Only</option>
                         <option value="LOW">LOW Only</option>
                     </select>
-                    <input type="text" id="predFilterSearch" oninput="PredictionEngine.filter()" placeholder="Search establishment..." style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;min-width:220px;">
-                    <select id="predSortBy" onchange="PredictionEngine.filter()" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;background:#fff;">
+                    <input type="text" id="predFilterSearch" oninput="TablePaging.setPage('prediction',1); PredictionEngine.filter()" placeholder="Search establishment..." style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;min-width:220px;">
+                    <select id="predSortBy" onchange="TablePaging.setPage('prediction',1); PredictionEngine.filter()" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;background:#fff;">
                         <option value="high-first">Highest Score</option>
                         <option value="low-first">Lowest Score</option>
                         <option value="name-az">Name A-Z</option>
@@ -1470,6 +1498,7 @@
                             </td></tr>
                         </tbody>
                     </table>
+                    <div id="pred-pager" class="pager-bar"></div>
                 </div>
 
                 <!-- Detail Panel -->
