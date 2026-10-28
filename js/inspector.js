@@ -2134,6 +2134,30 @@ async function getAccomplishmentDataForPeriod(months, year) {
         totals[r * 6 + 5] = sum;
     }
 
+    // M/F rows (9.1, 9.2, 10.1–10.3): 11 inputs each (10 M/F cells + total)
+    const mfBase = 14 * 6;
+    for (let r = 0; r < 5; r++) {
+        const base = mfBase + r * 11;
+        let sum = 0;
+        for (let i = 0; i < 10; i++) sum += totals[base + i];
+        totals[base + 10] = sum;
+    }
+
+    // Bottom "Total" row: per-inspector column sums (simple rows + M/F rows) + grand total
+    const bottomBase = mfBase + 5 * 11;
+    for (let c = 0; c < 5; c++) {
+        let sum = 0;
+        for (let r = 0; r < 14; r++) sum += totals[r * 6 + c];
+        for (let r = 0; r < 5; r++) {
+            const base = mfBase + r * 11;
+            sum += totals[base + c * 2] + totals[base + c * 2 + 1];
+        }
+        totals[bottomBase + c] = sum;
+    }
+    let grand = 0;
+    for (let c = 0; c < 5; c++) grand += totals[bottomBase + c];
+    totals[bottomBase + 5] = grand;
+
     return totals;
 }
 

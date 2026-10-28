@@ -674,12 +674,28 @@ dialog.modal[open] {
 
 .activity-item {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 12px;
-    padding: 12px;
+    padding: 12px 14px;
     background-color: #F9FAFB;
-    border-radius: 8px;
+    border-radius: 10px;
     border-left: 3px solid var(--brand-mid);
+    transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+.activity-item:hover {
+    background-color: #F3F4F6;
+}
+
+.activity-avatar {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
 }
 
 .activity-icon {
@@ -696,17 +712,47 @@ dialog.modal[open] {
 
 .activity-content {
     flex: 1;
+    min-width: 0;
 }
 
 .activity-text {
     font-size: 14px;
     color: #374151;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
+    line-height: 1.4;
+}
+
+.activity-text strong {
+    font-weight: 600;
+    color: #111827;
+}
+
+.activity-sub {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #9CA3AF;
+    line-height: 1.4;
+}
+
+.activity-label {
+    color: #6B7280;
+    font-weight: 500;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.activity-dot {
+    color: #D1D5DB;
 }
 
 .activity-time {
     font-size: 12px;
     color: #9CA3AF;
+    white-space: nowrap;
 }
 
 /* Toast Notification */
@@ -1891,7 +1937,7 @@ dialog.modal::backdrop {
     text-align: center;
     border: none;
     padding: 4px 2px;
-    font-size: 11px;
+    font-size: 14px;
     background: transparent;
     outline: none;
     -moz-appearance: textfield;
@@ -1899,6 +1945,15 @@ dialog.modal::backdrop {
 .admin-report-input::-webkit-outer-spin-button,
 .admin-report-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .admin-report-input:focus { background: #ecfdf5; }
+
+/* ===== ACCOMPLISHMENT REPORT — SCREEN SIZES (print restored at EOF) ===== */
+#admin-accomplishment-report { font-size: 14px; }
+#admin-accomplishment-report .report-title { font-size: 16px; }
+@media (min-width: 1280px) {
+    #admin-accomplishment-report { font-size: 16px; }
+    #admin-accomplishment-report .report-title { font-size: 18px; }
+    .admin-report-input { font-size: 16px; }
+}
 
 /* ===== NOTIFICATION BELL (matches inspector) ===== */
 .notif-bell-btn {
@@ -2262,8 +2317,24 @@ dialog.modal::backdrop {
     border-left-color: #3b82f6;
 }
 
+[data-theme="dark"] .activity-item:hover {
+    background-color: #263449;
+}
+
 [data-theme="dark"] .activity-text {
     color: #e2e8f0;
+}
+
+[data-theme="dark"] .activity-text strong {
+    color: #f8fafc;
+}
+
+[data-theme="dark"] .activity-label {
+    color: #94a3b8;
+}
+
+[data-theme="dark"] .activity-dot {
+    color: #475569;
 }
 
 [data-theme="dark"] .activity-time {
@@ -2646,4 +2717,11 @@ dialog.modal::backdrop {
 
 [data-theme="dark"] .pager-bar {
     border-top-color: #334155;
+}
+
+/* ===== ACCOMPLISHMENT REPORT — PRINT SIZES (restore pre-enlargement output) ===== */
+@media print {
+    #admin-accomplishment-report { font-size: 10px; }
+    #admin-accomplishment-report .report-title { font-size: 12px; }
+    .admin-report-input { font-size: 11px; }
 }

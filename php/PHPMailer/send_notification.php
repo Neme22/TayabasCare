@@ -20,12 +20,13 @@ function sendInspectionEmail($toEmail, $toName, $schedDate, $notes = '') {
         $mail->Port       = MAIL_PORT;
 
         $mail->setFrom(MAIL_FROM, MAIL_FROMNAME);
+        $mail->CharSet = 'UTF-8';
         $mail->addAddress($toEmail, $toName);
         $mail->isHTML(true);
 
         $formattedDate = date('F j, Y', strtotime($schedDate));
 
-        $mail->Subject = 'TayabasCare – Inspection Reminder for ' . $formattedDate;
+        $mail->Subject = 'TayabasCare - Inspection Reminder for ' . $formattedDate;
 
         $content = '<p style="margin:0 0 16px 0;">Dear <strong>' . htmlspecialchars($toName) . '</strong>,</p>'
             . '<p style="margin:0 0 20px 0;">This is a reminder that you have an inspection scheduled:</p>'
@@ -39,7 +40,7 @@ function sendInspectionEmail($toEmail, $toName, $schedDate, $notes = '') {
             . '<p style="margin:20px 0 0 0;">Please prepare accordingly.</p>';
 
         $mail->Body = renderEmailTemplate('Inspection Reminder', $content, '#1e40af');
-        $mail->AltBody = "Dear $toName,\n\nThis is a reminder that you have an inspection scheduled:\n\n   Date: $formattedDate\n" . ($notes ? "   Note: $notes\n" : '') . "\nPlease prepare accordingly.\n\n– TayabasCare System";
+        $mail->AltBody = "Dear $toName,\n\nThis is a reminder that you have an inspection scheduled:\n\n   Date: $formattedDate\n" . ($notes ? "   Note: $notes\n" : '') . "\nPlease prepare accordingly.\n\n- TayabasCare System";
 
         $mail->send();
         return true;
@@ -72,8 +73,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $formattedDate = date('F j, Y', strtotime($schedDate));
     $subject = $emailType === 'reschedule'
-        ? 'TayabasCare – Your Inspection Schedule Has Been Changed'
-        : 'TayabasCare – New Inspection Schedule Assigned';
+        ? 'TayabasCare - Your Inspection Schedule Has Been Changed'
+        : 'TayabasCare - New Inspection Schedule Assigned';
 
     if ($emailType === 'reschedule') {
         $accentColor = '#f59e0b';
@@ -99,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $altBody = "Dear $inspectorName,\n\n" . strip_tags($intro) . "\n\n"
         . ($emailType === 'reschedule' ? "New Date" : "Date") . ": $formattedDate\n"
         . ($notes ? "Note: $notes\n" : '')
-        . "\n– TayabasCare System";
+        . "\n- TayabasCare System";
 
     $mail = new PHPMailer(true);
     try {
@@ -111,6 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $mail->SMTPSecure = 'tls';
         $mail->Port       = MAIL_PORT;
         $mail->setFrom(MAIL_FROM, MAIL_FROMNAME);
+        $mail->CharSet = 'UTF-8';
         $mail->addAddress($inspector['email'], $inspectorName);
         $mail->Subject = $subject;
         $mail->isHTML(true);

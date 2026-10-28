@@ -134,6 +134,7 @@ try {
                 $mail->Port       = MAIL_PORT;
 
                 $mail->setFrom(MAIL_FROM, MAIL_FROMNAME);
+                $mail->CharSet = 'UTF-8';
                 $mail->addAddress($s['email'], $s['inspector_name']);
 
                 $formattedDate = date('F j, Y', strtotime($s['schedDate']));
@@ -153,9 +154,9 @@ try {
                 $altBody = "Dear {$s['inspector_name']},\n\nThis is a reminder that you have an inspection scheduled TOMORROW:\n\n   Date: $formattedDate"
                     . ($s['establishment'] ? "\n   Establishment: {$s['establishment']}" : '')
                     . ($s['notes'] ? "\n   Note: {$s['notes']}" : '')
-                    . "\n\nPlease prepare accordingly.\n\n– TayabasCare System";
+                    . "\n\nPlease prepare accordingly.\n\n- TayabasCare System";
 
-                $mail->Subject = 'TayabasCare – Inspection Reminder for ' . $formattedDate;
+                $mail->Subject = 'TayabasCare - Inspection Reminder for ' . $formattedDate;
                 $mail->isHTML(true);
                 $mail->Body = renderEmailTemplate('Inspection Reminder', $content, '#3b82f6');
                 $mail->AltBody = $altBody;
@@ -266,8 +267,9 @@ try {
             $mail->SMTPSecure = 'tls';
             $mail->Port = MAIL_PORT;
             $mail->setFrom(MAIL_FROM, MAIL_FROMNAME);
+            $mail->CharSet = 'UTF-8';
             $mail->addAddress($admin['email']);
-            $mail->Subject = 'TayabasCare – Daily Compliance Alert (' . date('M j, Y') . ')';
+            $mail->Subject = 'TayabasCare - Daily Compliance Alert (' . date('M j, Y') . ')';
 
             $content = '<p style="margin:0 0 16px 0;">Dear <strong>City Health Officer</strong>,</p>'
                 . '<p style="margin:0 0 20px 0;">This is your daily compliance alert from TayabasCare.</p>';
@@ -314,7 +316,7 @@ try {
                 foreach ($violationThresholdItems as $item) $altBody .= "  - {$item}\n";
                 $altBody .= "\nThese establishments have 3+ violations and need corrective action.\n\n";
             }
-            $altBody .= "Please review these in the TayabasCare dashboard.\n\n– TayabasCare System";
+            $altBody .= "Please review these in the TayabasCare dashboard.\n\n- TayabasCare System";
 
             $mail->isHTML(true);
             $mail->Body = renderEmailTemplate('Daily Compliance Alert', $content, '#dc2626');
@@ -375,8 +377,9 @@ try {
                 $mail->SMTPSecure = 'tls';
                 $mail->Port = MAIL_PORT;
                 $mail->setFrom(MAIL_FROM, MAIL_FROMNAME);
+                $mail->CharSet = 'UTF-8';
                 $mail->addAddress($item['email'], $item['inspector_name']);
-                $mail->Subject = 'TayabasCare – Overdue Compliance Follow-up';
+                $mail->Subject = 'TayabasCare - Overdue Compliance Follow-up';
 
                 $content = '<p style="margin:0 0 16px 0;">Dear <strong>' . htmlspecialchars($item['inspector_name']) . '</strong>,</p>'
                     . '<p style="margin:0 0 20px 0;">The compliance deadline for the following establishment has passed:</p>'
@@ -397,7 +400,7 @@ try {
                     . "   Establishment: {$item['establishment']}\n"
                     . "   Deadline: " . date('F j, Y', strtotime($item['compliance_deadline'])) . "\n"
                     . "   Days Overdue: {$daysOverdue}\n\n"
-                    . "Please follow up with the establishment and update the compliance status in TayabasCare.\n\n– TayabasCare System";
+                    . "Please follow up with the establishment and update the compliance status in TayabasCare.\n\n- TayabasCare System";
 
                 $mail->isHTML(true);
                 $mail->Body = renderEmailTemplate('Overdue Compliance Follow-up', $content, '#dc2626');

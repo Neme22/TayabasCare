@@ -1686,7 +1686,7 @@ select:valid {
     border: none;
     background: transparent;
     padding: 2px;
-    font-size: 10px;
+    font-size: 14px;
 }
 
 .report-input::-webkit-outer-spin-button,
@@ -1698,6 +1698,15 @@ select:valid {
 .report-input:focus {
     outline: 1px solid var(--insp-primary-light);
     background: var(--insp-primary-50);
+}
+
+/* ==================== ACCOMPLISHMENT REPORT — SCREEN SIZES ==================== */
+#accomplishment-report { font-size: 14px; }
+#accomplishment-report .report-title { font-size: 16px; }
+@media (min-width: 1280px) {
+    #accomplishment-report { font-size: 16px; }
+    #accomplishment-report .report-title { font-size: 18px; }
+    .report-input { font-size: 16px; }
 }
 
 /* ==================== BURIAL TABS ==================== */
@@ -1851,11 +1860,14 @@ select:valid {
     #accomplishment-report {
         box-shadow: none !important;
         padding: 0 !important;
+        font-size: 10px;
     }
+    #accomplishment-report .report-title { font-size: 12px; }
     .report-input {
         border: none !important;
         background: transparent !important;
         outline: none !important;
+        font-size: 10px;
     }
     .modal-footer-professional {
         display: none !important;

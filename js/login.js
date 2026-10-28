@@ -1,34 +1,60 @@
+// CSRF token management — top-level so every fetch (login, forgot-password)
+// shares the same token. Mirrors admin.js: bind real fetch first so bootstrap
+// never re-enters the patched wrapper.
+const API_ORIGIN = 'php';
+let _csrfToken = null;
+const _origFetch = window.fetch.bind(window);
+let _csrfFetchPromise = null;
+async function _fetchCsrfToken(force = false) {
+    if (_csrfToken && !force) return _csrfToken;
+    if (_csrfFetchPromise && !force) return _csrfFetchPromise;
+
+    const load = async () => {
+        try {
+            const r = await _origFetch('php/csrf_token.php', { credentials: 'include' });
+            const j = await r.json();
+            _csrfToken = j?.data?.token || j?.csrf_token || null;
+            return _csrfToken;
+        } catch (e) {
+            return null;
+        }
+    };
+
+    // Force refresh (mutating requests): bypass shared in-flight state so a
+    // stale bootstrap fetch cannot overwrite the token we just pulled for
+    // the current session cookie.
+    if (force) {
+        return load();
+    }
+
+    _csrfFetchPromise = load().finally(() => { _csrfFetchPromise = null; });
+    return _csrfFetchPromise;
+}
+_fetchCsrfToken();
+
+// Monkey-patch fetch to auto-attach CSRF header.
+// On the public landing page, page-load GETs (stats) can each mint a new
+// PHPSESSID and clobber the cookie jar — so a token cached at load may not
+// match the cookie sent with the next POST. Always re-fetch a fresh token
+// for mutating requests so token + session cookie stay in sync.
+window.fetch = async function(url, opts = {}) {
+    const method = (opts.method || 'GET').toUpperCase();
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+        _csrfToken = null;
+        const token = await _fetchCsrfToken(true);
+        if (token) {
+            opts.headers = { ...opts.headers, 'X-CSRF-Token': token };
+        }
+    } else if (_csrfToken) {
+        opts.headers = { ...opts.headers, 'X-CSRF-Token': _csrfToken };
+    }
+    return _origFetch(url, opts);
+};
+
 document.addEventListener("DOMContentLoaded", () => {
     // ============================================
     // Load real statistics for landing page
     // ============================================
-    const API_ORIGIN = 'php';
-
-    // CSRF token management
-    let _csrfToken = null;
-    async function _fetchCsrfToken() {
-        if (_csrfToken) return _csrfToken;
-        try {
-            const r = await fetch('php/csrf_token.php', { credentials: 'include' });
-            const j = await r.json();
-            _csrfToken = j?.data?.token || j?.csrf_token || null;
-            return _csrfToken;
-        } catch (e) { return null; }
-    }
-    _fetchCsrfToken();
-
-    // Monkey-patch fetch to auto-attach CSRF header on mutating requests
-    const _origFetch = window.fetch.bind(window);
-    window.fetch = async function(url, opts = {}) {
-        const method = (opts.method || 'GET').toUpperCase();
-        if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
-            const token = _csrfToken || await _fetchCsrfToken();
-            if (token) {
-                opts.headers = { ...opts.headers, 'X-CSRF-Token': token };
-            }
-        }
-        return _origFetch(url, opts);
-    };
     fetch(`${API_ORIGIN}/sanitary.php`)
         .then(r => r.json())
         .then(result => {
@@ -443,12 +469,12 @@ async function handleFPStep2() {
 function showForgotStep3() {
     injectModal(`
         <h2>Set New Password</h2>
-        <p>OTP verified! Enter your new password (minimum 6 characters).</p>
+        <p>OTP verified! Enter your new password (minimum 8 characters).</p>
 
         <div class="fp-form">
             <label>New Password</label>
             <div class="fp-password-wrapper">
-                <input type="password" id="fp_newpass" placeholder="New password (min. 6 chars)">
+                <input type="password" id="fp_newpass" placeholder="New password (min. 8 chars)">
                 <span class="fp-toggle-eye" onclick="toggleFPPass('fp_newpass')">👁</span>
             </div>
 
@@ -480,8 +506,8 @@ async function handleFPStep3() {
         errEl.textContent = 'Both fields are required.';
         return;
     }
-    if (newPass.length < 6) {
-        errEl.textContent = 'Password must be at least 6 characters.';
+    if (newPass.length < 8) {
+        errEl.textContent = 'Password must be at least 8 characters long.';
         return;
     }
     if (newPass !== confirmPass) {

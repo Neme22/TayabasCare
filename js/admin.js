@@ -1149,63 +1149,76 @@ const Dashboard = {
 
     renderActivity: async () => {
         const activityList = document.getElementById('activityList');
-        const activities = [];
+        if (!activityList) return;
 
-        let liveSanitaryRecords = [];
+        const verbs = {
+            CREATE: 'added',
+            UPDATE: 'updated',
+            DELETE: 'deleted',
+            RESTORE: 'restored',
+            IMPORT: 'imported',
+            EXPORT: 'exported',
+            LOGIN: 'signed in',
+            LOGOUT: 'signed out'
+        };
+        const modules = {
+            auth:      { noun: '',                    icon: 'fa-user-shield',  bg: '#eef2f7', fg: '#475569' },
+            inspector: { noun: 'an inspector account', icon: 'fa-user-tie',     bg: '#ede9fe', fg: '#7c3aed' },
+            sanitary:  { noun: 'a sanitary record',    icon: 'fa-clipboard-check', bg: '#d1fae5', fg: '#059669' },
+            burial:    { noun: 'a burial record',      icon: 'fa-cross',        bg: '#ffe4e6', fg: '#e11d48' },
+            reports:   { noun: 'an inspection report', icon: 'fa-file-alt',     bg: '#dbeafe', fg: '#2563eb' },
+            schedule:  { noun: 'a schedule entry',     icon: 'fa-calendar-check', bg: '#fef3c7', fg: '#d97706' }
+        };
+
+        let logs = [];
         try {
-            const res  = await fetch(`${API_BASE_URL}/sanitary.php`);
-            const json = await res.json();
-            liveSanitaryRecords = json.success ? (json.data || []) : [];
+            const resp = await fetch(`${API_BASE_URL}/activity_log.php?action=list`);
+            const json = await resp.json();
+            logs = json.success && Array.isArray(json.data) ? json.data : [];
         } catch (err) {
-            console.error('Error loading sanitary records for activity feed:', err);
+            console.error('Error loading recent activity:', err);
         }
 
-        liveSanitaryRecords.slice(-2).reverse().forEach(record => {
-            activities.push({
-                icon: 'fa-clipboard-check',
-                text: `Sanitary record added: ${Utils.esc(record.businessName)} - ${Utils.esc(record.barangay)}`,
-                time: Utils.formatDate(record.date)
-            });
-        });
+        const recent = logs
+            .slice()
+            .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+            .slice(0, 5);
 
-        const allBurialRecords = [
-            ...cachedBurialRecords.cadaver.map(r    => ({...r, type: 'Cadaver'})),
-            ...cachedBurialRecords.skeletal.map(r   => ({...r, type: 'Skeletal Transfer'})),
-            ...cachedBurialRecords.exhumation.map(r => ({...r, type: 'Exhumation'}))
-        ].sort((a, b) => new Date(b.datetime || b.date) - new Date(a.datetime || a.date));
-
-        allBurialRecords.slice(0, 2).forEach(record => {
-            activities.push({
-                icon: 'fa-cross',
-                text: `${Utils.esc(record.type)} record added: ${Utils.esc(record.deceased)}`,
-                time: Utils.formatDate(record.datetime || record.date)
-            });
-        });
-
-        DataStore.inspectionReports.slice(-2).reverse().forEach(report => {
-            activities.push({
-                icon: 'fa-file-alt',
-                text: `Inspection report: ${report.recommendation ? report.recommendation.substring(0, 50) + '...' : 'N/A'}`,
-                time: Utils.formatDate(report.date)
-            });
-        });
-
-        if (activities.length === 0) {
+        if (recent.length === 0) {
             activityList.innerHTML = '<p class="empty-state">No recent activity from inspectors</p>';
             return;
         }
 
-        activityList.innerHTML = activities.slice(0, 5).map(activity => `
-            <div class="activity-item">
-                <div class="activity-icon">
-                    <i class="fas ${activity.icon}"></i>
+        activityList.innerHTML = recent.map(log => {
+            const username = Utils.esc(log.username) || 'system';
+            const initials = username.replace(/[^A-Za-z0-9]/g, '').substring(0, 2).toUpperCase() || 'SY';
+            const mod = modules[log.module] || { noun: 'a record', icon: 'fa-history', bg: '#f3f4f6', fg: '#6b7280' };
+            const verb = verbs[log.action] || (log.action || '').toLowerCase();
+            const phrase = mod.noun ? `${verb} ${mod.noun}` : verb;
+
+            const label = (log.recordLabel && log.recordLabel !== log.username)
+                ? `<span class="activity-label">${Utils.esc(log.recordLabel)}</span>`
+                : '';
+            const ts = log.createdAt
+                ? new Date(log.createdAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                : '';
+
+            return `
+            <div class="activity-item" title="${Utils.esc(log.action)} ${Utils.esc(log.module)}">
+                <div class="activity-avatar" style="background:${mod.bg};color:${mod.fg};">
+                    <i class="fas ${mod.icon}" style="font-size:13px;"></i>
                 </div>
                 <div class="activity-content">
-                    <p class="activity-text">${activity.text}</p>
-                    <p class="activity-time">${activity.time}</p>
+                    <p class="activity-text"><strong>${username}</strong> ${phrase}</p>
+                    <div class="activity-sub">
+                        ${label}
+                        ${label ? '<span class="activity-dot">&middot;</span>' : ''}
+                        <span class="activity-time">${ts}</span>
+                    </div>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
     },
 
     initTabs: () => {
@@ -2802,6 +2815,31 @@ async function adminGetAccomplishmentDataForPeriod(months, year) {
         for (let c = 0; c < 5; c++) sum += totals[r * 6 + c];
         totals[r * 6 + 5] = sum;
     }
+
+    // M/F rows (9.1, 9.2, 10.1–10.3): 11 inputs each (10 M/F cells + total)
+    const mfBase = 14 * 6;
+    for (let r = 0; r < 5; r++) {
+        const base = mfBase + r * 11;
+        let sum = 0;
+        for (let i = 0; i < 10; i++) sum += totals[base + i];
+        totals[base + 10] = sum;
+    }
+
+    // Bottom "Total" row: per-inspector column sums (simple rows + M/F rows) + grand total
+    const bottomBase = mfBase + 5 * 11;
+    for (let c = 0; c < 5; c++) {
+        let sum = 0;
+        for (let r = 0; r < 14; r++) sum += totals[r * 6 + c];
+        for (let r = 0; r < 5; r++) {
+            const base = mfBase + r * 11;
+            sum += totals[base + c * 2] + totals[base + c * 2 + 1];
+        }
+        totals[bottomBase + c] = sum;
+    }
+    let grand = 0;
+    for (let c = 0; c < 5; c++) grand += totals[bottomBase + c];
+    totals[bottomBase + 5] = grand;
+
     return totals;
 }
 
@@ -5587,7 +5625,6 @@ function exportReportsExcel() {
 const ActivityLog = {
     data: [],
     filtered: [],
-    _showAll: false,
 
     load: async () => {
         try {
@@ -5627,7 +5664,7 @@ const ActivityLog = {
     },
 
     applyFilters: async () => {
-        ActivityLog._showAll = false;
+        TablePaging.reset('activitylog');
         const params = new URLSearchParams();
         const module = document.getElementById('alFilterModule')?.value;
         const action = document.getElementById('alFilterAction')?.value;
@@ -5659,12 +5696,7 @@ const ActivityLog = {
         document.getElementById('alFilterUser').value = '';
         document.getElementById('alFilterFrom').value = '';
         document.getElementById('alFilterTo').value = '';
-        ActivityLog._showAll = false;
         ActivityLog.applyFilters();
-    },
-    showAll: () => {
-        ActivityLog._showAll = true;
-        ActivityLog.render();
     },
 
     render: () => {
@@ -5672,20 +5704,20 @@ const ActivityLog = {
         if (!tbody) return;
         const logs = ActivityLog.data;
         const countEl = document.getElementById('al-count');
-        const showAllBtn = document.getElementById('al-show-all-btn');
 
         if (!logs || logs.length === 0) {
             tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#9ca3af;">No activity recorded yet</td></tr>';
             if (countEl) countEl.textContent = '';
-            if (showAllBtn) showAllBtn.style.display = 'none';
+            renderNumberedPager('activity-log-pager', null, 'activitylog');
             return;
         }
 
-        const total = logs.length;
-        const showing = ActivityLog._showAll ? total : Math.min(20, total);
-        const displayed = logs.slice(0, showing);
-        if (countEl) countEl.textContent = `Showing ${showing} of ${total} entries`;
-        if (showAllBtn) showAllBtn.style.display = showing < total ? '' : 'none';
+        // Numbered pages (10 per page) — data is already newest-first from the server
+        TablePaging.register('activitylog', () => ActivityLog.render());
+        const page = TablePaging.pageSlice(logs, 'activitylog', 10);
+        const displayed = page.displayed;
+        renderNumberedPager('activity-log-pager', page, 'activitylog');
+        if (countEl) countEl.textContent = `Showing ${displayed.length} of ${page.total} entries (page ${page.page} of ${page.pages})`;
 
         const actionColors = {
             'CREATE':  { bg: '#dcfce7', color: '#16a34a' },
@@ -5702,15 +5734,15 @@ const ActivityLog = {
             const ac = actionColors[log.action] || { bg: '#f3f4f6', color: '#6b7280' };
             const ts = log.createdAt ? new Date(log.createdAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
             return `<tr style="border-bottom:1px solid #f3f4f6;">
-                <td style="padding:10px 14px;color:#374151;white-space:nowrap;">${ts}</td>
-                <td style="padding:10px 14px;font-weight:600;color:#111827;">${Utils.esc(log.username) || ''}</td>
-                <td style="padding:10px 14px;text-align:center;">
-                    <span style="background:${ac.bg};color:${ac.color};padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;">${log.action}</span>
+                <td style="padding:16px 18px;color:#374151;white-space:nowrap;">${ts}</td>
+                <td style="padding:16px 18px;font-weight:600;color:#111827;">${Utils.esc(log.username) || ''}</td>
+                <td style="padding:16px 18px;text-align:center;">
+                    <span style="background:${ac.bg};color:${ac.color};padding:5px 12px;border-radius:6px;font-size:13px;font-weight:700;">${log.action}</span>
                 </td>
-                <td style="padding:10px 14px;color:#6b7280;">${Utils.esc(log.module) || ''}</td>
-                <td style="padding:10px 14px;color:#374151;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${Utils.esc(log.recordLabel) || ''}">${Utils.esc(log.recordLabel) || '-'}</td>
-                <td style="padding:10px 14px;color:#6b7280;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${Utils.esc(log.details) || ''}">${Utils.esc(log.details) || '-'}</td>
-                <td style="padding:10px 14px;color:#9ca3af;font-size:11px;">${Utils.esc(log.ipAddress) || ''}</td>
+                <td style="padding:16px 18px;color:#6b7280;">${Utils.esc(log.module) || ''}</td>
+                <td style="padding:16px 18px;color:#374151;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${Utils.esc(log.recordLabel) || ''}">${Utils.esc(log.recordLabel) || '-'}</td>
+                <td style="padding:16px 18px;color:#6b7280;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${Utils.esc(log.details) || ''}">${Utils.esc(log.details) || '-'}</td>
+                <td style="padding:16px 18px;color:#9ca3af;font-size:12px;">${Utils.esc(log.ipAddress) || ''}</td>
             </tr>`;
         }).join('');
     },

@@ -918,7 +918,7 @@
 
                     <!-- Report Title -->
                     <div class="text-center mb-3">
-                        <p class="font-bold uppercase" style="font-size:12px;">
+                        <p class="font-bold uppercase report-title">
                             <span id="admin-report-type-label">ACCOMPLISHMENT REPORT FOR THE MONTH OF</span>
                             <span id="admin-report-period-display" class="underline font-bold ml-1">_________________________________</span>
                         </p>
@@ -926,7 +926,7 @@
 
                     <!-- Main Table -->
                     <div class="overflow-x-auto">
-                        <table class="w-full border-collapse" style="font-size:10px;" id="admin-report-main-table">
+                        <table class="w-full border-collapse" id="admin-report-main-table">
                             <thead>
                                 <tr>
                                     <th class="border border-gray-800 p-1 bg-emerald-100 text-left" style="width:34%;">ACTIVITIES</th>
@@ -1188,7 +1188,7 @@
                     </div>
 
                     <!-- Footer: Submitted By (dynamically populated from inspector_accounts) -->
-                    <div class="mt-6" style="font-size:10px;">
+                    <div class="mt-6">
                         <p class="font-semibold mb-4">Submitted By:</p>
                         <table class="w-full" id="accomplishmentInspectorsTable">
                             <tr id="accomplishmentInspectorsRow">
@@ -1196,7 +1196,7 @@
                             </tr>
                         </table>
                     </div>
-                    <div class="mt-4 flex justify-between" style="font-size:10px;">
+                    <div class="mt-4 flex justify-between">
                         <div>
                             <p class="font-semibold">Submitted to:</p><br>
                             <div style="border-bottom: 1px solid black; margin-bottom:4px; padding-bottom: 20px;"></div>
@@ -1565,22 +1565,21 @@
                 </div>
 
                 <!-- Log Table -->
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                    <span id="al-count" style="font-size:12px;color:#9ca3af;"></span>
-                    <button id="al-show-all-btn" onclick="ActivityLog.showAll()" style="display:none;padding:6px 14px;background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;cursor:pointer;">Show All</button>
+                <div style="margin-bottom:10px;">
+                    <span id="al-count" style="font-size:13px;color:#9ca3af;"></span>
                 </div>
                 <div style="background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);overflow:hidden;">
                     <div style="overflow-x:auto;">
-                        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                        <table style="width:100%;border-collapse:collapse;font-size:15px;">
                             <thead>
                                 <tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">
-                                    <th style="text-align:left;padding:10px 14px;color:#6b7280;font-weight:700;">Timestamp</th>
-                                    <th style="text-align:left;padding:10px 14px;color:#6b7280;font-weight:700;">User</th>
-                                    <th style="text-align:center;padding:10px 14px;color:#6b7280;font-weight:700;">Action</th>
-                                    <th style="text-align:left;padding:10px 14px;color:#6b7280;font-weight:700;">Module</th>
-                                    <th style="text-align:left;padding:10px 14px;color:#6b7280;font-weight:700;">Record</th>
-                                    <th style="text-align:left;padding:10px 14px;color:#6b7280;font-weight:700;">Details</th>
-                                    <th style="text-align:left;padding:10px 14px;color:#6b7280;font-weight:700;">IP</th>
+                                    <th style="text-align:left;padding:14px 18px;color:#6b7280;font-weight:700;">Timestamp</th>
+                                    <th style="text-align:left;padding:14px 18px;color:#6b7280;font-weight:700;">User</th>
+                                    <th style="text-align:center;padding:14px 18px;color:#6b7280;font-weight:700;">Action</th>
+                                    <th style="text-align:left;padding:14px 18px;color:#6b7280;font-weight:700;">Module</th>
+                                    <th style="text-align:left;padding:14px 18px;color:#6b7280;font-weight:700;">Record</th>
+                                    <th style="text-align:left;padding:14px 18px;color:#6b7280;font-weight:700;">Details</th>
+                                    <th style="text-align:left;padding:14px 18px;color:#6b7280;font-weight:700;">IP</th>
                                 </tr>
                             </thead>
                             <tbody id="activityLogBody">
@@ -1589,6 +1588,7 @@
                         </table>
                     </div>
                 </div>
+                <div id="activity-log-pager" style="margin-top:14px;"></div>
             </div>
 
         </div>
@@ -1914,7 +1914,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-    <script src="js/admin.js"></script>
+    <script src="js/admin.js?v=2"></script>
 
     <script>
 document.addEventListener('click', function(e) {

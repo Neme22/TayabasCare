@@ -20,8 +20,8 @@ if (empty($currentPassword) || empty($newPassword)) {
     errorResponse('Current password and new password are required', 400);
 }
 
-if (strlen($newPassword) < 8) {
-    errorResponse('Password must be at least 8 characters long', 400);
+if (strlen($newPassword) < 6) {
+    errorResponse('Password must be at least 6 characters long', 400);
 }
 
 if (strlen($newPassword) > 72) {

@@ -75,20 +75,27 @@ function sendOTP($input) {
             errorResponse('If the username and email match, an OTP has been sent.', 200);
         }
 
-        // If the user's email in the users table is empty (e.g. inspector), check inspector_accounts
-        $userEmail = $user['email'];
-        if (empty($userEmail)) {
-            $stmtIA = $db->prepare("SELECT email FROM inspector_accounts WHERE username = ?");
-            $stmtIA->execute([$username]);
-            $iaRow = $stmtIA->fetch();
-            if ($iaRow) {
-                $userEmail = $iaRow['email'];
-            }
+        // Resolve registered email: prefer inspector_accounts (admin-registered),
+        // also accept users.email. OTP goes to the address that matches the form.
+        $stmtIA = $db->prepare("SELECT email FROM inspector_accounts WHERE username = ?");
+        $stmtIA->execute([$username]);
+        $iaRow = $stmtIA->fetch();
+
+        $iaEmail   = $iaRow['email'] ?? '';
+        $usersEmail = $user['email'] ?? '';
+        $submitted  = strtolower($email);
+
+        $matched = '';
+        if ($iaEmail && strtolower($iaEmail) === $submitted) {
+            $matched = $iaEmail;
+        } elseif ($usersEmail && strtolower($usersEmail) === $submitted) {
+            $matched = $usersEmail;
         }
 
-        if (empty($userEmail) || strtolower($userEmail) !== strtolower($email)) {
+        if ($matched === '') {
             errorResponse('If the username and email match, an OTP has been sent.', 200);
         }
+        $userEmail = $matched;
 
         $otp     = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
@@ -111,8 +118,9 @@ function sendOTP($input) {
             $mail->Port       = MAIL_PORT;
 
             $mail->setFrom(MAIL_FROM, MAIL_FROMNAME);
+            $mail->CharSet = 'UTF-8';
             $mail->addAddress($userEmail, $user['username']);
-            $mail->Subject = 'TayabasCare – Password Reset OTP';
+            $mail->Subject = 'TayabasCare - Password Reset Verification Code';
             $mail->isHTML(true);
 
             $content = '<p style="margin:0 0 16px 0;">Hello <strong>' . htmlspecialchars($user['username']) . '</strong>,</p>'
