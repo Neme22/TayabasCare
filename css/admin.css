@@ -2725,3 +2725,11 @@ dialog.modal::backdrop {
     #admin-accomplishment-report .report-title { font-size: 12px; }
     .admin-report-input { font-size: 11px; }
 }
+/* ===== CLUSTER ASSIGNMENTS — DRAG & DROP ===== */
+.cluster-brgy-list.drag-over {
+    border-color: #059669 !important;
+    background: #ecfdf5 !important;
+}
+.brgy-chip:active {
+    cursor: grabbing;
+}

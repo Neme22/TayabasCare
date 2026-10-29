@@ -1231,15 +1231,14 @@
                         <div style="display:flex;gap:8px;align-items:center;">
                             <span id="clusterStatus" style="font-size:12px;color:#6b7280;"></span>
                             <button onclick="ClusterAssignments.toggle()" style="background:none;border:1px solid #e5e7eb;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;color:#374151;">
-                                <i class="fas fa-chevron-down" id="clusterToggleIcon"></i> Show / Hide
+                                <i class="fas fa-chevron-right" id="clusterToggleIcon"></i> Show / Hide
                             </button>
                             <button onclick="ClusterAssignments.save()" data-testid="cluster-save-btn" style="background:#059669;color:#fff;border:none;padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
                                 <i class="fas fa-save" style="margin-right:4px;"></i> Save Clusters
                             </button>
                         </div>
                     </div>
-                    <p style="font-size:12px;color:#6b7280;margin:0 0 12px 0;">Divide the 66 barangays into 5 clusters, one per inspector. Zone families (e.g. Angeles Zones I–IV) always stay together in one cluster. Saved assignments control which establishments each inspector can inspect.</p>
-                    <div id="clusterCards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;"></div>
+                    <div id="clusterCards" style="display:none;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;"></div>
                 </div>
 
                 <!-- Auto-Schedule Recommendations Panel -->

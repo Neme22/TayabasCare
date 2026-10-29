@@ -82,7 +82,7 @@ if ($method === 'POST') {
         // owner, store that owner regardless of the submitted name.
         if ($estabBarangay !== '') {
             ensureClusterTables($db);
-            $clusterN = fixedClusterForBarangay($estabBarangay);
+            $clusterN = fixedClusterForBarangay($estabBarangay, $db);
             $ownersMap = clusterOwners($db);
             if ($clusterN && !empty($ownersMap[$clusterN])) {
                 $inspector = $ownersMap[$clusterN];

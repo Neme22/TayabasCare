@@ -552,7 +552,6 @@ const Dashboard = {
         Dashboard.renderInspectorProductivity();
         Dashboard.renderComplianceRanking();
         Dashboard.loadComplianceDeadlines();
-        Dashboard.drawRiskTrendChart();
     },
 
     loadComplianceDeadlines: async () => {
@@ -634,11 +633,6 @@ const Dashboard = {
         } catch (err) {
             container.innerHTML = '<p style="text-align:center;color:#9ca3af;font-size:13px;padding:20px;">Failed to load deadlines</p>';
         }
-    },
-
-    drawRiskTrendChart: async () => {
-        // Legacy call — now opens as modal
-        Dashboard.showRiskTrendModal();
     },
 
     showRiskTrendModal: async () => {
@@ -4568,14 +4562,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
 const ClusterAssignments = {
     _inspectors: [],       // [{fullName}]
-    _clusters: null,       // {1..5: {inspector, barangays: []}} — barangays are FIXED
-    _expanded: true,
+    _clusters: null,       // {1..5: {inspector, barangays: []}} — barangays are drag-editable
+    _expanded: false,      // cards hidden until admin clicks Show / Hide
+    _dragging: null,       // {barangay, from} while a chip is dragged
 
     load: async () => {
-        // Fetch inspectors + clusters (fixed barangays + current owners)
+        // Fetch inspectors + clusters (barangays + current owners)
         const [inspResp, clusResp] = await Promise.all([
             fetch(`${API_BASE_URL}/inspector.php`).then(r => r.json()).catch(() => null),
-            fetch(`${API_BASE_URL}/clusters.php`).then(r => r.json()).catch(() => null)
+            fetch(`${API_BASE_URL}/cluster_api.php`).then(r => r.json()).catch(() => null)
         ]);
 
         ClusterAssignments._inspectors = (inspResp && inspResp.success && inspResp.data) || [];
@@ -4610,32 +4605,73 @@ const ClusterAssignments = {
                     return `<option value="${Utils.esc(name)}" ${name === c.inspector ? 'selected' : ''}>${Utils.esc(name)}</option>`;
                 })).join('');
 
-            // Barangays are fixed — read-only chips
+            // Draggable barangay chips — drop onto another card to move
             const barangayChips = (c.barangays || []).map(b =>
-                `<span style="font-size:11px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:2px 6px;color:#374151;">${Utils.esc(b)}</span>`
+                `<span class="brgy-chip" draggable="true" data-barangay="${Utils.esc(b)}" style="font-size:11px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:2px 6px;color:#374151;cursor:grab;user-select:none;">${Utils.esc(b)}</span>`
             ).join('');
 
             html += `
             <div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;background:#f9fafb;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                    <span style="font-weight:700;font-size:13px;color:#059669;">Cluster ${n}</span>
-                    <span style="font-size:11px;color:#6b7280;">${c.barangays.length} barangays (fixed)</span>
+                    <span style="font-weight:700;font-size:13px;color:#059669;">Barangay Clusters</span>
+                    <span style="font-size:11px;color:#6b7280;">${c.barangays.length} barangays</span>
                 </div>
                 <select class="cluster-inspector-select" data-cluster="${n}" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;margin-bottom:8px;">
                     ${inspOptions}
                 </select>
-                <div class="cluster-brgy-list" data-cluster="${n}" style="max-height:220px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:6px;background:#fff;padding:6px;">
+                <div class="cluster-brgy-list" data-cluster="${n}" style="min-height:40px;max-height:220px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:6px;background:#fff;padding:6px;">
                     <div style="display:flex;flex-wrap:wrap;gap:4px;">${barangayChips}</div>
                 </div>
             </div>`;
         }
         wrap.innerHTML = html;
 
-        // Bind inspector selects (the only editable part)
+        // Bind inspector selects
         wrap.querySelectorAll('.cluster-inspector-select').forEach(sel => {
             sel.addEventListener('change', () => {
                 const n = parseInt(sel.dataset.cluster, 10);
                 ClusterAssignments._clusters[n].inspector = sel.value;
+            });
+        });
+
+        // Bind drag & drop
+        wrap.querySelectorAll('.brgy-chip').forEach(chip => {
+            chip.addEventListener('dragstart', (e) => {
+                ClusterAssignments._dragging = {
+                    barangay: chip.dataset.barangay,
+                    from: parseInt(chip.closest('.cluster-brgy-list').dataset.cluster, 10)
+                };
+                e.dataTransfer.setData('text/plain', chip.dataset.barangay);
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            chip.addEventListener('dragend', () => {
+                ClusterAssignments._dragging = null;
+                wrap.querySelectorAll('.cluster-brgy-list').forEach(l => l.classList.remove('drag-over'));
+            });
+        });
+
+        wrap.querySelectorAll('.cluster-brgy-list').forEach(list => {
+            list.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                list.classList.add('drag-over');
+            });
+            list.addEventListener('dragleave', () => list.classList.remove('drag-over'));
+            list.addEventListener('drop', (e) => {
+                e.preventDefault();
+                list.classList.remove('drag-over');
+                const drag = ClusterAssignments._dragging;
+                if (!drag) return;
+                const to = parseInt(list.dataset.cluster, 10);
+                if (drag.from === to) return;
+                const src = ClusterAssignments._clusters[drag.from];
+                const dst = ClusterAssignments._clusters[to];
+                const idx = (src.barangays || []).indexOf(drag.barangay);
+                if (idx === -1 || !dst) return;
+                src.barangays.splice(idx, 1);
+                dst.barangays.push(drag.barangay);
+                ClusterAssignments._dragging = null;
+                ClusterAssignments.render();
             });
         });
     },
@@ -4654,16 +4690,17 @@ const ClusterAssignments = {
             adminShowNotification('Clusters not loaded yet.', 'error');
             return;
         }
-        // Barangays are fixed server-side — only inspector owners are saved
+        // Inspector owners + barangay partition are saved together
         const payload = [];
         for (let n = 1; n <= 5; n++) {
             payload.push({
                 cluster_number: n,
-                inspector_full_name: ClusterAssignments._clusters[n].inspector || ''
+                inspector_full_name: ClusterAssignments._clusters[n].inspector || '',
+                barangays: (ClusterAssignments._clusters[n].barangays || []).slice()
             });
         }
         try {
-            const resp = await fetch(`${API_BASE_URL}/clusters.php`, {
+            const resp = await fetch(`${API_BASE_URL}/cluster_api.php`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)

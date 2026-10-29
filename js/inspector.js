@@ -802,7 +802,7 @@ function isInMyCluster(b) {
 
 async function loadMyCluster() {
     try {
-        const resp = await fetch(`${API_BASE_URL}/clusters.php`);
+        const resp = await fetch(`${API_BASE_URL}/cluster_api.php`);
         const json = await resp.json();
         if (json.success && json.data) {
             _myCluster = json.data.myCluster || null;

@@ -1,14 +1,15 @@
 <?php
 // ============================================================
 // Shared barangay-cluster helpers.
-// Used by clusters.php (admin assigns inspectors to clusters),
+// Used by clusters.php (admin assigns inspectors + barangays),
 // inspection.php (record scoping) and inspection_schedules.php
 // (cluster guard).
 //
-// The 66 barangays are partitioned into 5 FIXED clusters in code
-// (fixedClusterBarangays below). The admin does not edit the
-// partition — they only choose which inspector owns each cluster
-// (stored in cluster_assignments).
+// The 66 barangays are partitioned into 5 clusters. The partition
+// is admin-editable (drag & drop in the Schedule module) and is
+// stored in cluster_barangays; when that table is empty the
+// hardcoded default partition below is used. Inspector owners
+// live in cluster_assignments.
 // ============================================================
 
 function ensureClusterTables(PDO $db): void
@@ -22,18 +23,25 @@ function ensureClusterTables(PDO $db): void
                 UNIQUE KEY uq_cluster (cluster_number)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         );
+        $db->exec(
+            "CREATE TABLE IF NOT EXISTS cluster_barangays (
+                barangay VARCHAR(100) NOT NULL PRIMARY KEY,
+                cluster_number TINYINT NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
     } catch (PDOException $e) {
         error_log('cluster tables create: ' . $e->getMessage());
     }
 }
 
 /**
- * Fixed partition of the official 66 Tayabas barangays into
- * Cluster 1-5 (alphabetical blocks; zone families never split).
+ * Default partition of the official 66 Tayabas barangays into
+ * Cluster 1-5 (alphabetical blocks). Used when the admin has
+ * never saved a custom partition.
  *
  * @return array<int, string[]> cluster_number => barangay names
  */
-function fixedClusterBarangays(): array
+function defaultClusterBarangays(): array
 {
     return [
         1 => [
@@ -68,13 +76,42 @@ function fixedClusterBarangays(): array
     ];
 }
 
-/** Cluster number that owns a barangay ('' when not in the fixed partition). */
-function fixedClusterForBarangay(string $barangay): int
+/**
+ * Current partition of the 66 barangays into clusters: the admin-saved
+ * assignment from cluster_barangays, or the default partition when
+ * nothing has been saved yet.
+ *
+ * @return array<int, string[]> cluster_number => barangay names
+ */
+function fixedClusterBarangays(PDO $db): array
+{
+    try {
+        $rows = $db->query("SELECT barangay, cluster_number FROM cluster_barangays")->fetchAll();
+    } catch (PDOException $e) {
+        // Table missing (fresh install before clusters.php ran) — use defaults
+        error_log('fixedClusterBarangays: ' . $e->getMessage());
+        return defaultClusterBarangays();
+    }
+    if (!$rows) {
+        return defaultClusterBarangays();
+    }
+    $out = [1 => [], 2 => [], 3 => [], 4 => [], 5 => []];
+    foreach ($rows as $r) {
+        $n = (int)$r['cluster_number'];
+        if ($n >= 1 && $n <= 5) {
+            $out[$n][] = trim($r['barangay']);
+        }
+    }
+    return $out;
+}
+
+/** Cluster number that owns a barangay (0 when not in the partition). */
+function fixedClusterForBarangay(string $barangay, PDO $db): int
 {
     static $lookup = null;
     if ($lookup === null) {
         $lookup = [];
-        foreach (fixedClusterBarangays() as $n => $names) {
+        foreach (fixedClusterBarangays($db) as $n => $names) {
             foreach ($names as $name) {
                 $lookup[mb_strtolower($name)] = $n;
             }
@@ -133,7 +170,7 @@ function clusterBarangaysForSession(PDO $db): array
         return [];
     }
     $owners = clusterOwners($db);
-    $fixed  = fixedClusterBarangays();
+    $fixed  = fixedClusterBarangays($db);
     foreach ($owners as $n => $owner) {
         if (strcasecmp($owner, $fullName) === 0) {
             return $fixed[$n] ?? [];
@@ -150,7 +187,7 @@ function clusterBarangaysForSession(PDO $db): array
  */
 function syncPendingSchedulesToOwners(PDO $db, array $owners): void
 {
-    foreach (fixedClusterBarangays() as $n => $names) {
+    foreach (fixedClusterBarangays($db) as $n => $names) {
         $owner = trim($owners[$n] ?? '');
         if ($owner === '' || $owner === 'Unassigned') {
             continue;
