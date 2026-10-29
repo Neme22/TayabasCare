@@ -1325,8 +1325,8 @@ const InspectorManager = {
                     </div>
                     <div class="form-group">
                         <label class="form-label">Role Title</label>
-                        <input type="text" class="form-input" id="role" value="Field Inspector" data-testid="input-role">
-                        <small style="color:#6B7280;">Login role is always set to <strong>inspector</strong></small>
+                        <input type="text" class="form-input" id="role" value="Sanitary Inspector" placeholder="e.g. Sanitary Inspector V" data-testid="input-role">
+                        <small style="color:#6B7280;">Rank shown on permits (e.g. Sanitary Inspector V). Login role is always <strong>inspector</strong></small>
                     </div>
                     <p id="inspectorFormError" style="color:#DC2626;font-size:13px;margin-top:8px;display:none;"></p>
                 </form>
@@ -1404,7 +1404,7 @@ const InspectorManager = {
         const email    = document.getElementById('email')?.value.trim() || '';
         const username = document.getElementById('username')?.value.trim() || '';
         const password = document.getElementById('password')?.value || '';
-        const role     = document.getElementById('role')?.value.trim() || 'Field Inspector';
+        const role     = document.getElementById('role')?.value.trim() || 'Sanitary Inspector';
 
         const errEl = document.getElementById('inspectorFormError');
 
@@ -5299,13 +5299,14 @@ const PredictionEngine = {
         });
 
         // Sort
+        const levelRank = l => ({ HIGH: 2, MODERATE: 1, LOW: 0 }[l] ?? 0);
         filtered = [...filtered].sort((a, b) => {
             switch (sortBy) {
-                case 'high-first': return b.totalScore - a.totalScore;
-                case 'low-first': return a.totalScore - b.totalScore;
+                case 'high-first': return (levelRank(b.riskLevel) - levelRank(a.riskLevel)) || (b.totalScore - a.totalScore);
+                case 'low-first': return (levelRank(a.riskLevel) - levelRank(b.riskLevel)) || (a.totalScore - b.totalScore);
                 case 'name-az': return (a.businessName || '').localeCompare(b.businessName || '');
                 case 'recent': return new Date(b.lastInspected || 0) - new Date(a.lastInspected || 0);
-                default: return b.totalScore - a.totalScore;
+                default: return (levelRank(b.riskLevel) - levelRank(a.riskLevel)) || (b.totalScore - a.totalScore);
             }
         });
 
@@ -5404,6 +5405,22 @@ const PredictionEngine = {
               ).join('')
             : '<li style="color:#9ca3af;font-size:15px;">No inspector remarks on record yet.</li>';
 
+        // Open violations (severity chips from matchedViolations)
+        const chipColors = {
+            HIGH:     { bg: '#fef2f2', color: '#ef4444', border: '#fecaca' },
+            MODERATE: { bg: '#fffbeb', color: '#d97706', border: '#fde68a' },
+        };
+        const openViolations = r.matchedViolations || [];
+        const openViolHtml = openViolations.length
+            ? openViolations.map(v => {
+                const c = chipColors[v.severity] || chipColors.MODERATE;
+                return `<span style="display:inline-block;background:${c.bg};color:${c.color};border:1px solid ${c.border};font-size:12px;font-weight:700;padding:4px 12px;border-radius:999px;margin:0 6px 6px 0;">${Utils.esc(v.label)}</span>`;
+              }).join('')
+            : '<span style="color:#059669;font-size:14px;">No open violations — compliant / never inspected.</span>';
+        const levelReasonHtml = r.levelReason
+            ? `<p style="margin:8px 0 0;font-size:13px;color:#6b7280;">${Utils.esc(r.levelReason)}</p>`
+            : '';
+
         // Create modal overlay
         const modal = document.createElement('div');
         modal.id = 'predDetailModal';
@@ -5416,6 +5433,11 @@ const PredictionEngine = {
             <div style="background:#fff;border-radius:16px;padding:28px;width:92%;max-width:900px;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative;margin-bottom:40px;">
                 <button onclick="document.getElementById('predDetailModal')?.remove()" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;">&times;</button>
                 <h3 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 18px;">${Utils.esc(r.businessName)} &nbsp;<span style="font-size:15px;padding:5px 14px;border-radius:999px;background:${riskBg};color:${riskColor};font-weight:700;">${r.riskLevel} RISK · ${r.totalScore}/100</span></h3>
+                <div style="margin:0 0 18px;padding:14px 16px;background:#f9fafb;border-radius:10px;">
+                    <h4 style="font-size:13px;font-weight:700;color:#6b7280;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.5px;">Open Violations</h4>
+                    <div>${openViolHtml}</div>
+                    ${levelReasonHtml}
+                </div>
                 <div id="predDetailBody">
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
                         <div>
@@ -5482,7 +5504,7 @@ const PredictionEngine = {
             alert('No prescription results to export. Run the analysis first.');
             return;
         }
-        const headers = ['#', 'Business Name', 'Barangay', 'Business Type', 'Risk Level', 'Score', 'Last Inspected', 'Total Violations', 'Compliance Rate'];
+        const headers = ['#', 'Business Name', 'Barangay', 'Business Type', 'Risk Level', 'Score', 'Last Inspected', 'Total Violations', 'Compliance Rate', 'Open Violations'];
         const rows = results.map((r, i) => [
             i + 1,
             r.businessName || '',
@@ -5492,7 +5514,8 @@ const PredictionEngine = {
             r.totalScore || 0,
             r.lastInspected || '',
             r.factors?.violations?.count ?? 0,
-            (r.factors?.compliance?.rate ?? 'N/A') + '%'
+            (r.factors?.compliance?.rate ?? 'N/A') + '%',
+            (r.matchedViolations || []).map(v => v.label).join('; ')
         ]);
         const csv = [headers, ...rows].map(row => row.map(v => `"${v}"`).join(',')).join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });

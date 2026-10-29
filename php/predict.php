@@ -48,7 +48,7 @@ try {
             return matchEstablishment($estab, $name);
         });
 
-        // Establishments with no inspection reports get maximum risk (never inspected)
+        // Establishments with no inspection reports: LOW (no open violations), schedule initial visit
         if (count($myInspections) === 0) {
             $sanitaryRecord = [
                 'remarks'       => $record['remarks']        ?? '',
@@ -58,7 +58,7 @@ try {
                 'created_at'    => $record['created_at']     ?? '',
                 'business_type' => $record['business_type']  ?? 'Other',
             ];
-            // Score honestly: violations=0, time=20 (never), category=computed, compliance=10 (unknown), followup=0
+            // Score with empty history: violations=0, time=0 (never), category=computed, compliance=0 (unknown), followup=0
             $scored = calculateRiskScore($name, [], $sanitaryRecord);
             // Override to mark as never-inspected with recommendation
             $scored['recommendations'] = ['Never inspected — schedule initial inspection immediately.'];
@@ -95,8 +95,10 @@ try {
         $results[] = $scored;
     }
 
-    // Sort by score descending (highest risk first)
-    usort($results, fn($a, $b) => $b['totalScore'] - $a['totalScore']);
+    // Sort by severity first, then score descending
+    usort($results, fn($a, $b) =>
+        (VIOLATION_SEVERITY_RANK[$b['riskLevel']] <=> VIOLATION_SEVERITY_RANK[$a['riskLevel']])
+        ?: ($b['totalScore'] <=> $a['totalScore']));
 
     // Log risk scores to history table (create table if needed)
     // CSRF required for this GET-side write — skip logging if token is absent

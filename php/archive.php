@@ -79,12 +79,14 @@ function restoreItem() {
             ]);
         } elseif ($type === 'burial') {
             $stmt = $db->prepare("INSERT INTO burial_records
-                (type, datetime, deceased, death_date, death_place, informant, inspector, origin, transfer, funeral, cemetery_origin, cemetery_transfer, or_number, file_name, file_path)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                (type, datetime, deceased, death_date, death_place, cause_of_death, informant, inspector, sex, age, origin, transfer, funeral, cemetery_origin, cemetery_transfer, or_number, file_name, file_path)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([
                 $subType ?: $data['type'] ?? 'cadaver',
                 $data['datetime'] ?? '', $data['deceased'] ?? '', $data['death_date'] ?? null,
-                $data['death_place'] ?? '', $data['informant'] ?? '', $data['inspector'] ?? '',
+                $data['death_place'] ?? '', $data['cause_of_death'] ?? $data['causeOfDeath'] ?? '',
+                $data['informant'] ?? '', $data['inspector'] ?? '',
+                $data['sex'] ?? '', $data['age'] ?? '',
                 $data['origin'] ?? '', $data['transfer'] ?? '', $data['funeral'] ?? '',
                 $data['cemetery_origin'] ?? '', $data['cemetery_transfer'] ?? '', $data['or_number'] ?? '',
                 $data['file_name'] ?? null, $data['file_path'] ?? null
@@ -114,7 +116,7 @@ function restoreItem() {
                 VALUES (?, ?, ?, ?, ?)");
             $stmt->execute([
                 $data['full_name'] ?? '', $data['email'] ?? '', $data['username'] ?? '',
-                $password, $data['role_title'] ?? 'Field Inspector'
+                $password, $data['role_title'] ?? 'Sanitary Inspector'
             ]);
             // Also restore to users table
             $stmt2 = $db->prepare("INSERT INTO users (username, password, email, role) VALUES (?, ?, ?, 'inspector')");

@@ -242,8 +242,10 @@ try {
             ];
             $scored = calculateRiskScore($name, array_values($myInspections), $sanitaryRecord);
 
-            if ($scored['totalScore'] >= 60) {
-                $highRiskItems[] = "{$name} (Score: {$scored['totalScore']}, Barangay: " . ($record['barangay'] ?? 'N/A') . ")";
+            if (($scored['riskLevel'] ?? '') === 'HIGH') {
+                $openLabels = implode(', ', array_column($scored['matchedViolations'] ?? [], 'label'));
+                $openPart = $openLabels !== '' ? " — open: {$openLabels}" : '';
+                $highRiskItems[] = "{$name}{$openPart} (Score: {$scored['totalScore']}, Barangay: " . ($record['barangay'] ?? 'N/A') . ")";
             }
 
             $violationCount = $scored['factors']['violations']['count'] ?? 0;

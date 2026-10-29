@@ -234,6 +234,8 @@ const FormDrafts = {
             deceased: (document.getElementById('burial-deceased') || {}).value || '',
             deathDate: (document.getElementById('burial-death-date') || {}).value || '',
             deathPlace: (document.getElementById('burial-death-place') || {}).value || '',
+            causeOfDeath: (document.getElementById('burial-cause-of-death') || {}).value || '',
+            age: (document.getElementById('burial-age') || {}).value || '',
             informant: (document.getElementById('burial-informant') || {}).value || '',
             inspector: (document.getElementById('burial-inspector') || {}).value || '',
             sex: (document.getElementById('burial-sex') || {}).value || '',
@@ -373,6 +375,8 @@ const FormDrafts = {
             if (d.deceased) document.getElementById('burial-deceased').value = d.deceased;
             if (d.deathDate) document.getElementById('burial-death-date').value = d.deathDate;
             if (d.deathPlace) document.getElementById('burial-death-place').value = d.deathPlace;
+            if (d.causeOfDeath) document.getElementById('burial-cause-of-death').value = d.causeOfDeath;
+            if (d.age) document.getElementById('burial-age').value = d.age;
             if (d.informant) document.getElementById('burial-informant').value = d.informant;
             if (d.inspector) document.getElementById('burial-inspector').value = d.inspector;
             if (d.sex) { const el = document.getElementById('burial-sex'); if (el) el.value = d.sex; }
@@ -1708,12 +1712,23 @@ const QUARTER_MONTHS = { 1: [1,2,3], 2: [4,5,6], 3: [7,8,9], 4: [10,11,12] };
 // Dynamic inspector column map — built from database via inspector_accounts API
 let INSPECTOR_COL_MAP = {};
 let _inspectorNamesList = []; // First 5 inspector full_names, ordered by id
+let _inspectorsFullList = []; // All inspectors: { fullName, role } — burial dropdown + permit print
+let _inspectorRoleByName = {}; // lowercased fullName → role_title
 
 async function buildInspectorColumnMap() {
     try {
         const resp = await fetch(`${API_BASE_URL}/inspector.php`);
         const json = await resp.json();
         if (json.success && Array.isArray(json.data)) {
+            _inspectorsFullList = json.data.map(i => ({
+                fullName: i.fullName || '',
+                role: i.role || ''
+            }));
+            _inspectorRoleByName = {};
+            _inspectorsFullList.forEach(i => {
+                if (i.fullName) _inspectorRoleByName[i.fullName.toLowerCase()] = i.role || '';
+            });
+
             const inspectors = json.data.slice(0, 5); // Max 5 columns
             _inspectorNamesList = inspectors.map(i => i.fullName);
             INSPECTOR_COL_MAP = {};
@@ -1799,17 +1814,27 @@ function populateInspectorReportHeaders() {
 // Populate burial modal inspector dropdown from database
 function populateBurialInspectorDropdown() {
     const container = document.getElementById('burial-inspector-options');
-    if (!container || !_inspectorNamesList || _inspectorNamesList.length === 0) return;
+    if (!container) return;
+
+    // Prefer full list (name + role); fall back to first-5 names list
+    const list = (_inspectorsFullList && _inspectorsFullList.length)
+        ? _inspectorsFullList
+        : (_inspectorNamesList || []).map(n => ({ fullName: n, role: '' }));
+    if (!list.length) return;
 
     let html = `<div class="custom-option" onclick="selectInspector('', 'Select Inspector', '')">
         <span class="option-name">Select Inspector</span>
     </div>`;
 
-    _inspectorNamesList.forEach(name => {
-        const safeName = name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        html += `<div class="custom-option" onclick="selectInspector('${safeName}', '${safeName}', 'Sanitary Inspector')">
+    list.forEach(item => {
+        const name = item.fullName || '';
+        if (!name) return;
+        const role = item.role || 'Sanitary Inspector';
+        const safeName = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        const safeRole = role.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        html += `<div class="custom-option" onclick="selectInspector('${safeName}', '${safeName}', '${safeRole}')">
             <span class="option-name">${esc(name)}</span>
-            <span class="option-rank">Sanitary Inspector</span>
+            <span class="option-rank">${esc(role)}</span>
         </div>`;
     });
 
@@ -2515,7 +2540,7 @@ function renderRiskBadge(ai) {
                 ${s.icon} ${ai.riskLevel} RISK
             </span>
             <span class="text-xs ${s.text} font-semibold">
-                Score: ${ai.riskScore}/100
+                Score: ${ai.totalScore ?? ai.riskScore ?? 0}/100
             </span>
         </div>
     `;
@@ -2618,7 +2643,9 @@ function filterSanitaryRecords() {
             case 'risk': {
                 const aRisk = getRiskForEstablishment(a.businessName);
                 const bRisk = getRiskForEstablishment(b.businessName);
-                return (bRisk?.riskScore || 0) - (aRisk?.riskScore || 0);
+                const rank = l => ({ HIGH: 2, MODERATE: 1, LOW: 0 }[l] ?? 0);
+                return (rank(bRisk?.riskLevel) - rank(aRisk?.riskLevel))
+                    || ((bRisk?.totalScore ?? bRisk?.riskScore ?? 0) - (aRisk?.totalScore ?? aRisk?.riskScore ?? 0));
             }
             default: return new Date(b.date || 0) - new Date(a.date || 0);
         }
@@ -4478,9 +4505,13 @@ function openBurialModal(mode, type, id = null) {
         // Prefill inspector with the logged-in user so accomplishment
         // attribution (burial.inspector) is always filled
         const loggedName = localStorage.getItem('inspectorFullName') || localStorage.getItem('username') || '';
-        if (loggedName && _inspectorNamesList.length > 0) {
-            const match = _inspectorNamesList.find(n => n === loggedName || n.toLowerCase() === loggedName.toLowerCase()) || loggedName;
-            selectInspector(match, match, 'Sanitary Inspector');
+        if (loggedName && (_inspectorsFullList.length || _inspectorNamesList.length > 0)) {
+            const names = _inspectorsFullList.length
+                ? _inspectorsFullList.map(i => i.fullName)
+                : _inspectorNamesList;
+            const match = names.find(n => n === loggedName || n.toLowerCase() === loggedName.toLowerCase()) || loggedName;
+            const matchRole = (match && _inspectorRoleByName[match.toLowerCase()]) || 'Sanitary Inspector';
+            selectInspector(match, match, matchRole);
         } else if (loggedName) {
             document.getElementById('burial-inspector').value = loggedName;
             const label = document.querySelector('#inspector-dropdown-selected .selected-text');
@@ -4539,8 +4570,16 @@ function loadBurialData(type, index) {
     document.getElementById('burial-deceased').value = record.deceased || '';
     document.getElementById('burial-death-date').value = record.deathDate || '';
     document.getElementById('burial-death-place').value = record.deathPlace || '';
+    const causeEl = document.getElementById('burial-cause-of-death');
+    if (causeEl) causeEl.value = record.causeOfDeath || '';
+    const ageEl = document.getElementById('burial-age');
+    if (ageEl) ageEl.value = record.age || '';
     document.getElementById('burial-informant').value = record.informant || '';
-    selectInspector(record.inspector || '', record.inspector || '', 'Sanitary Inspector');
+    {
+        const inspName = record.inspector || '';
+        const inspRole = (inspName && _inspectorRoleByName[inspName.toLowerCase()]) || 'Sanitary Inspector';
+        selectInspector(inspName, inspName, inspRole);
+    }
     const sexSelect = document.getElementById('burial-sex');
     if (sexSelect) sexSelect.value = record.sex || '';
     
@@ -4633,6 +4672,8 @@ async function handleBurialSubmit(e) {
         deceased: document.getElementById('burial-deceased').value.trim(),
         deathDate: document.getElementById('burial-death-date').value,
         deathPlace: document.getElementById('burial-death-place').value.trim(),
+        causeOfDeath: (document.getElementById('burial-cause-of-death') || { value: '' }).value.trim(),
+        age: (document.getElementById('burial-age') || { value: '' }).value.trim(),
         informant: document.getElementById('burial-informant').value.trim(),
         inspector: document.getElementById('burial-inspector').value.trim(),
         sex: sex,
@@ -4667,6 +4708,8 @@ async function handleBurialSubmit(e) {
         formData.append('deceased', record.deceased);
         formData.append('deathDate', record.deathDate);
         formData.append('deathPlace', record.deathPlace);
+        formData.append('causeOfDeath', record.causeOfDeath);
+        formData.append('age', record.age);
         formData.append('informant', record.informant);
         formData.append('inspector', record.inspector);
         formData.append('sex', record.sex);
@@ -4722,8 +4765,396 @@ function closeBurialModal() {
     document.getElementById('burial-cert-preview').innerHTML = '';
 }
 
+// ── Burial permit print helpers ──────────────────────────────────────────
+function burialLongDate(d) {
+    if (!d || isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function burialClockTime(d) {
+    if (!d || isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+        .toLowerCase().replace(/\s/g, ' ');
+}
+
+function burialReleasedStamp(d) {
+    const pad = n => String(n).padStart(2, '0');
+    const date = `${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${d.getFullYear()}`;
+    return `${date} / ${burialClockTime(d)}`;
+}
+
+// transfer / cemeteryTransfer store "PSGCcode | MunicipalityName"
+function burialPlaceLabel(storedRaw, provinceSelectId) {
+    const raw = (storedRaw || '').trim();
+    if (!raw) return '';
+    let code = '';
+    let muni = raw;
+    if (raw.includes('|')) {
+        const parts = raw.split('|').map(s => s.trim());
+        code = parts[0] || '';
+        muni = parts[1] || '';
+    }
+    if (!muni) return '';
+    let provinceName = '';
+    if (code) {
+        const sel = document.getElementById(provinceSelectId);
+        if (sel) {
+            const opt = Array.from(sel.options || []).find(o => o.value === code);
+            provinceName = opt ? (opt.textContent || '').trim() : '';
+        }
+    }
+    const place = /city/i.test(muni) ? `City of ${muni}` : `Municipality of ${muni}`;
+    return provinceName ? `${place}, Province of ${provinceName}` : place;
+}
+
+function burialCemeteryLabel(storedRaw, kind) {
+    const raw = (storedRaw || '').trim();
+    if (!raw) return '';
+    if (kind === 'origin') {
+        const barangay = raw.includes('|') ? (raw.split('|').pop() || '').trim() : raw;
+        return `${barangay} (City of Tayabas, Quezon Province)`;
+    }
+    const place = burialPlaceLabel(raw, 'burial-cemetery-transfer-province');
+    return place ? `${place}` : raw;
+}
+
+// Known post-nominal credentials keyed by full name (not the logged-in user)
+const BURIAL_INSPECTOR_CREDENTIALS = {
+    'rommel d. sate': 'Rommel D. Sate, LPT, MMPA',
+    'michael o. baldovino': 'Michael O. Baldovino, RN',
+    'olive b. caagbay': 'Olive B. Caagbay, RND, LPT',
+    'april wendy s. ponce': 'April Wendy S. Ponce, RN',
+    'rizaldy a. ramos': 'Rizaldy A. Ramos, RN'
+};
+
+// Rank fallback when role_title is empty/placeholder ("Field Inspector").
+// Prefer role_title from inspector_accounts when set to a real rank.
+const BURIAL_INSPECTOR_RANKS = {
+    'rommel d. sate': 'Sanitary Inspector V'
+};
+
+// Signature: name from the burial record; rank from inspector_accounts
+function burialInspectorSignature(record) {
+    let name = ((record && record.inspector) || '').trim();
+    if (!name) {
+        name = (localStorage.getItem('inspectorFullName') ||
+            localStorage.getItem('inspectorDisplayName') ||
+            localStorage.getItem('username') || '').trim();
+    }
+    const key = name.toLowerCase();
+    // Prefer full display string with credentials when known
+    let displayName = BURIAL_INSPECTOR_CREDENTIALS[key] || name;
+    if (!BURIAL_INSPECTOR_CREDENTIALS[key] && name) {
+        const hit = Object.keys(BURIAL_INSPECTOR_CREDENTIALS).find(k =>
+            k.split(/\s+/).pop() === key.split(/\s+/).pop() && key.split(/\s+/).pop()
+        );
+        if (hit) displayName = BURIAL_INSPECTOR_CREDENTIALS[hit];
+    }
+
+    // Rank = role_title from inspector_accounts; ignore the old "Field Inspector" placeholder
+    let title = _inspectorRoleByName[key] || '';
+    if (!title || /^field\s+inspector$/i.test(title)) {
+        title = BURIAL_INSPECTOR_RANKS[key] || '';
+    }
+    if (!title) {
+        const hit = Object.keys(_inspectorRoleByName).find(k =>
+            k.split(/\s+/).pop() === key.split(/\s+/).pop() && key.split(/\s+/).pop()
+        );
+        if (hit) title = _inspectorRoleByName[hit];
+    }
+    if (!title || /^field\s+inspector$/i.test(title)) {
+        const rankHit = Object.keys(BURIAL_INSPECTOR_RANKS).find(k =>
+            k.split(/\s+/).pop() === key.split(/\s+/).pop() && key.split(/\s+/).pop()
+        );
+        if (rankHit) title = BURIAL_INSPECTOR_RANKS[rankHit];
+    }
+    if (!title || /^field\s+inspector$/i.test(title)) title = 'Sanitary Inspector';
+    return { name: displayName || 'Sanitary Inspector', title };
+}
+
+function burialFormatDeathDate(deathDate) {
+    if (!deathDate) return '';
+    const d = new Date(deathDate);
+    if (!isNaN(d.getTime())) return burialLongDate(d);
+    return String(deathDate);
+}
+
+// Cadaver died-clause with underlined variable parts (matches DOCX)
+function burialCadaverDiedClauseHtml(cause, age, deathDate) {
+    const parts = [];
+    if (cause) parts.push(`died of <u>${esc(cause)}</u>`);
+    if (age) parts.push(`at the age of <u>${esc(age)}</u> years old`);
+    const dLong = burialFormatDeathDate(deathDate);
+    if (dLong) parts.push(`on <u>${esc(dLong)}</u>`);
+    if (!parts.length) return '';
+    return `who ${parts.join(' ')}`;
+}
+
+function burialSkeletalDiedClauseHtml(cause, deathDate) {
+    const dLong = burialFormatDeathDate(deathDate);
+    if (cause && dLong) return `who died of <u>${esc(cause)}</u> last <u>${esc(dLong)}</u>`;
+    if (cause) return `who died of <u>${esc(cause)}</u>`;
+    if (dLong) return `who died last <u>${esc(dLong)}</u>`;
+    return '';
+}
+
+// Absolute base for logo images (popup is about:blank — relative paths fail)
+function burialAssetsBase() {
+    const path = window.location.pathname || '/';
+    const dir = path.replace(/\/[^/]*$/, '/');
+    return window.location.origin + dir;
+}
+
+function burialLetterheadHtml() {
+    const base = burialAssetsBase();
+    const city = esc(base + 'images/city_of_tayabas_seal.png');
+    const bagong = esc(base + 'images/bagong_pilipinas.png');
+    const cho = esc(base + 'images/cho_seal.jpg');
+    return `
+<div class="logos">
+  <img src="${city}" alt="City of Tayabas" width="72" height="72" />
+  <img src="${bagong}" alt="Bagong Pilipinas" width="76" height="70" />
+  <img src="${cho}" alt="City Health Office" width="72" height="72" />
+</div>
+<div class="lh">
+  <div>Republic of the Philippines</div>
+  <div>Province of Quezon</div>
+  <div class="lh-city">CITY OF TAYABAS</div>
+  <hr class="rule" />
+  <div class="lh-office">CITY HEALTH OFFICE</div>
+  <div>ENVIRONMENTAL HEALTH AND SANITATION SECTION</div>
+  <hr class="rule" />
+</div>`;
+}
+
+function burialSignatures(opts) {
+    const label = opts.recommendedLabel || 'Recommended by:';
+    const insp = esc(opts.inspectorName || '');
+    const title = esc(opts.inspectorTitle || 'Sanitary Inspector');
+    const choName = 'HERNANDO C. MARQUEZ, MD, MPM, MPH, DPAMS';
+    const released = esc(opts.released || '');
+    const amountLine = esc(opts.amountLabel || '');
+    return `
+  <div class="sig-stack">
+    <div class="sig-block">
+      <div class="sig-label">${esc(label)}</div>
+      <div class="sig-space"></div>
+      <div class="sig-name">${insp}</div>
+      <div class="sig-role">${title}</div>
+    </div>
+    <div class="sig-block">
+      <div class="sig-label">Approved by:</div>
+      <div class="sig-space"></div>
+      <div class="sig-name">${choName}</div>
+      <div class="sig-role">City Health Officer</div>
+    </div>
+  </div>
+  <div class="footer-meta">
+    <div>Date &amp; Time Released: ${released}</div>
+    <div>${amountLine}</div>
+    <div class="received">Received by: ______________________________</div>
+  </div>`;
+}
+
+function burialCadaverBody(ctx, amount) {
+    const died = ctx.diedClauseHtml || '';
+    const diedPart = died ? ` ${died}` : '';
+    const transferTo = esc(ctx.transferLabel || 'the destination');
+    const funeral = esc(ctx.funeral || 'the funeral service');
+    const deceased = esc(ctx.deceased || '');
+    return `
+  <div class="title"><u>C E R T I F I C A T E&nbsp;&nbsp;&nbsp;O F&nbsp;&nbsp;&nbsp;T R A N S F E R</u></div>
+  <div class="meta">
+    <div class="meta-date">Date: ${esc(ctx.date)}</div>
+    <div class="meta-time">Time: ${esc(ctx.time)}</div>
+  </div>
+  <div class="greeting">TO WHOM IT MY CONCERN:</div>
+  <p class="body-text">
+    This is to certify that the CADAVER of <u>${deceased}</u>${diedPart} was transferred by <u>${funeral}</u>
+    from the <u>City of Tayabas, Province of Quezon</u> to <u>${transferTo}</u> for interment and burial services.
+  </p>
+  <p class="legal">
+    This permit is given to the family of the deceased, by virtue of Section 1090 of the
+    Revised Administrative Code as amended.
+  </p>
+  ${burialSignatures({
+        recommendedLabel: 'Recommended by:',
+        inspectorName: ctx.inspectorName,
+        inspectorTitle: ctx.inspectorTitle,
+        released: ctx.released,
+        amountLabel: `Amount P${amount}`
+    })}`;
+}
+
+function burialSkeletalBody(ctx, amount) {
+    const died = ctx.diedClauseHtml || '';
+    const diedPart = died ? ` ${died}` : '';
+    const deceased = esc(ctx.deceased || '');
+    const from = esc(ctx.cemeteryOriginLabel || 'the cemetery');
+    const to = esc(ctx.cemeteryTransferLabel || 'the destination cemetery');
+    const by = esc(ctx.informant || 'the informant');
+    return `
+  <div class="title"><u>CERTIFICATE OF TRANSFER</u></div>
+  <div class="meta">
+    <div class="meta-date">Date: ${esc(ctx.date)}</div>
+    <div class="meta-time">Time: ${esc(ctx.time)}</div>
+  </div>
+  <div class="greeting">TO WHOM IT MY CONCERN:</div>
+  <p class="body-text">
+    This is to certify that the skeletal remains of <u>${deceased}</u>${diedPart} are hereby granted
+    permission to be transferred from <u>${from}</u> to <u>${to}</u> by <u>${by}</u>.
+  </p>
+  ${burialSignatures({
+        recommendedLabel: 'Prepared and recommended by:',
+        inspectorName: ctx.inspectorName,
+        inspectorTitle: ctx.inspectorTitle,
+        released: ctx.released,
+        amountLabel: `Amount: ${amount}`
+    })}`;
+}
+
+function burialExhumationBody(ctx, amount) {
+    const died = ctx.diedClauseHtml || '';
+    const diedPart = died ? ` ${died}` : '';
+    const deceased = esc(ctx.deceased || '');
+    const cemetery = esc(ctx.cemeteryOriginLabel || 'the cemetery');
+    const by = esc(ctx.informant || 'the informant');
+    return `
+  <div class="title"><u>EXHUMATION PERMIT</u></div>
+  <div class="meta">
+    <div class="meta-date">Date: ${esc(ctx.date)}</div>
+    <div class="meta-time">Time: ${esc(ctx.time)}</div>
+  </div>
+  <div class="greeting">TO WHOM IT MY CONCERN:</div>
+  <p class="body-text">
+    This is to certify that the skeletal remains of <u>${deceased}</u>${diedPart} is hereby granted
+    permission for exhumation in <u>${cemetery}</u> by <u>${by}</u>.
+  </p>
+  ${burialSignatures({
+        recommendedLabel: 'Recommended by:',
+        inspectorName: ctx.inspectorName,
+        inspectorTitle: ctx.inspectorTitle,
+        released: ctx.released,
+        amountLabel: `Amount: ${amount}`
+    })}`;
+}
+
 function printBurial() {
-    window.print();
+    const type = (document.getElementById('burial-type') || {}).value || '';
+    const id = (document.getElementById('burial-id') || {}).value || '';
+    const record = (cachedBurialRecords[type] || []).find(r => String(r.id) === String(id));
+    if (!record) {
+        showNotification('Record not found', 'error');
+        return;
+    }
+
+    // Fee already collected — print with default amount, no prompt/alert
+    const amountDisplay = (type === 'skeletal' ? 75 : 100).toFixed(2);
+
+    const win = window.open('', '_blank', 'width=794,height=1123');
+    if (!win) {
+        showNotification('Popup blocked — allow popups for this site to print.', 'error');
+        return;
+    }
+
+    const dt = record.datetime ? new Date(record.datetime) : new Date();
+    const insp = burialInspectorSignature(record);
+
+    const ctx = {
+        date: burialLongDate(dt) || String(record.datetime || ''),
+        time: burialClockTime(dt),
+        deceased: record.deceased || '',
+        cause: (record.causeOfDeath || '').trim(),
+        age: (record.age || '').trim(),
+        deathDate: record.deathDate || '',
+        funeral: record.funeral || '',
+        informant: record.informant || '',
+        transferLabel: burialPlaceLabel(record.transfer, 'burial-transfer-province'),
+        cemeteryOriginLabel: burialCemeteryLabel(record.cemeteryOrigin, 'origin'),
+        cemeteryTransferLabel: burialCemeteryLabel(record.cemeteryTransfer, 'transfer'),
+        inspectorName: insp.name,
+        inspectorTitle: insp.title,
+        released: burialReleasedStamp(new Date())
+    };
+
+    if (type === 'cadaver') {
+        ctx.diedClauseHtml = burialCadaverDiedClauseHtml(ctx.cause, ctx.age, ctx.deathDate);
+    } else {
+        ctx.diedClauseHtml = burialSkeletalDiedClauseHtml(ctx.cause, ctx.deathDate);
+    }
+
+    const body = type === 'cadaver' ? burialCadaverBody(ctx, amountDisplay)
+        : type === 'skeletal' ? burialSkeletalBody(ctx, amountDisplay)
+        : burialExhumationBody(ctx, amountDisplay);
+
+    const letterhead = burialLetterheadHtml();
+
+    win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title></title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Times New Roman', Times, serif; font-size: 12.5pt; color: #000; background: #fff; }
+  .sheet { width: 190mm; margin: 0 auto; padding: 10mm 18mm 14mm; }
+  .logos {
+    display: flex; justify-content: center; align-items: center;
+    gap: 28mm; margin-bottom: 4mm;
+  }
+  .logos img { display: block; object-fit: contain; }
+  .lh { text-align: center; line-height: 1.3; margin-bottom: 6mm; }
+  .lh-city, .lh-office { font-weight: bold; }
+  .lh-city { margin-top: 2px; }
+  .lh-office { margin-top: 2px; }
+  .rule { border: none; border-top: 1.5px solid #000; width: 100%; margin: 4px 0; }
+  .title {
+    text-align: center; font-size: 14pt; font-weight: bold;
+    letter-spacing: 1px; margin: 6mm 0 4mm;
+  }
+  .meta {
+    margin: 0 0 5mm 0; line-height: 1.6;
+    text-align: right; padding-right: 4mm;
+  }
+  .meta-date,
+  .meta-time {
+    display: block !important;
+    width: 100%;
+    text-align: right;
+  }
+  .greeting { font-weight: bold; margin-bottom: 4mm; }
+  .body-text { text-align: justify; line-height: 1.7; margin-bottom: 5mm; text-indent: 0; }
+  .legal { text-align: justify; line-height: 1.7; margin-bottom: 8mm; }
+  .sig-stack { margin-top: 4mm; }
+  .sig-block { margin-bottom: 7mm; }
+  .sig-label { font-weight: normal; }
+  .sig-space { height: 10mm; }
+  .sig-name { font-weight: bold; font-size: 12pt; }
+  .sig-role { font-size: 11.5pt; }
+  .footer-meta { margin-top: 6mm; line-height: 1.8; }
+  .received { margin-top: 2mm; }
+  @media print {
+    @page { size: Letter portrait; margin: 12mm 15mm; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .sheet { width: auto; padding: 0; margin: 0; }
+    .logos img { max-height: 18mm; width: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+${letterhead}
+${body}
+</div>
+</body>
+</html>`);
+    win.document.close();
+    // Empty title keeps the document name out of Chrome's print header
+    // (date/time + page numbers are still browser-controlled — uncheck
+    //  "Headers and footers" in the print dialog to hide those).
+    try { win.document.title = ' '; } catch (e) { /* ignore */ }
+    win.focus();
+    setTimeout(() => { try { win.print(); } catch (e) { /* user can print manually */ } }, 400);
 }
 
 function disableBurialInputs(disable) {

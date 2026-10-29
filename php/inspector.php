@@ -55,7 +55,7 @@ function createInspector() {
     $email    = trim($input['email']    ?? '');
     $username = trim($input['username'] ?? '');
     $password = $input['password']      ?? '';
-    $role     = trim($input['role']     ?? 'Field Inspector');
+    $role     = trim($input['role']     ?? 'Sanitary Inspector');
 
     if (!$fullName || !$email || !$username || !$password) {
         errorResponse('All fields are required.', 400);
@@ -108,7 +108,7 @@ function updateInspector() {
     $email    = trim($input['email']     ?? '');
     $username = trim($input['username']  ?? '');
     $password = $input['password']       ?? '';
-    $role     = trim($input['role']      ?? 'Field Inspector');
+    $role     = trim($input['role']      ?? 'Sanitary Inspector');
 
     if (!$id) {
         errorResponse('Inspector ID is required.', 400);

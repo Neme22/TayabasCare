@@ -37,6 +37,27 @@ function ensureBurialSexColumn() {
 }
 ensureBurialSexColumn();
 
+// Lazy migration: optional print fields for burial permits (cause of death + age)
+function ensureBurialPrintColumns() {
+    global $db;
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $stmt = $db->query("SHOW COLUMNS FROM burial_records LIKE 'cause_of_death'");
+        if (!$stmt->fetch()) {
+            $db->exec("ALTER TABLE burial_records ADD COLUMN cause_of_death VARCHAR(255) NOT NULL DEFAULT '' AFTER death_place");
+        }
+        $stmt = $db->query("SHOW COLUMNS FROM burial_records LIKE 'age'");
+        if (!$stmt->fetch()) {
+            $db->exec("ALTER TABLE burial_records ADD COLUMN age VARCHAR(20) NOT NULL DEFAULT '' AFTER sex");
+        }
+    } catch (PDOException $e) {
+        error_log('ensureBurialPrintColumns: ' . $e->getMessage());
+    }
+}
+ensureBurialPrintColumns();
+
 switch($method) {
     case 'GET': getRecords(); break;
     case 'POST':
@@ -98,6 +119,8 @@ function getRecords() {
                 'deceased' => $r['deceased'],
                 'deathDate' => $r['death_date'],
                 'deathPlace' => $r['death_place'],
+                'causeOfDeath' => $r['cause_of_death'] ?? '',
+                'age' => $r['age'] ?? '',
                 'informant' => $r['informant'],
                 'inspector' => $r['inspector'],
                 'sex' => $r['sex'] ?? '',
@@ -136,11 +159,11 @@ function createRecord() {
     try {
         $stmt = $db->prepare("
             INSERT INTO burial_records
-            (type, datetime, deceased, death_date, death_place,
-             informant, inspector, sex, origin, transfer,
+            (type, datetime, deceased, death_date, death_place, cause_of_death,
+             informant, inspector, sex, age, origin, transfer,
              funeral, cemetery_origin, cemetery_transfer, or_number,
              file_name, file_path)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
 
         $sexInput = $input['sex'] ?? '';
@@ -150,9 +173,11 @@ function createRecord() {
             $input['deceased'] ?? '',
             $input['deathDate'] ?? null,
             $input['deathPlace'] ?? '',
+            $input['causeOfDeath'] ?? '',
             $input['informant'] ?? '',
             $input['inspector'] ?? '',
             $sexInput,
+            $input['age'] ?? '',
             $input['origin'] ?? '',
             $input['transfer'] ?? '',
             $input['funeral'] ?? '',
@@ -216,7 +241,7 @@ function updateRecord() {
         $stmt = $db->prepare("
             UPDATE burial_records SET
             type=?, datetime=?, deceased=?, death_date=?,
-            death_place=?, informant=?, inspector=?, sex=?,
+            death_place=?, cause_of_death=?, informant=?, inspector=?, sex=?, age=?,
             origin=?, transfer=?, funeral=?,
             cemetery_origin=?, cemetery_transfer=?, or_number=?,
             file_name=?, file_path=?
@@ -225,8 +250,10 @@ function updateRecord() {
 
         $stmt->execute([
             $input['type'] ?? 'cadaver', $input['datetime'] ?? '', $input['deceased'] ?? '', $input['deathDate'] ?? null,
-            $input['deathPlace'] ?? '', $input['informant'] ?? '', $input['inspector'] ?? '',
+            $input['deathPlace'] ?? '', $input['causeOfDeath'] ?? ($current['cause_of_death'] ?? ''),
+            $input['informant'] ?? '', $input['inspector'] ?? '',
             $input['sex'] ?? ($current['sex'] ?? ''),
+            $input['age'] ?? ($current['age'] ?? ''),
             $input['origin'] ?? '', $input['transfer'] ?? '', $input['funeral'] ?? '',
             $input['cemeteryOrigin'] ?? '', $input['cemeteryTransfer'] ?? '', $input['orNumber'] ?? '',
             $fileName, $filePath,

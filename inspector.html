@@ -1644,10 +1644,21 @@
                                required />
                     </div>
 
-                    <!-- Place of Death -->
+                    <!-- Place of Death + Age -->
                     <div class="form-control">
                         <label class="label"><span class="label-text font-semibold">Place of Death</span></label>
                         <input type="text" id="burial-death-place" class="input input-bordered input-success" data-testid="burial-death-place" />
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label"><span class="label-text font-semibold">Age</span></label>
+                        <input type="text" id="burial-age" class="input input-bordered input-success" data-testid="burial-age" inputmode="numeric" placeholder="e.g. 46" />
+                    </div>
+
+                    <!-- Cause of Death (used on burial permit print) -->
+                    <div class="form-control md:col-span-2">
+                        <label class="label"><span class="label-text font-semibold">Cause of Death</span></label>
+                        <input type="text" id="burial-cause-of-death" class="input input-bordered input-success" data-testid="burial-cause-of-death" placeholder="e.g. Cardiac arrest" />
                     </div>
 
                     <!-- Name of Informant -->

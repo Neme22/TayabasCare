@@ -46,7 +46,7 @@ try {
 
     // matchEstablishment() is now defined in risk_utils.php
 
-    // ---- action=by_category: Violation rates by business type ----
+    // ---- action=by_category: Violation rates by FOOD vs NON-FOOD ----
     if ($action === 'by_category') {
         $categoryStats = [];
         $seen = [];
@@ -56,8 +56,8 @@ try {
             if (isset($seen[$name])) continue;
             $seen[$name] = true;
 
-            $bizType = $record['business_type'] ?? 'Other';
-            if (empty($bizType)) $bizType = 'Other';
+            // Group as FOOD ESTABLISHMENT vs NON-FOOD ESTABLISHMENT
+            $bizType = foodOrNonFoodLabel($record['business_type'] ?? '', $name);
 
             if (!isset($categoryStats[$bizType])) {
                 $categoryStats[$bizType] = [
@@ -98,7 +98,7 @@ try {
                 'remarks' => $record['remarks'] ?? '',
                 'result_xray' => $record['result_xray'] ?? null,
                 'result_stool' => $record['result_stool'] ?? null,
-                'business_type' => $bizType,
+                'business_type' => $record['business_type'] ?? 'Other',
             ];
             if ($inspCount > 0) {
                 $scored = calculateRiskScore($name, array_values($myInspections), $sanitaryRecord);
