@@ -14,6 +14,7 @@ session_set_cookie_params([
     'path'     => '/',
     'httponly' => true,
     'samesite' => 'Lax',
+    'secure'   => !empty($_SERVER['HTTPS']),
 ]);
 
 // Start session before any output (must be before headers)
@@ -21,14 +22,14 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Database Configuration
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-define('DB_NAME', 'tayabascare_db');
-
-// Load secrets (API keys, mail credentials)
+// Load secrets (API keys, mail credentials) — must precede DB constants
 require_once __DIR__ . '/secrets.php';
+
+// Database Configuration (overridable via php/.env; fallbacks = local XAMPP)
+define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+define('DB_USER', getenv('DB_USER') ?: 'root');
+define('DB_PASS', getenv('DB_PASS') ?: '');
+define('DB_NAME', getenv('DB_NAME') ?: 'tayabascare_db');
 
 // Database Connection
 class Database {
@@ -58,7 +59,7 @@ class Database {
 }
 
 // CORS Headers — restrict to local origin
-$allowedOrigins = ['http://localhost', 'http://localhost:80', 'http://127.0.0.1', 'http://localhost:8080'];
+$allowedOrigins = ['http://localhost', 'http://localhost:80', 'http://127.0.0.1', 'http://localhost:8080', 'https://tayabascare.me', 'https://www.tayabascare.me', 'http://tayabascare.me'];
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if (in_array($origin, $allowedOrigins, true)) {
     header('Access-Control-Allow-Origin: ' . $origin);
