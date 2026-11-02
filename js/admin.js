@@ -197,47 +197,66 @@ const Utils = {
         return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     },
 
+    // Single DaisyUI toast renderer used by Utils.showToast and adminShowNotification
+    _renderToast: (message, type = 'success') => {
+        let container = document.getElementById('toast');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toast';
+            container.className = 'toast toast-end z-[9999]';
+            document.body.appendChild(container);
+        }
+        container.innerHTML = '';
+        const alertType = ['success', 'error', 'warning', 'info'].includes(type) ? type : 'success';
+        const icons = {
+            success: 'fa-check-circle',
+            error: 'fa-exclamation-circle',
+            warning: 'fa-exclamation-triangle',
+            info: 'fa-info-circle'
+        };
+        const item = document.createElement('div');
+        item.className = `alert alert-${alertType} shadow-lg`;
+        item.style.pointerEvents = 'auto';
+        item.innerHTML = `<i class="fas ${icons[alertType]}"></i>
+            <span>${Utils.esc(message)}</span>
+            <button class="btn btn-ghost btn-xs" aria-label="Close"><i class="fas fa-times"></i></button>`;
+        item.querySelector('button').onclick = () => item.remove();
+        container.appendChild(item);
+        setTimeout(() => item.remove(), 4000);
+    },
+
     showToast: (message, type = 'success') => {
-        const toast = document.getElementById('toast');
-        const icon = toast.querySelector('.toast-icon');
-        const msg = toast.querySelector('.toast-message');
-
-        toast.className = `toast ${type}`;
-        icon.className = type === 'success' ? 'toast-icon fas fa-check-circle' : 'toast-icon fas fa-exclamation-circle';
-        msg.textContent = message;
-
-        toast.style.display = 'flex';
-        setTimeout(() => {
-            toast.style.display = 'none';
-        }, 3000);
+        Utils._renderToast(message, type);
     },
 
     openModal: (content) => {
         const modal = document.getElementById('modal');
         const modalContent = document.getElementById('modalContent');
         modalContent.innerHTML = content;
-        modal.style.display = 'flex';
+        if (typeof modal.showModal === 'function') modal.showModal();
+        else modal.setAttribute('open', '');
     },
 
     closeModal: () => {
         const modal = document.getElementById('modal');
-        modal.style.display = 'none';
+        if (modal.open && typeof modal.close === 'function') modal.close();
+        else modal.removeAttribute('open');
     },
 
     showConfirmDialog: (message, onConfirm) => {
         const content = `
-            <div class="modal-header">
-                <h3>Confirm Action</h3>
-                <button class="modal-close" onclick="Utils.closeModal()" data-testid="confirm-close-btn">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-lg font-bold">Confirm Action</h3>
+                <button class="btn btn-ghost btn-sm btn-circle" onclick="Utils.closeModal()" data-testid="confirm-close-btn" aria-label="Close">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="modal-body">
-                <p style="font-size: 15px; color: #374151; margin-bottom: 20px;">${message}</p>
+            <div class="mb-4">
+                <p class="text-sm text-base-content/70 mb-5">${message}</p>
             </div>
-            <div class="modal-footer">
+            <div class="modal-action justify-end">
                 <button class="btn btn-secondary" onclick="Utils.closeModal()" data-testid="confirm-cancel-btn">Cancel</button>
-                <button class="btn btn-danger" id="confirmActionBtn" data-testid="confirm-delete-btn">Delete</button>
+                <button class="btn btn-error" id="confirmActionBtn" data-testid="confirm-delete-btn">Delete</button>
             </div>
         `;
         Utils.openModal(content);
@@ -249,23 +268,25 @@ const Utils = {
 
     showArchiveConfirmDialog: ({ title, message, onConfirm }) => {
         const content = `
-            <div class="modal-header">
-                <h3>${Utils.esc(title)}</h3>
-                <button class="modal-close" onclick="Utils.closeModal()" data-testid="archive-close-btn">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-lg font-bold">${Utils.esc(title)}</h3>
+                <button class="btn btn-ghost btn-sm btn-circle" onclick="Utils.closeModal()" data-testid="archive-close-btn" aria-label="Close">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="modal-body">
-                <p style="font-size: 15px; color: #374151; margin-bottom: 16px;">${Utils.esc(message)}</p>
-                <label for="archiveReasonInput" style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">Reason</label>
+            <div class="mb-4">
+                <p class="text-sm text-base-content/70 mb-4">${Utils.esc(message)}</p>
+                <label for="archiveReasonInput" class="label py-1">
+                    <span class="label-text">Reason</span>
+                </label>
                 <input type="text" id="archiveReasonInput" data-testid="archive-reason-input"
+                    class="input input-bordered input-sm w-full"
                     placeholder="Reason (optional)"
-                    style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; box-sizing: border-box;"
                     onkeydown="if(event.key==='Enter'){document.getElementById('archiveConfirmBtn').click();}">
             </div>
-            <div class="modal-footer">
+            <div class="modal-action justify-end">
                 <button class="btn btn-secondary" onclick="Utils.closeModal()" data-testid="archive-cancel-btn">Cancel</button>
-                <button class="btn btn-danger" id="archiveConfirmBtn" data-testid="archive-confirm-btn">
+                <button class="btn btn-error" id="archiveConfirmBtn" data-testid="archive-confirm-btn">
                     <i class="bi bi-archive"></i> Archive
                 </button>
             </div>
@@ -3141,20 +3162,7 @@ function adminCancelReportEdit() {
 }
 
 function adminShowNotification(message, type = 'success') {
-    const existingToasts = document.querySelectorAll('.admin-toast-notification');
-    existingToasts.forEach(t => t.remove());
-    const types = {
-        success: { bg: 'bg-emerald-600', icon: 'fa-check-circle' },
-        error:   { bg: 'bg-red-600',     icon: 'fa-exclamation-circle' },
-        warning: { bg: 'bg-yellow-500',  icon: 'fa-exclamation-triangle' },
-        info:    { bg: 'bg-blue-600',    icon: 'fa-info-circle' }
-    };
-    const style = types[type] || types.success;
-    const toast = document.createElement('div');
-    toast.className = `admin-toast-notification fixed bottom-4 right-4 ${style.bg} text-white px-6 py-4 rounded-lg shadow-2xl z-[9999]`;
-    toast.innerHTML = `<div class="flex items-center gap-3"><i class="fas ${style.icon} text-xl"></i><span class="font-medium">${Utils.esc(message)}</span><button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-white hover:text-gray-200"><i class="fas fa-times"></i></button></div>`;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
+    Utils._renderToast(message, type);
 }
 
 // ==================== END ADMIN ACCOMPLISHMENT REPORT MODULE ====================
@@ -3201,13 +3209,6 @@ async function initApp() {
         menuToggle.addEventListener('click', () => {
             const sidebarEl = document.getElementById('sidebar');
             if (sidebarEl) sidebarEl.classList.toggle('active');
-        });
-    }
-
-    const modalOverlay = document.getElementById('modalOverlay');
-    if (modalOverlay) {
-        modalOverlay.addEventListener('click', () => {
-            Utils.closeModal();
         });
     }
 
@@ -6692,3 +6693,38 @@ const EstablishmentTrend = {
 document.addEventListener('DOMContentLoaded', () => {
     YoYComparison.init();
 });
+
+// ==================== BULK IMPORT — BURIAL (admin) ====================
+// Shared engine + parsers live in js/import_common.js (window.ImportFlow).
+// Admin sanitary/inspection imports above (SanitaryImport / InspectionImport) are unchanged.
+function openBurialImport(presetType) {
+    if (typeof ImportFlow === 'undefined') { adminShowNotification('Import library failed to load.', 'error'); return; }
+    ImportFlow.open({
+        module: 'burial',
+        title: 'Import Burial Records',
+        accept: '.docx,.xlsx,.xls,.csv',
+        typeSelect: true,
+        defaultType: presetType || 'cadaver',
+        columns: [
+            { key: 'deceased', label: 'Deceased' },
+            { key: 'deathDate', label: 'Death Date' },
+            { key: 'causeOfDeath', label: 'Cause of Death' },
+            { key: 'age', label: 'Age' },
+            { key: 'funeral', label: 'Funeral' },
+            { key: 'origin', label: 'Origin' },
+            { key: 'transfer', label: 'Transfer' },
+            { key: 'inspector', label: 'Inspector' },
+            { key: 'datetime', label: 'Released' },
+            { key: '_issue', label: 'Issues' }
+        ],
+        parseFile: ImportFlow.parseBurialFile,
+        buildPayload: (rows, state) => ({ type: state.type, rows }),
+        endpoint: 'import_burial.php',
+        notify: adminShowNotification,
+        onSuccess: async () => {
+            await BurialManager.render();
+            if (typeof Dashboard !== 'undefined' && Dashboard.updateStats) Dashboard.updateStats();
+        }
+    });
+}
+// ==================== END BULK IMPORT — BURIAL (admin) ====================

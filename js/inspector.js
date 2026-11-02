@@ -1678,6 +1678,7 @@ function getCollectedRecommendations() {
 }
 
 function showBurialTab(type, tabEl) {
+    window._activeBurialType = type;
     // Hide all burial sections
     document.querySelectorAll('.burial-section').forEach(section => {
         section.classList.add('hidden');
@@ -7033,3 +7034,87 @@ document.addEventListener('DOMContentLoaded', () => {
     FormDrafts.attachAutoSave();
     FormDrafts.promptRestore();
 });
+
+// ==================== BULK IMPORT (INSPECTOR) ====================
+// Shared engine + parsers live in js/import_common.js (window.ImportFlow).
+function openSanitaryImport() {
+    if (typeof ImportFlow === 'undefined') { showNotification('Import library failed to load.', 'error'); return; }
+    ImportFlow.open({
+        module: 'sanitary',
+        title: 'Import Sanitary Records',
+        accept: '.xlsx,.xls,.csv,.docx',
+        typeSelect: false,
+        columns: [
+            { key: 'businessName', label: 'Business Name' },
+            { key: 'barangay', label: 'Barangay' },
+            { key: 'permitNo', label: 'Permit No' },
+            { key: 'date', label: 'Date' },
+            { key: 'personnelNo', label: 'Personnel #' },
+            { key: 'ownerDisplay', label: 'Owner' },
+            { key: '_issue', label: 'Issues' }
+        ],
+        parseFile: ImportFlow.parseSanitaryFile,
+        buildPayload: (rows) => ({ rows }),
+        endpoint: 'import_sanitary.php',
+        notify: showNotification,
+        onSuccess: async () => {
+            await loadSanitaryRecords();
+            updateSanitaryStatistics();
+        }
+    });
+}
+
+function openInspectionImport() {
+    if (typeof ImportFlow === 'undefined') { showNotification('Import library failed to load.', 'error'); return; }
+    ImportFlow.open({
+        module: 'inspection',
+        title: 'Import Inspection Reports',
+        accept: '.xlsx,.xls,.csv,.docx',
+        typeSelect: false,
+        columns: [
+            { key: 'establishment', label: 'Establishment' },
+            { key: 'reportDate', label: 'Report Date' },
+            { key: 'inspectorName', label: 'Inspector' },
+            { key: 'status', label: 'Status' },
+            { key: 'complied', label: 'Complied' },
+            { key: '_issue', label: 'Issues' }
+        ],
+        parseFile: ImportFlow.parseInspectionFile,
+        buildPayload: (rows) => ({ rows }),
+        endpoint: 'import_inspections.php',
+        notify: showNotification,
+        onSuccess: async () => { await loadInspectionReports(); }
+    });
+}
+
+function openBurialImport(presetType) {
+    if (typeof ImportFlow === 'undefined') { showNotification('Import library failed to load.', 'error'); return; }
+    ImportFlow.open({
+        module: 'burial',
+        title: 'Import Burial Records',
+        accept: '.docx,.xlsx,.xls,.csv',
+        typeSelect: true,
+        defaultType: presetType || 'cadaver',
+        columns: [
+            { key: 'deceased', label: 'Deceased' },
+            { key: 'deathDate', label: 'Death Date' },
+            { key: 'causeOfDeath', label: 'Cause of Death' },
+            { key: 'age', label: 'Age' },
+            { key: 'funeral', label: 'Funeral' },
+            { key: 'origin', label: 'Origin' },
+            { key: 'transfer', label: 'Transfer' },
+            { key: 'inspector', label: 'Inspector' },
+            { key: 'datetime', label: 'Released' },
+            { key: '_issue', label: 'Issues' }
+        ],
+        parseFile: ImportFlow.parseBurialFile,
+        buildPayload: (rows, state) => ({ type: state.type, rows }),
+        endpoint: 'import_burial.php',
+        notify: showNotification,
+        onSuccess: async () => {
+            const active = window._activeBurialType || presetType || 'cadaver';
+            await loadBurialRecords(active);
+        }
+    });
+}
+// ==================== END BULK IMPORT (INSPECTOR) ====================

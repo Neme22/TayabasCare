@@ -755,54 +755,8 @@ dialog.modal[open] {
     white-space: nowrap;
 }
 
-/* Toast Notification */
-.toast {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    background-color: #1F2937;
-    color: #FFFFFF;
-    padding: 16px 20px;
-    border-radius: 8px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-width: 300px;
-    z-index: 3000;
-    animation: toastSlideIn 0.3s ease;
-}
-
-@keyframes toastSlideIn {
-    from {
-        opacity: 0;
-        transform: translateX(100%);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-.toast.success {
-    background-color: var(--brand-deep);
-    color: #FFFFFF;
-}
-
-.toast.error {
-    background-color: #991B1B;
-    color: #FFFFFF;
-}
-
-.toast-icon {
-    font-size: 20px;
-}
-
-.toast-message {
-    flex: 1;
-    font-size: 14px;
-    font-weight: 500;
-}
+/* Toast Notification â€” legacy .toast rules removed; admin now uses the
+   DaisyUI toast container (#toast.toast.toast-end) rendered by Utils._renderToast */
 
 /* Print Styles */
 @media print {
@@ -2725,7 +2679,7 @@ dialog.modal::backdrop {
     #admin-accomplishment-report .report-title { font-size: 12px; }
     .admin-report-input { font-size: 11px; }
 }
-/* ===== CLUSTER ASSIGNMENTS — DRAG & DROP ===== */
+/* ===== CLUSTER ASSIGNMENTS ï¿½ DRAG & DROP ===== */
 .cluster-brgy-list.drag-over {
     border-color: #059669 !important;
     background: #ecfdf5 !important;

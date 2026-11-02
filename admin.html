@@ -605,6 +605,9 @@
                         <span class="section-label">Records</span>
                         <h2>Burial Records</h2>
                     </div>
+                    <button class="btn btn-primary" data-testid="admin-import-burial-btn" onclick="openBurialImport('cadaver')">
+                        <i class="fas fa-file-import"></i> Import Burial
+                    </button>
                 </div>
                 <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
                     <input type="text" id="admin-burial-search" placeholder="Search by Deceased Name, Informant, or Category..." oninput="TablePaging.setPage('burial',1); BurialManager.applyFilters()" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;min-width:260px;">
@@ -1593,19 +1596,16 @@
         </div>
     </div>
 
-    <!-- Modal Container -->
-    <div class="admin-modal" id="modal" style="display: none;">
-        <div class="modal-overlay" id="modalOverlay"></div>
-        <div class="modal-content" id="modalContent">
+    <!-- Dynamic Modal Container (DaisyUI) -->
+    <dialog id="modal" class="modal">
+        <div class="modal-box" id="modalContent">
             <!-- Dynamic content will be inserted here -->
         </div>
-    </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
 
-    <!-- Toast Notification -->
-    <div class="toast" id="toast" style="display: none;">
-        <i class="toast-icon"></i>
-        <span class="toast-message"></span>
-    </div>
+    <!-- Toast Notification (DaisyUI) -->
+    <div id="toast" class="toast toast-end z-[9999]"></div>
 
      <!-- Profile Modal -->
     <dialog id="profile-modal" class="modal">
@@ -1909,11 +1909,15 @@
         </form>
     </dialog>
 
+    <!-- Import preview modal UI is injected by js/import_common.js (single shared definition) -->
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+    <script src="js/import_common.js?v=1"></script>
 
-    <script src="js/admin.js?v=2"></script>
+    <script src="js/admin.js?v=3"></script>
 
     <script>
 document.addEventListener('click', function(e) {

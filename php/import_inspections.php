@@ -1,7 +1,8 @@
 <?php
 require_once 'auth_check.php';
-requireRole('admin');
+requireRole(['admin', 'inspector']);
 require_once 'csrf.php';
+require_once 'accomplishment_auto.php';
 
 // ============================================================
 // BULK INSPECTION REPORT IMPORT (Objective 1)
@@ -100,11 +101,20 @@ foreach ($rows as $i => $row) {
         $complianceDeadline = null;
     }
 
+    // Blank inspector name defaults to the session user's full name so
+    // inspector-imported historical rows are attributed correctly.
+    // (No cluster enforcement here — this endpoint ingests historical data.)
+    $inspectorName = trim($row['inspectorName'] ?? '');
+    if ($inspectorName === '') {
+        $inspectorName = accomplishmentSessionFullName($db);
+        if ($inspectorName === '') $inspectorName = trim($_SESSION['username'] ?? '');
+    }
+
     try {
         $stmt->execute([
             $establishment,
             $estabId,
-            trim($row['inspectorName'] ?? ''),
+            $inspectorName,
             $reportDate,
             $recommendation,
             $remarks,

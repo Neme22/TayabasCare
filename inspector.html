@@ -209,9 +209,14 @@
                 
                 <div class="page-header">
                     <h2>Sanitary Records</h2>
-                    <button class="btn btn-success text-white" data-testid="add-sanitary-btn" onclick="openSanitaryModal('add')">
-                        <i class="fas fa-plus"></i>Add New Record
-                    </button>
+                    <div class="flex items-center gap-3">
+                        <button class="btn btn-outline btn-success" data-testid="import-sanitary-btn" onclick="openSanitaryImport()">
+                            <i class="fas fa-file-import"></i>Import
+                        </button>
+                        <button class="btn btn-success text-white" data-testid="add-sanitary-btn" onclick="openSanitaryModal('add')">
+                            <i class="fas fa-plus"></i>Add New Record
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Search Box -->
@@ -278,9 +283,14 @@
             <div id="inspection-module" class="module-content hidden">
                 <div class="page-header">
                     <h2>Inspection Report</h2>
-                    <button class="btn btn-success text-white" onclick="openInspectionModal()">
-                        <i class="fas fa-plus"></i>Add Inspection Report
-                    </button>
+                    <div class="flex items-center gap-3">
+                        <button class="btn btn-outline btn-success" data-testid="import-inspection-btn" onclick="openInspectionImport()">
+                            <i class="fas fa-file-import"></i>Import
+                        </button>
+                        <button class="btn btn-success text-white" onclick="openInspectionModal()">
+                            <i class="fas fa-plus"></i>Add Inspection Report
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Filter Bar -->
@@ -585,9 +595,14 @@
                 <div id="cadaver-section" class="burial-section">
                     <div class="page-header">
                         <h3>Cadaver Records</h3>
-                        <button class="btn btn-success text-white" data-testid="add-cadaver-btn" onclick="openBurialModal('add', 'cadaver')">
-                            <i class="fas fa-plus"></i>Add Cadaver Record
-                        </button>
+                        <div class="flex items-center gap-3">
+                            <button class="btn btn-outline btn-success" data-testid="import-cadaver-btn" onclick="openBurialImport('cadaver')">
+                                <i class="fas fa-file-import"></i>Import
+                            </button>
+                            <button class="btn btn-success text-white" data-testid="add-cadaver-btn" onclick="openBurialModal('add', 'cadaver')">
+                                <i class="fas fa-plus"></i>Add Cadaver Record
+                            </button>
+                        </div>
                     </div>
                     
                     <!-- Search Box -->
@@ -633,9 +648,14 @@
                 <div id="skeletal-section" class="burial-section hidden">
                     <div class="page-header">
                         <h3>Transfer of Skeletal Records</h3>
-                        <button class="btn btn-success text-white" onclick="openBurialModal('add', 'skeletal')">
-                            <i class="fas fa-plus"></i>Add Skeletal Record
-                        </button>
+                        <div class="flex items-center gap-3">
+                            <button class="btn btn-outline btn-success" data-testid="import-skeletal-btn" onclick="openBurialImport('skeletal')">
+                                <i class="fas fa-file-import"></i>Import
+                            </button>
+                            <button class="btn btn-success text-white" onclick="openBurialModal('add', 'skeletal')">
+                                <i class="fas fa-plus"></i>Add Skeletal Record
+                            </button>
+                        </div>
                     </div>
                     
                     <!-- Search Box -->
@@ -682,9 +702,14 @@
                 <div id="exhumation-section" class="burial-section hidden">
                     <div class="page-header">
                         <h3>Exhumation Records</h3>
-                        <button class="btn btn-success text-white" onclick="openBurialModal('add', 'exhumation')">
-                            <i class="fas fa-plus"></i>Add Exhumation Record
-                        </button>
+                        <div class="flex items-center gap-3">
+                            <button class="btn btn-outline btn-success" data-testid="import-exhumation-btn" onclick="openBurialImport('exhumation')">
+                                <i class="fas fa-file-import"></i>Import
+                            </button>
+                            <button class="btn btn-success text-white" onclick="openBurialModal('add', 'exhumation')">
+                                <i class="fas fa-plus"></i>Add Exhumation Record
+                            </button>
+                        </div>
                     </div>
                     
                     <!-- Search Box -->
@@ -2196,7 +2221,12 @@
         </form>
     </dialog>
 
-    <script src="js/inspector.js?v=2"></script>
+    <!-- Import preview modal UI is injected by js/import_common.js (single shared definition) -->
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+    <script src="js/import_common.js?v=1"></script>
+    <script src="js/inspector.js?v=3"></script>
 
     <script>
 document.addEventListener('click', function(e) {

@@ -1,7 +1,27 @@
 <?php
 require_once 'auth_check.php';
-requireRole('admin');
+requireRole(['admin', 'inspector']);
 require_once 'csrf.php';
+require_once 'accomplishment_auto.php';
+require_once 'activity_log.php';
+
+// Lazy migration: created_by stamps which user imported the record
+// (same column as sanitary.php createRecord).
+function ensureImportSanitaryCreatedByColumn() {
+    global $db;
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $stmt = $db->query("SHOW COLUMNS FROM sanitary_records LIKE 'created_by'");
+        if (!$stmt->fetch()) {
+            $db->exec("ALTER TABLE sanitary_records ADD COLUMN created_by VARCHAR(255) NOT NULL DEFAULT '' AFTER remarks");
+        }
+    } catch (PDOException $e) {
+        error_log('ensureImportSanitaryCreatedByColumn: ' . $e->getMessage());
+    }
+}
+ensureImportSanitaryCreatedByColumn();
 
 // ============================================================
 // BULK HISTORICAL RECORD IMPORT (Objective 1)
@@ -42,13 +62,15 @@ $stmt = $db->prepare("
     (record_no, date, permit_no, personnel_no, business_name,
      owner_first_name, owner_middle_name, owner_last_name,
      personnel_list, sex, result_xray, result_stool, barangay,
-     building_street, corporation_name, remarks, business_type)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     building_street, corporation_name, remarks, business_type, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ");
 
 $imported  = 0;
 $skipped   = 0;
 $failed    = [];
+$createdBy = accomplishmentSessionFullName($db);
+if ($createdBy === '') $createdBy = trim($_SESSION['username'] ?? '');
 
 $db->beginTransaction();
 
@@ -77,7 +99,13 @@ foreach ($rows as $i => $row) {
     // Map medical results and personnel from imported data
     $resultXray = isset($row['resultXray']) ? (int)(bool)$row['resultXray'] : (isset($row['Result Xray']) ? (int)(bool)$row['Result Xray'] : 0);
     $resultStool = isset($row['resultStool']) ? (int)(bool)$row['resultStool'] : (isset($row['Result Stool']) ? (int)(bool)$row['Result Stool'] : 0);
-    $personnelRaw = $row['personnelList'] ?? $row['Personnel List'] ?? null;
+    // Structured personnel (form-shaped objects from the inspector bulk import)
+    // takes precedence; then legacy personnelList / comma-separated string.
+    if (array_key_exists('personnel', $row) && $row['personnel'] !== null && $row['personnel'] !== '') {
+        $personnelRaw = $row['personnel'];
+    } else {
+        $personnelRaw = $row['personnelList'] ?? $row['Personnel List'] ?? null;
+    }
     if ($personnelRaw === null || $personnelRaw === '') {
         $personnelList = json_encode([]);
     } elseif (is_string($personnelRaw)) {
@@ -104,7 +132,8 @@ foreach ($rows as $i => $row) {
             $row['buildingStreet'] ?? '',
             $row['corporationName']?? '',
             $row['remarks']        ?? '',
-            $row['businessType']   ?? 'Other'
+            $row['businessType']   ?? 'Other',
+            $createdBy
         ]);
         $imported++;
         $existingKeys[$dedupeKey] = true;
@@ -115,6 +144,10 @@ foreach ($rows as $i => $row) {
 
 // Commit all successfully imported rows; failures are reported in the response
 $db->commit();
+
+try {
+    logActivity($db, 'IMPORT', 'sanitary', null, '', "Bulk imported $imported sanitary record(s)");
+} catch (Exception $e) {}
 
 $msg = "$imported record(s) imported.";
 if ($skipped > 0) $msg .= " $skipped duplicate(s) skipped.";
