@@ -603,6 +603,14 @@ function setRealtimeDatesAdvanced() {
     if (sanitaryDate && !sanitaryDate.value) {
         sanitaryDate.value = formatted;
     }
+    refreshSanitaryDateDisplay();
+}
+
+// Date is shown as a non-editable label; hidden input holds the value.
+function refreshSanitaryDateDisplay() {
+    const el = document.getElementById('sanitary-date-display');
+    const src = document.getElementById('sanitary-date');
+    if (el && src) el.textContent = src.value || '—';
 }
 
 document.addEventListener('DOMContentLoaded', setRealtimeDatesAdvanced);
@@ -658,36 +666,36 @@ function addPersonnel() {
 
     personnelRow.innerHTML = `
         <div class="grid grid-cols-3 gap-2 mb-2">
-            <input type="text" class="input input-bordered input-success input-sm first-name" placeholder="First Name"
+            <input type="text" class="input input-bordered input-warning input-sm first-name" placeholder="First Name"
                 oninput="this.value = this.value.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ\\s\\-]/g, ''); this.value = this.value.replace(/(?:^|\\s|-)\\S/g, c => c.toUpperCase());" />
-            <input type="text" class="input input-bordered input-success input-sm middle-name" placeholder="M.I." maxlength="1"
+            <input type="text" class="input input-bordered input-warning input-sm middle-name" placeholder="M.I." maxlength="1"
                 oninput="this.value = this.value.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ]/g, '').toUpperCase();" />
-            <input type="text" class="input input-bordered input-success input-sm last-name" placeholder="Last Name"
+            <input type="text" class="input input-bordered input-warning input-sm last-name" placeholder="Last Name"
                 oninput="this.value = this.value.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ\\s\\-]/g, ''); this.value = this.value.replace(/(?:^|\\s|-)\\S/g, c => c.toUpperCase());" />
         </div>
         <div class="grid grid-cols-2 gap-2 items-center">
             <div>
-                <label class="label-text text-xs font-semibold">Sex:</label>
+                <label class="label-text text-xs font-semibold">Sex: <span class="text-red-500">*</span></label>
                 <div class="flex gap-3 mt-1">
                     <label class="label cursor-pointer">
-                        <input type="radio" name="personnel-sex-${personnelCount}" value="Male" class="radio radio-xs radio-success personnel-sex" />
+                        <input type="radio" name="personnel-sex-${personnelCount}" value="Male" class="radio radio-xs radio-warning personnel-sex" />
                         <span class="label-text ml-1 text-xs">Male</span>
                     </label>
                     <label class="label cursor-pointer">
-                        <input type="radio" name="personnel-sex-${personnelCount}" value="Female" class="radio radio-xs radio-success personnel-sex" />
+                        <input type="radio" name="personnel-sex-${personnelCount}" value="Female" class="radio radio-xs radio-warning personnel-sex" />
                         <span class="label-text ml-1 text-xs">Female</span>
                     </label>
                 </div>
             </div>
             <div>
-                <label class="label-text text-xs font-semibold">Result:</label>
+                <label class="label-text text-xs font-semibold">Result: <span class="text-red-500">*</span></label>
                 <div class="flex gap-3 mt-1">
                     <label class="label cursor-pointer">
-                        <input type="checkbox" class="checkbox checkbox-xs checkbox-success personnel-xray" />
+                        <input type="checkbox" class="checkbox checkbox-xs checkbox-warning personnel-xray" />
                         <span class="label-text ml-1 text-xs">X-ray</span>
                     </label>
                     <label class="label cursor-pointer">
-                        <input type="checkbox" class="checkbox checkbox-xs checkbox-success personnel-stool" />
+                        <input type="checkbox" class="checkbox checkbox-xs checkbox-warning personnel-stool" />
                         <span class="label-text ml-1 text-xs">Stool</span>
                     </label>
                 </div>
@@ -739,39 +747,39 @@ function generatePersonnelFields() {
         
         personnelRow.innerHTML = `
             <div class="mb-2">
-                <label class="label-text text-sm font-semibold text-emerald-700">Personnel #${i}</label>
+                <label class="label-text text-sm font-semibold text-emerald-700">Personnel #${i} <span class="text-red-500">*</span></label>
             </div>
             <div class="grid grid-cols-3 gap-2 mb-2">
-                <input type="text" class="input input-bordered input-success input-sm first-name" placeholder="First Name"
+                <input type="text" class="input input-bordered input-warning input-sm first-name" placeholder="First Name"
                     oninput="this.value = this.value.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ\\s\\-]/g, ''); this.value = this.value.replace(/(?:^|\\s|-)\\S/g, c => c.toUpperCase());" />
-                <input type="text" class="input input-bordered input-success input-sm middle-name" placeholder="M.I." maxlength="1"
+                <input type="text" class="input input-bordered input-warning input-sm middle-name" placeholder="M.I." maxlength="1"
                     oninput="this.value = this.value.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ]/g, '').toUpperCase();" />
-                <input type="text" class="input input-bordered input-success input-sm last-name" placeholder="Last Name"
+                <input type="text" class="input input-bordered input-warning input-sm last-name" placeholder="Last Name"
                     oninput="this.value = this.value.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ\\s\\-]/g, ''); this.value = this.value.replace(/(?:^|\\s|-)\\S/g, c => c.toUpperCase());" />
             </div>
             <div class="grid grid-cols-2 gap-2 items-center">
                 <div>
-                    <label class="label-text text-xs font-semibold">Sex:</label>
+                    <label class="label-text text-xs font-semibold">Sex: <span class="text-red-500">*</span></label>
                     <div class="flex gap-3 mt-1">
                         <label class="label cursor-pointer">
-                            <input type="radio" name="personnel-sex-${i}" value="Male" class="radio radio-xs radio-success personnel-sex" />
+                            <input type="radio" name="personnel-sex-${i}" value="Male" class="radio radio-xs radio-warning personnel-sex" />
                             <span class="label-text ml-1 text-xs">Male</span>
                         </label>
                         <label class="label cursor-pointer">
-                            <input type="radio" name="personnel-sex-${i}" value="Female" class="radio radio-xs radio-success personnel-sex" />
+                            <input type="radio" name="personnel-sex-${i}" value="Female" class="radio radio-xs radio-warning personnel-sex" />
                             <span class="label-text ml-1 text-xs">Female</span>
                         </label>
                     </div>
                 </div>
                 <div>
-                    <label class="label-text text-xs font-semibold">Result:</label>
+                    <label class="label-text text-xs font-semibold">Result: <span class="text-red-500">*</span></label>
                     <div class="flex gap-3 mt-1">
                         <label class="label cursor-pointer">
-                            <input type="checkbox" class="checkbox checkbox-xs checkbox-success personnel-xray" />
+                            <input type="checkbox" class="checkbox checkbox-xs checkbox-warning personnel-xray" />
                             <span class="label-text ml-1 text-xs">X-ray</span>
                         </label>
                         <label class="label cursor-pointer">
-                            <input type="checkbox" class="checkbox checkbox-xs checkbox-success personnel-stool" />
+                            <input type="checkbox" class="checkbox checkbox-xs checkbox-warning personnel-stool" />
                             <span class="label-text ml-1 text-xs">Stool</span>
                         </label>
                     </div>
@@ -2913,6 +2921,7 @@ function openSanitaryModal(mode, index = null) {
         document.getElementById('sanitary-mode').value = 'edit';
     }
     
+    refreshSanitaryDateDisplay();
     modal.showModal();
 }
 
@@ -2982,36 +2991,36 @@ function loadSanitaryData(id) {
         
         row.innerHTML = `
             <div class="grid grid-cols-3 gap-2 mb-2">
-                <input type="text" class="input input-bordered input-success input-sm first-name" value="${esc(person.first) || ''}" placeholder="First Name"
+                <input type="text" class="input input-bordered input-warning input-sm first-name" value="${esc(person.first) || ''}" placeholder="First Name"
                     oninput="this.value = this.value.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ\\s\\-]/g, ''); this.value = this.value.replace(/(?:^|\\s|-)\\S/g, c => c.toUpperCase());" />
-                <input type="text" class="input input-bordered input-success input-sm middle-name" value="${esc((person.middle || '').replace(/\\.$/,'').toUpperCase())}" placeholder="M.I." maxlength="1"
+                <input type="text" class="input input-bordered input-warning input-sm middle-name" value="${esc((person.middle || '').replace(/\\.$/,'').toUpperCase())}" placeholder="M.I." maxlength="1"
                     oninput="this.value = this.value.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ]/g, '').toUpperCase();" />
-                <input type="text" class="input input-bordered input-success input-sm last-name" value="${esc(person.last) || ''}" placeholder="Last Name"
+                <input type="text" class="input input-bordered input-warning input-sm last-name" value="${esc(person.last) || ''}" placeholder="Last Name"
                     oninput="this.value = this.value.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ\\s\\-]/g, ''); this.value = this.value.replace(/(?:^|\\s|-)\\S/g, c => c.toUpperCase());" />
             </div>
             <div class="grid grid-cols-2 gap-2 items-center">
                 <div>
-                    <label class="label-text text-xs font-semibold">Sex:</label>
+                    <label class="label-text text-xs font-semibold">Sex: <span class="text-red-500">*</span></label>
                     <div class="flex gap-3 mt-1">
                         <label class="label cursor-pointer">
-                            <input type="radio" name="personnel-sex-${index + 1}" value="Male" class="radio radio-xs radio-success personnel-sex" ${sexMaleChecked} />
+                            <input type="radio" name="personnel-sex-${index + 1}" value="Male" class="radio radio-xs radio-warning personnel-sex" ${sexMaleChecked} />
                             <span class="label-text ml-1 text-xs">Male</span>
                         </label>
                         <label class="label cursor-pointer">
-                            <input type="radio" name="personnel-sex-${index + 1}" value="Female" class="radio radio-xs radio-success personnel-sex" ${sexFemaleChecked} />
+                            <input type="radio" name="personnel-sex-${index + 1}" value="Female" class="radio radio-xs radio-warning personnel-sex" ${sexFemaleChecked} />
                             <span class="label-text ml-1 text-xs">Female</span>
                         </label>
                     </div>
                 </div>
                 <div>
-                    <label class="label-text text-xs font-semibold">Result:</label>
+                    <label class="label-text text-xs font-semibold">Result: <span class="text-red-500">*</span></label>
                     <div class="flex gap-3 mt-1">
                         <label class="label cursor-pointer">
-                            <input type="checkbox" class="checkbox checkbox-xs checkbox-success personnel-xray" ${xrayChecked} />
+                            <input type="checkbox" class="checkbox checkbox-xs checkbox-warning personnel-xray" ${xrayChecked} />
                             <span class="label-text ml-1 text-xs">X-ray</span>
                         </label>
                         <label class="label cursor-pointer">
-                            <input type="checkbox" class="checkbox checkbox-xs checkbox-success personnel-stool" ${stoolChecked} />
+                            <input type="checkbox" class="checkbox checkbox-xs checkbox-warning personnel-stool" ${stoolChecked} />
                             <span class="label-text ml-1 text-xs">Stool</span>
                         </label>
                     </div>
@@ -3027,36 +3036,36 @@ function loadSanitaryData(id) {
     row.className = "personnel-row border border-gray-300 p-3 rounded-lg";
     row.innerHTML = `
         <div class="grid grid-cols-3 gap-2 mb-2">
-            <input type="text" class="input input-bordered input-success input-sm first-name" placeholder="First Name"
+            <input type="text" class="input input-bordered input-warning input-sm first-name" placeholder="First Name"
                 oninput="this.value = this.value.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ\\s\\-]/g, ''); this.value = this.value.replace(/(?:^|\\s|-)\\S/g, c => c.toUpperCase());" />
-            <input type="text" class="input input-bordered input-success input-sm middle-name" placeholder="M.I." maxlength="1"
+            <input type="text" class="input input-bordered input-warning input-sm middle-name" placeholder="M.I." maxlength="1"
                 oninput="this.value = this.value.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ]/g, '').toUpperCase();" />
-            <input type="text" class="input input-bordered input-success input-sm last-name" placeholder="Last Name"
+            <input type="text" class="input input-bordered input-warning input-sm last-name" placeholder="Last Name"
                 oninput="this.value = this.value.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ\\s\\-]/g, ''); this.value = this.value.replace(/(?:^|\\s|-)\\S/g, c => c.toUpperCase());" />
         </div>
         <div class="grid grid-cols-2 gap-2 items-center">
             <div>
-                <label class="label-text text-xs font-semibold">Sex:</label>
+                <label class="label-text text-xs font-semibold">Sex: <span class="text-red-500">*</span></label>
                 <div class="flex gap-3 mt-1">
                     <label class="label cursor-pointer">
-                        <input type="radio" name="personnel-sex-1" value="Male" class="radio radio-xs radio-success personnel-sex" />
+                        <input type="radio" name="personnel-sex-1" value="Male" class="radio radio-xs radio-warning personnel-sex" />
                         <span class="label-text ml-1 text-xs">Male</span>
                     </label>
                     <label class="label cursor-pointer">
-                        <input type="radio" name="personnel-sex-1" value="Female" class="radio radio-xs radio-success personnel-sex" />
+                        <input type="radio" name="personnel-sex-1" value="Female" class="radio radio-xs radio-warning personnel-sex" />
                         <span class="label-text ml-1 text-xs">Female</span>
                     </label>
                 </div>
             </div>
             <div>
-                <label class="label-text text-xs font-semibold">Result:</label>
+                <label class="label-text text-xs font-semibold">Result: <span class="text-red-500">*</span></label>
                 <div class="flex gap-3 mt-1">
                     <label class="label cursor-pointer">
-                        <input type="checkbox" class="checkbox checkbox-xs checkbox-success personnel-xray" />
+                        <input type="checkbox" class="checkbox checkbox-xs checkbox-warning personnel-xray" />
                         <span class="label-text ml-1 text-xs">X-ray</span>
                     </label>
                     <label class="label cursor-pointer">
-                        <input type="checkbox" class="checkbox checkbox-xs checkbox-success personnel-stool" />
+                        <input type="checkbox" class="checkbox checkbox-xs checkbox-warning personnel-stool" />
                         <span class="label-text ml-1 text-xs">Stool</span>
                     </label>
                 </div>
@@ -3086,8 +3095,10 @@ async function handleSanitarySubmit(e) {
 
     const personnelNo = document.getElementById('sanitary-personnel-no').value.replace(/[^0-9]/g, '').trim();
     const ownerSex = document.querySelector('input[name="sex"]:checked')?.value || '';
+    const ownerResultXray = document.getElementById('result-xray').checked;
+    const ownerResultStool = document.getElementById('result-stool').checked;
 
-    if (!permit1 || !permit2 || !permit3 || !businessName || !barangay || !ownerFirst || !ownerLast || !ownerSex || !personnelNo || parseInt(personnelNo, 10) <= 0) {
+    if (!permit1 || !permit2 || !permit3 || !businessName || !barangay || !ownerFirst || !ownerLast || !ownerSex || !personnelNo || parseInt(personnelNo, 10) <= 0 || (!ownerResultXray && !ownerResultStool)) {
         alert('Please fill in all required fields!');
         return;
     }
@@ -3106,7 +3117,7 @@ async function handleSanitarySubmit(e) {
         const xray = row.querySelector('.personnel-xray').checked;
         const stool = row.querySelector('.personnel-stool').checked;
 
-        if (!first || !middle || !last || !sex) {
+        if (!first || !middle || !last || !sex || (!xray && !stool)) {
             personnelValid = false;
         }
 
