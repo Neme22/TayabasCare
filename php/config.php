@@ -59,7 +59,7 @@ class Database {
 }
 
 // CORS Headers — restrict to local origin
-$allowedOrigins = ['http://localhost', 'http://localhost:80', 'http://127.0.0.1', 'http://localhost:8080', 'https://tayabascare.me', 'https://www.tayabascare.me', 'http://tayabascare.me'];
+$allowedOrigins = ['http://localhost', 'http://localhost:80', 'http://127.0.0.1', 'http://localhost:8080', 'https://tayabascare.me', 'https://www.tayabascare.me', 'http://tayabascare.me', 'https://tayabascare.tech', 'https://www.tayabascare.tech', 'http://tayabascare.tech'];
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if (in_array($origin, $allowedOrigins, true)) {
     header('Access-Control-Allow-Origin: ' . $origin);
