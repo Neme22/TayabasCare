@@ -378,11 +378,18 @@ const FormDrafts = {
             if (d.causeOfDeath) document.getElementById('burial-cause-of-death').value = d.causeOfDeath;
             if (d.age) document.getElementById('burial-age').value = d.age;
             if (d.informant) document.getElementById('burial-informant').value = d.informant;
-            if (d.inspector) document.getElementById('burial-inspector').value = d.inspector;
+            if (d.inspector) setBurialInspector(d.inspector);
             if (d.sex) { const el = document.getElementById('burial-sex'); if (el) el.value = d.sex; }
             if (d.originMunicipality) { const el = document.getElementById('burial-origin-municipality'); if (el) el.value = d.originMunicipality; }
             if (d.transferProvince) { const el = document.getElementById('burial-transfer-province'); if (el) el.value = d.transferProvince; }
-            if (d.transferMunicipality) { const el = document.getElementById('burial-transfer-municipality'); if (el) el.value = d.transferMunicipality; }
+            if (d.transferMunicipality) {
+                const el = document.getElementById('burial-transfer-municipality');
+                if (el) {
+                    el.dataset.pendingValue = d.transferMunicipality;
+                    const provEl = document.getElementById('burial-transfer-province');
+                    if (provEl) provEl.dispatchEvent(new Event('change'));
+                }
+            }
             if (d.funeral) { const el = document.getElementById('burial-funeral') || document.getElementById('burial-funeral-skeletal'); if (el) el.value = d.funeral; }
             if (d.orNumber) { const el = document.getElementById('burial-or') || document.getElementById('burial-or-skeletal'); if (el) el.value = d.orNumber; }
         }, 300);
@@ -866,7 +873,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Dynamic inspector column map (replaces hardcoded names)
     buildInspectorColumnMap().then(() => {
         populateInspectorReportHeaders();
-        populateBurialInspectorDropdown();
     });
 
     // Migrate any localStorage accomplishment records to server
@@ -1812,34 +1818,17 @@ function populateInspectorReportHeaders() {
     }
 }
 
-// Populate burial modal inspector dropdown from database
-function populateBurialInspectorDropdown() {
-    const container = document.getElementById('burial-inspector-options');
-    if (!container) return;
+// ── Burial inspector: locked label (no dropdown, not editable) ─────────────
+function getLoggedInInspectorName() {
+    return localStorage.getItem('inspectorFullName') || localStorage.getItem('username') || '';
+}
 
-    // Prefer full list (name + role); fall back to first-5 names list
-    const list = (_inspectorsFullList && _inspectorsFullList.length)
-        ? _inspectorsFullList
-        : (_inspectorNamesList || []).map(n => ({ fullName: n, role: '' }));
-    if (!list.length) return;
-
-    let html = `<div class="custom-option" onclick="selectInspector('', 'Select Inspector', '')">
-        <span class="option-name">Select Inspector</span>
-    </div>`;
-
-    list.forEach(item => {
-        const name = item.fullName || '';
-        if (!name) return;
-        const role = item.role || 'Sanitary Inspector';
-        const safeName = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        const safeRole = role.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        html += `<div class="custom-option" onclick="selectInspector('${safeName}', '${safeName}', '${safeRole}')">
-            <span class="option-name">${esc(name)}</span>
-            <span class="option-rank">${esc(role)}</span>
-        </div>`;
-    });
-
-    container.innerHTML = html;
+function setBurialInspector(name) {
+    const value = name || '';
+    const hidden = document.getElementById('burial-inspector');
+    if (hidden) hidden.value = value;
+    const label = document.getElementById('burial-inspector-name');
+    if (label) label.textContent = value || '—';
 }
 
 // Auto-recorded form fields (1-based): the system computes these from records.
@@ -4496,45 +4485,201 @@ function openBurialModal(mode, type, id = null) {
     }
 
     // Handle button visibility and input states
+    clearBurialViewLabels();
     if (mode === 'add') {
         title.textContent = `Add ${type.charAt(0).toUpperCase() + type.slice(1)} Record`;
         submitBtn.style.display = 'inline-flex';
         printBtn.style.display = 'none';
         disableBurialInputs(false);
-        startBurialRealtimeClock(); // ← Make sure this line exists!
+        setBurialRequired(true);
+        startBurialRealtimeClock();
 
-        // Prefill inspector with the logged-in user so accomplishment
-        // attribution (burial.inspector) is always filled
-        const loggedName = localStorage.getItem('inspectorFullName') || localStorage.getItem('username') || '';
-        if (loggedName && (_inspectorsFullList.length || _inspectorNamesList.length > 0)) {
-            const names = _inspectorsFullList.length
-                ? _inspectorsFullList.map(i => i.fullName)
-                : _inspectorNamesList;
-            const match = names.find(n => n === loggedName || n.toLowerCase() === loggedName.toLowerCase()) || loggedName;
-            const matchRole = (match && _inspectorRoleByName[match.toLowerCase()]) || 'Sanitary Inspector';
-            selectInspector(match, match, matchRole);
-        } else if (loggedName) {
-            document.getElementById('burial-inspector').value = loggedName;
-            const label = document.querySelector('#inspector-dropdown-selected .selected-text');
-            if (label) label.textContent = loggedName;
-        }
+        // Inspector is a locked label — always the logged-in inspector
+        setBurialInspector(getLoggedInInspectorName());
     } else if (mode === 'edit') {
         title.textContent = `Edit ${type.charAt(0).toUpperCase() + type.slice(1)} Record`;
-        submitBtn.style.display = 'inline-flex'; // Show save in edit
+        submitBtn.style.display = 'inline-flex';
         printBtn.style.display = 'none';
-        disableBurialInputs(false); // Enable inputs for editing
+        disableBurialInputs(false);
+        setBurialRequired(false); // existing file already satisfies death cert
         stopBurialRealtimeClock();
         loadBurialData(type, id);
     } else if (mode === 'view') {
         title.textContent = `View ${type.charAt(0).toUpperCase() + type.slice(1)} Record`;
-        submitBtn.style.display = 'none'; // REMOVE SAVE IN VIEW
+        submitBtn.style.display = 'none';
         printBtn.style.display = 'inline-flex';
-        disableBurialInputs(true); // Disable inputs for viewing
         stopBurialRealtimeClock();
         loadBurialData(type, id);
+        applyBurialViewLabels(type, id);
+        disableBurialInputs(true);
     }
-    
+
     modal.showModal();
+}
+
+// Required fields when creating a new burial record (all categories).
+// Text fields stay required always; death-cert upload is required only on add
+// (edit already has a stored file).
+function setBurialRequired(required) {
+    ['burial-death-place', 'burial-age', 'burial-cause-of-death', 'burial-informant']
+        .forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.setAttribute('required', '');
+        });
+    const cert = document.getElementById('burial-death-cert');
+    if (cert) {
+        if (required) cert.setAttribute('required', '');
+        else cert.removeAttribute('required');
+    }
+}
+
+// ── View mode: show every field as a static label (nothing editable) ──────
+function clearBurialViewLabels() {
+    const form = document.getElementById('burial-form');
+    if (!form) return;
+    form.classList.remove('burial-view-mode');
+    form.querySelectorAll('.burial-view-value').forEach(el => el.remove());
+    form.querySelectorAll('[data-view-hidden]').forEach(el => {
+        el.style.display = '';
+        el.removeAttribute('data-view-hidden');
+    });
+}
+
+function burialViewDate(str) {
+    if (!str || str === '0000-00-00') return '—';
+    const d = new Date(str);
+    if (isNaN(d.getTime())) return str;
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function burialViewSelectText(id) {
+    const el = document.getElementById(id);
+    if (!el) return '—';
+    if (el.tagName === 'SELECT') {
+        const opt = el.selectedOptions && el.selectedOptions[0];
+        if (el.value && opt && opt.value) return opt.textContent.trim();
+        return '—';
+    }
+    return (el.value || '').trim() || '—';
+}
+
+// "PSGCcode | City" or "Province | City" → human-readable place (city first)
+function burialViewPlace(raw) {
+    const s = (raw || '').trim();
+    if (!s) return '—';
+    const parts = s.split('|').map(p => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+        const city = parts[1];
+        const prov = parts[0];
+        if (/^\d+$/.test(prov)) return city; // PSGC code — show city only
+        return `${city}, ${prov}`;
+    }
+    return parts[0];
+}
+
+function applyBurialViewLabels(type, id) {
+    const form = document.getElementById('burial-form');
+    if (!form) return;
+    clearBurialViewLabels();
+    form.classList.add('burial-view-mode');
+
+    const records = cachedBurialRecords[type] || [];
+    const record = records.find(r => String(r.id) === String(id)) || {};
+    const isCadaver = type === 'cadaver';
+
+    const values = {
+        'burial-datetime': (function () {
+            if (!record.datetime) return '—';
+            const d = new Date(record.datetime);
+            if (isNaN(d.getTime())) return record.datetime;
+            return d.toLocaleString('en-US', {
+                year: 'numeric', month: 'long', day: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+        })(),
+        'burial-deceased': record.deceased || '—',
+        'burial-sex': record.sex || '—',
+        'burial-death-date': burialViewDate(record.deathDate),
+        'burial-death-place': record.deathPlace || '—',
+        'burial-age': record.age || '—',
+        'burial-cause-of-death': record.causeOfDeath || '—',
+        'burial-informant': record.informant || '—',
+        'burial-origin-municipality': isCadaver ? (record.origin || '—') : '—',
+        'burial-transfer-province': isCadaver ? burialViewPlace(record.transfer) : '—',
+        'burial-funeral': isCadaver ? (record.funeral || '—') : '—',
+        'burial-or': isCadaver ? (record.orNumber || '—') : '—',
+        'burial-cemetery-origin-municipality': !isCadaver ? (record.cemeteryOrigin || '—') : '—',
+        'burial-cemetery-transfer-province': !isCadaver ? burialViewPlace(record.cemeteryTransfer) : '—',
+        'burial-funeral-skeletal': !isCadaver ? (record.funeral || '—') : '—',
+        'burial-or-skeletal': !isCadaver ? (record.orNumber || '—') : '—'
+    };
+
+    // Pair selects (province + city) share one grid — hide the grid, show one place label
+    const pairMap = [
+        { ids: ['burial-transfer-province', 'burial-transfer-municipality'], label: values['burial-transfer-province'] },
+        { ids: ['burial-cemetery-transfer-province', 'burial-cemetery-transfer-municipality'], label: values['burial-cemetery-transfer-province'] }
+    ];
+    const pairHidden = new Set();
+    pairMap.forEach(pair => {
+        const first = document.getElementById(pair.ids[0]);
+        if (!first) return;
+        const formControl = first.closest('.form-control');
+        const section = formControl && formControl.closest('#cadaver-fields, #skeletal-fields');
+        if (section && section.style.display === 'none') return;
+
+        pair.ids.forEach(pid => {
+            const el = document.getElementById(pid);
+            if (el) {
+                el.style.display = 'none';
+                el.setAttribute('data-view-hidden', '1');
+                pairHidden.add(pid);
+            }
+        });
+        const grid = first.parentElement;
+        if (grid && grid !== formControl) {
+            grid.style.display = 'none';
+            grid.setAttribute('data-view-hidden', '1');
+        }
+
+        const wrap = document.createElement('div');
+        wrap.className = 'burial-view-value';
+        wrap.textContent = pair.label || '—';
+        if (formControl) {
+            const lab = formControl.querySelector(':scope > .label');
+            if (lab) lab.insertAdjacentElement('afterend', wrap);
+            else formControl.insertBefore(wrap, formControl.firstChild);
+        }
+    });
+
+    Object.keys(values).forEach(id => {
+        if (pairHidden.has(id)) return;
+        const control = document.getElementById(id);
+        if (!control || control.type === 'hidden') return;
+        // Skip fields inside a hidden type section
+        const section = control.closest('#cadaver-fields, #skeletal-fields');
+        if (section && section.style.display === 'none') return;
+
+        const wrap = document.createElement('div');
+        wrap.className = 'burial-view-value';
+        wrap.textContent = values[id] || '—';
+        control.parentNode.insertBefore(wrap, control);
+        control.style.display = 'none';
+        control.setAttribute('data-view-hidden', '1');
+    });
+
+    // File input → show filename only
+    const fileInput = document.getElementById('burial-death-cert');
+    if (fileInput) {
+        const wrap = document.createElement('div');
+        wrap.className = 'burial-view-value';
+        wrap.textContent = record.fileName || '—';
+        fileInput.parentNode.insertBefore(wrap, fileInput);
+        fileInput.style.display = 'none';
+        fileInput.setAttribute('data-view-hidden', '1');
+    }
+
+    // Inspector always a locked label showing who is logged in / recorded
+    setBurialInspector(record.inspector || getLoggedInInspectorName());
 }
 
 function loadBurialData(type, index) {
@@ -4576,11 +4721,8 @@ function loadBurialData(type, index) {
     const ageEl = document.getElementById('burial-age');
     if (ageEl) ageEl.value = record.age || '';
     document.getElementById('burial-informant').value = record.informant || '';
-    {
-        const inspName = record.inspector || '';
-        const inspRole = (inspName && _inspectorRoleByName[inspName.toLowerCase()]) || 'Sanitary Inspector';
-        selectInspector(inspName, inspName, inspRole);
-    }
+    // Inspector is a locked label — record's inspector, falling back to logged-in user
+    setBurialInspector(record.inspector || getLoggedInInspectorName());
     const sexSelect = document.getElementById('burial-sex');
     if (sexSelect) sexSelect.value = record.sex || '';
     
@@ -4594,17 +4736,24 @@ function loadBurialData(type, index) {
                 if (originSelect) originSelect.value = savedOriginBarangay;
             }, 600);
         }
-        // Split saved transfer back into province and municipality
+        // Split saved transfer back into province and municipality.
+        // The municipality options only exist AFTER the province's async PSGC
+        // fetch completes, so stash the city as a pending value and let the
+        // change handler apply it once the options are actually there.
         const transferParts = (record.transfer || '').split(' | ');
         const savedTransferProvince = transferParts[0] || '';
         const savedTransferMunicipality = transferParts[1] || '';
         if (savedTransferProvince) {
             const transferProvSelect = document.getElementById('burial-transfer-province');
+            const transferMuniSelect = document.getElementById('burial-transfer-municipality');
+            if (transferMuniSelect) transferMuniSelect.dataset.pendingValue = savedTransferMunicipality;
             transferProvSelect.value = savedTransferProvince;
-            transferProvSelect.dispatchEvent(new Event('change'));
-            setTimeout(() => {
-                document.getElementById('burial-transfer-municipality').value = savedTransferMunicipality;
-            }, 800);
+            if (transferProvSelect.value) {
+                transferProvSelect.dispatchEvent(new Event('change'));
+            } else if (transferMuniSelect) {
+                // Provinces not loaded yet — stash province too, apply on load
+                transferProvSelect.dataset.pendingValue = savedTransferProvince;
+            }
         }
         document.getElementById('burial-funeral').value = record.funeral || '';
         document.getElementById('burial-or').value = record.orNumber || '';
@@ -4619,16 +4768,20 @@ function loadBurialData(type, index) {
         }
 
         // Split saved cemetery transfer back into province and municipality
+        // (pending-value pattern — options load async after province change)
         const cemeteryTransferParts = (record.cemeteryTransfer || '').split(' | ');
         const savedCemTransferProvince = cemeteryTransferParts[0] || '';
         const savedCemTransferMunicipality = cemeteryTransferParts[1] || '';
         if (savedCemTransferProvince) {
             const cemTransferProvSelect = document.getElementById('burial-cemetery-transfer-province');
+            const cemTransferMuniSelect = document.getElementById('burial-cemetery-transfer-municipality');
+            if (cemTransferMuniSelect) cemTransferMuniSelect.dataset.pendingValue = savedCemTransferMunicipality;
             cemTransferProvSelect.value = savedCemTransferProvince;
-            cemTransferProvSelect.dispatchEvent(new Event('change'));
-            setTimeout(() => {
-                document.getElementById('burial-cemetery-transfer-municipality').value = savedCemTransferMunicipality;
-            }, 800);
+            if (cemTransferProvSelect.value) {
+                cemTransferProvSelect.dispatchEvent(new Event('change'));
+            } else if (cemTransferMuniSelect) {
+                cemTransferProvSelect.dataset.pendingValue = savedCemTransferProvince;
+            }
         }
         document.getElementById('burial-funeral-skeletal').value = record.funeral || '';
         document.getElementById('burial-or-skeletal').value = record.orNumberSkeletal || record.orNumber || '';
@@ -4655,7 +4808,7 @@ async function handleBurialSubmit(e) {
     e.preventDefault();
 
     const mode = document.getElementById('burial-mode').value;
-    const type = document.getElementById('burial-type').value; // This is the 'cadaver', 'skeletal', or 'exhumation'
+    const type = document.getElementById('burial-type').value;
     const burialId = document.getElementById('burial-id').value;
     const datetimeInput = document.getElementById('burial-datetime');
 
@@ -4664,6 +4817,24 @@ async function handleBurialSubmit(e) {
     if (!sex) {
         showNotification('Please select the Sex of the Deceased.', 'error');
         return;
+    }
+
+    // Required on new records: Death Certificate, Place of Death, Age, Cause, Informant
+    if (mode === 'add') {
+        const fileInput = document.getElementById('burial-death-cert');
+        if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+            showNotification('Death Certificate is required.', 'error');
+            return;
+        }
+        const requiredIds = ['burial-death-place', 'burial-age', 'burial-cause-of-death', 'burial-informant'];
+        for (const rid of requiredIds) {
+            const el = document.getElementById(rid);
+            if (!el || !(el.value || '').trim()) {
+                showNotification('Please fill in all required fields (Place of Death, Age, Cause of Death, Name of Informant).', 'error');
+                el && el.focus();
+                return;
+            }
+        }
     }
 
     // Build the data object with keys matching your PHP $input names
@@ -4678,8 +4849,7 @@ async function handleBurialSubmit(e) {
         informant: document.getElementById('burial-informant').value.trim(),
         inspector: document.getElementById('burial-inspector').value.trim(),
         sex: sex,
-        
-        // These fields are essential for Skeletal and Exhumation
+
         origin: (() => {
             const muni = (document.getElementById('burial-origin-municipality') || {value: ''}).value.trim();
             return muni;
@@ -4762,6 +4932,7 @@ function editBurial(type, id) {
 }
 
 function closeBurialModal() {
+    clearBurialViewLabels();
     document.getElementById('burial-modal').close();
     document.getElementById('burial-cert-preview').innerHTML = '';
 }
@@ -5167,6 +5338,9 @@ function disableBurialInputs(disable) {
             input.disabled = disable;
         }
     });
+    // Inspector display is never an editable control
+    const inspDisplay = document.getElementById('burial-inspector-display');
+    if (inspDisplay) inspDisplay.classList.add('select-none');
 }
 
 // ==================== DELETE FUNCTIONALITY ====================
@@ -5250,350 +5424,9 @@ function clearFilePreview(inputId, previewId) {
 }
 
 
-// ── Global reference to the original image for re-processing ─────────────
-let _deathCertOriginalImg = null;
-
+// Death certificate: manual entry only — simple file preview, no OCR / inspect-file
 async function handleDeathCertUpload(input) {
-    const previewContainer = document.getElementById('burial-cert-preview');
-    previewContainer.innerHTML = '';
-    document.getElementById('ai-reading-status').style.display = 'none';
-    document.getElementById('ai-success-status').style.display = 'none';
-    document.getElementById('ai-error-status').style.display = 'none';
-    _deathCertOriginalImg = null;
-
-    if (!input.files || !input.files[0]) return;
-    const file = input.files[0];
-
-    // ── File name/size preview ────────────────────────────────────────────
-    const fileItem = document.createElement('div');
-    fileItem.className = 'file-preview-item flex items-center gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200';
-    const icon  = file.type.includes('pdf') ? 'fa-file-pdf' : 'fa-file-image';
-    const color = file.type.includes('pdf') ? 'text-red-500' : 'text-blue-500';
-    fileItem.innerHTML = `
-        <i class="fas ${icon} ${color} text-2xl"></i>
-        <div class="flex-1">
-            <p class="font-semibold text-sm">${esc(file.name)}</p>
-            <p class="text-xs text-gray-500">${(file.size / 1024).toFixed(2)} KB</p>
-        </div>
-        <button type="button" class="btn btn-sm btn-circle btn-ghost"
-                onclick="clearFilePreview('burial-death-cert','burial-cert-preview');">
-            <i class="fas fa-times"></i>
-        </button>
-    `;
-    previewContainer.appendChild(fileItem);
-    if (file.type.includes('pdf')) return;
-
-    // ── Load image silently ───────────────────────────────────────────────
-    const img = await new Promise((res, rej) => {
-        const i = new Image();
-        i.onload  = () => res(i);
-        i.onerror = rej;
-        i.src = URL.createObjectURL(file);
-    });
-
-    _deathCertOriginalImg = img;
-
-    // ── AI auto-enhances then immediately runs OCR ────────────────────────
-    applyDeathCertEnhancement();
-    runDeathCertOCR();
-}
-
-function applyDeathCertEnhancement() {
-    if (!_deathCertOriginalImg) return;
-
-    // ── Fixed optimal settings for OCR — user never touches these ────────
-    const brightness = 10;      // slight brightness lift
-    const contrast   = 60;      // strong contrast for crisp text
-    const sharpness  = 7;       // heavy sharpening
-    const scale      = 3;       // 3× upscale for fine text
-
-    const img    = _deathCertOriginalImg;
-    const canvas = document.getElementById('enhancer-canvas');
-    canvas.width  = Math.round(img.width  * scale);
-    canvas.height = Math.round(img.height * scale);
-    const ctx = canvas.getContext('2d');
-
-    // Use high-quality image smoothing when upscaling
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-    // ── Convert to grayscale + brightness + contrast ──────────────────────
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const d = imageData.data;
-    const contrastFactor = (259 * (contrast + 255)) / (255 * (259 - contrast));
-
-    for (let i = 0; i < d.length; i += 4) {
-        let gray = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
-        gray += brightness;
-        gray = contrastFactor * (gray - 128) + 128;
-        gray = Math.min(255, Math.max(0, gray));
-        d[i] = d[i+1] = d[i+2] = gray;
-    }
-    ctx.putImageData(imageData, 0, 0);
-
-    // ── Sharpness via unsharp mask convolution ───────────────────────────
-    const amount = sharpness * 0.15;
-    const w = canvas.width, h = canvas.height;
-    const src = ctx.getImageData(0, 0, w, h);
-    const dst = ctx.createImageData(w, h);
-    const s = src.data, o = dst.data;
-
-    for (let y = 1; y < h - 1; y++) {
-        for (let x = 1; x < w - 1; x++) {
-            const idx = (y * w + x) * 4;
-            for (let c = 0; c < 3; c++) {
-                const center = s[idx + c];
-                const neighbors =
-                    s[((y-1)*w + x    ) * 4 + c] +
-                    s[((y+1)*w + x    ) * 4 + c] +
-                    s[(y    *w + x - 1) * 4 + c] +
-                    s[(y    *w + x + 1) * 4 + c];
-                const sharpened = center + amount * (4 * center - neighbors);
-                o[idx + c] = Math.min(255, Math.max(0, sharpened));
-            }
-            o[idx + 3] = 255;
-        }
-    }
-    ctx.putImageData(dst, 0, 0);
-}
-
-async function runDeathCertOCR() {
-    const canvas     = document.getElementById('enhancer-canvas');
-    const statusDiv  = document.getElementById('ai-reading-status');
-    const statusSpan = statusDiv.querySelector('span.text-sm');
-
-    document.getElementById('ai-success-status').style.display = 'none';
-    document.getElementById('ai-error-status').style.display   = 'none';
-    statusDiv.style.display = 'block';
-    statusSpan.textContent  = 'Reading certificate — please wait...';
-
-    try {
-        const { data: { text } } = await Tesseract.recognize(canvas, 'eng', {
-            logger: m => {
-                if (m.status === 'recognizing text')
-                    statusSpan.textContent = `Reading certificate... ${Math.round(m.progress * 100)}%`;
-            }
-        });
-
-
-
-        const raw   = text.replace(/[ \t]+/g, ' ');
-        const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-        const full  = lines.join(' ');
-        const upper = full.toUpperCase();
-
-        // ─────────────────────────────────────────────────────────────────
-        // UTILITY: find first line index containing ANY of the keywords
-        // ─────────────────────────────────────────────────────────────────
-        function findLine(keywords) {
-            for (let i = 0; i < lines.length; i++) {
-                const u = lines[i].toUpperCase();
-                if (keywords.some(k => u.includes(k.toUpperCase()))) return i;
-            }
-            return -1;
-        }
-
-        // UTILITY: scan a window of lines for a date string
-        const MONTHS = {
-            jan:1,feb:2,mar:3,apr:4,may:5,jun:6,
-            jul:7,aug:8,sep:9,oct:10,nov:11,dec:12,
-            january:1,february:2,march:3,april:4,june:6,july:7,
-            august:8,september:9,october:10,november:11,december:12
-        };
-
-        function parseDate(str) {
-            // "15 June 1997" or "15 Jun 1997"
-            let m = str.match(/(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})/);
-            if (m) {
-                const mo = MONTHS[m[2].toLowerCase().slice(0,3)];
-                if (mo) return `${m[3]}-${String(mo).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
-            }
-            // "June 15, 1997"
-            m = str.match(/([A-Za-z]{3,9})\s+(\d{1,2})[,\s]+(\d{4})/);
-            if (m) {
-                const mo = MONTHS[m[1].toLowerCase().slice(0,3)];
-                if (mo) return `${m[3]}-${String(mo).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`;
-            }
-            // "5/16/97" or "5/16/1997"
-            m = str.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-            if (m) {
-                let yr = m[3]; if (yr.length === 2) yr = '19' + yr;
-                return `${yr}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
-            }
-            return '';
-        }
-
-        // ═════════════════════════════════════════════════════════════════
-        // 1. NAME OF DECEASED
-        //    Philippine cert format: row "1. NAME" then three separate
-        //    cells for (First) (Middle) (Last) on the same or next lines.
-        //    Strategy: grab up to 3 ALL-CAPS name tokens after "1. NAME"
-        //    stopping before the next numbered item or keyword.
-        // ═════════════════════════════════════════════════════════════════
-        let deceased = '';
-        const nameIdx = findLine(['1. NAME', '1.NAME', '(FIRST)', 'FIRST)']);
-        if (nameIdx !== -1) {
-            const nameParts = [];
-            for (let i = nameIdx; i < Math.min(nameIdx + 10, lines.length); i++) {
-                const l = lines[i];
-                // Stop when we hit next section headers
-                if (i > nameIdx && /^\d+\.|SEX|RELIGION|DATE OF|PLACE OF|CIVIL STATUS/i.test(l)) break;
-                // Split line into tokens and collect name-like words
-                const tokens = l.split(/\s+/);
-                for (const tok of tokens) {
-                    // Accept tokens that are purely uppercase letters (2+ chars), dots, hyphens
-                    if (/^[A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚÑ.\-]{1,}$/.test(tok) &&
-                        !/^(NAME|FIRST|MIDDLE|LAST|SEX|AGE|MALE|FEMALE|RELIGION|CIVIL|DATE|PLACE|OF|THE|AND|A|AN)$/i.test(tok)) {
-                        nameParts.push(tok);
-                    }
-                }
-                if (nameParts.length >= 3) break;
-            }
-            if (nameParts.length >= 2) deceased = nameParts.slice(0, 4).join(' ');
-        }
-
-        // Fallback: scan full text for "JUSTA EDORA REYES" style — a run of 2-4
-        // capitalised words not matching form labels, appearing near the top
-        if (!deceased) {
-            const SKIP = /REPUBLIC|PHILIPPINE|OFFICE|CIVIL|CERTIFICATE|DEATH|REGISTRAR|PROVINCE|MUNICIPALITY|BARANGAY|CITY|FORM|REVISED|MEDICAL|CAUSE|BURIAL|CORPSE|AUTOPSY|INFORMANT|PREPARED|RECEIVED|REGISTERED|SIGNATURE|ADDRESS|RELATIONSHIP|CERTIFICATION|REMARKS|ANNOTATION/i;
-            for (let i = 0; i < Math.min(lines.length, 25); i++) {
-                const l = lines[i].trim();
-                const words = l.split(/\s+/);
-                const nameWords = words.filter(w => /^[A-Z][A-Z.\-]{1,}$/.test(w) && w.length > 1);
-                if (nameWords.length >= 2 && nameWords.length <= 5 && !SKIP.test(l)) {
-                    deceased = nameWords.join(' ');
-                    break;
-                }
-            }
-        }
-
-        // ═════════════════════════════════════════════════════════════════
-        // 2. DATE OF DEATH
-        //    Label is "6. DATE OF DEATH" on Philippine form (not item 3).
-        //    Then day / month / year in separate boxes on the same line.
-        //    Also try a broad scan for any date pattern in the full text.
-        // ═════════════════════════════════════════════════════════════════
-        let deathDate = '';
-
-        // Search in the window around the label
-        const dateIdx = findLine(['DATE OF DEATH', '3. DATE', '3.DATE']);
-        if (dateIdx !== -1) {
-            for (let i = dateIdx; i <= dateIdx + 5 && i < lines.length; i++) {
-                deathDate = parseDate(lines[i]);
-                if (deathDate) break;
-            }
-        }
-
-        // Broad fallback: scan whole text for a month-name date
-        if (!deathDate) {
-            const mx = upper.match(/(\d{1,2})\s+(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)\s+(\d{4})/);
-            if (mx) {
-                const mo = MONTHS[mx[2].toLowerCase().slice(0,3)];
-                if (mo) deathDate = `${mx[3]}-${String(mo).padStart(2,'0')}-${String(mx[1]).padStart(2,'0')}`;
-            }
-        }
-
-        // Fallback: any slash date like "6/15/97"
-        if (!deathDate) {
-            const mx = full.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
-            if (mx) {
-                let yr = mx[3]; if (yr.length === 2) yr = '19' + yr;
-                deathDate = `${yr}-${String(mx[2]).padStart(2,'0')}-${String(mx[1]).padStart(2,'0')}`;
-            }
-        }
-
-        // ═════════════════════════════════════════════════════════════════
-        // 3. PLACE OF DEATH
-        //    Label "5. PLACE OF DEATH" — value is City/Municipality +
-        //    Province on the same or following line.
-        //    We look for "Tayabas" / "Quezon" pattern.
-        // ═════════════════════════════════════════════════════════════════
-        let deathPlace = '';
-        const placeIdx = findLine(['PLACE OF DEATH', '6. PLACE', '6.PLACE']);
-        if (placeIdx !== -1) {
-            // Collect text from the label line and next 3 lines
-            const window = lines.slice(placeIdx, placeIdx + 4).join(' ');
-            // Remove the label itself
-            const stripped = window.replace(/5\.?\s*PLACE\s*OF\s*DEATH/i, '').replace(/\(.*?\)/g, '').trim();
-            // Match "Brgy. Matiama Tayabas, Quezon" style
-            const loc = stripped.match(/([A-Za-z.,\s]{3,60})/);
-            if (loc) {
-                deathPlace = loc[1].replace(/^\s*[,.\s]+/, '').trim();
-            }
-        }
-
-        // Fallback: look for "Tayabas" + "Quezon" anywhere
-        if (!deathPlace) {
-            const mx = full.match(/(Brgy\.?\s+\w+[\s,]+\w[\w\s,]+(?:Quezon|Manila|Cavite|Laguna|Batangas|Rizal|Bulacan|Pampanga|Cebu|Davao))/i);
-            if (mx) deathPlace = mx[1].trim();
-        }
-
-        // ═════════════════════════════════════════════════════════════════
-        // 4. INFORMANT
-        //    Label "25. INFORMANT" — look for "Name in Print" line which
-        //    contains the clean printed name (not the signature scribble).
-        // ═════════════════════════════════════════════════════════════════
-        let informant = '';
-        const informantIdx = findLine(['26. INFORMANT', '26.INFORMANT', 'INFORMANT']);
-        if (informantIdx !== -1) {
-            // Search the next several lines for "Name in Print" then grab its value
-            for (let i = informantIdx; i < Math.min(informantIdx + 8, lines.length); i++) {
-                const l = lines[i];
-                if (/NAME\s*IN\s*PRINT/i.test(l)) {
-                    // Value is either on the same line after the label, or on the next line
-                    const same = l.replace(/NAME\s*IN\s*PRINT/i, '').replace(/[^A-Za-z.\s]/g,'').trim();
-                    if (same.length > 3) { informant = same; break; }
-                    if (i + 1 < lines.length) {
-                        const next = lines[i+1].replace(/[^A-Za-z.\s]/g,'').trim();
-                        if (next.length > 3 && !/RELATIONSHIP|DATE|SIGNATURE|ADDRESS/i.test(next)) {
-                            informant = next; break;
-                        }
-                    }
-                }
-            }
-        }
-
-        
-        if (!informant && informantIdx !== -1) {
-            for (let i = informantIdx + 1; i < Math.min(informantIdx + 6, lines.length); i++) {
-                const l = lines[i].replace(/[^A-Za-z.\s]/g,'').trim();
-                if (l.length > 4 && /^[A-Z]/.test(l) && !/RELATIONSHIP|DATE|ADDRESS|SIGNATURE|INFORMANT|PREPARED|RECEIVED/i.test(l)) {
-                    informant = l; break;
-                }
-            }
-        }
-
-        // ── Clean up ─────────────────────────────────────────────────────
-        deceased   = deceased.replace(/\s+/g,' ').trim();
-        deathPlace = deathPlace.replace(/\s+/g,' ').replace(/^[,.\s]+|[,.\s]+$/g,'').trim();
-        informant  = informant.replace(/\s+/g,' ').trim();
-
-        // ── Inject into form fields ───────────────────────────────────────
-        if (deceased)   document.getElementById('burial-deceased').value    = deceased;
-        if (deathDate)  document.getElementById('burial-death-date').value  = deathDate;
-        if (deathPlace) document.getElementById('burial-death-place').value = deathPlace;
-        if (informant)  document.getElementById('burial-informant').value   = informant;
-
-
-
-        statusDiv.style.display = 'none';
-
-        if (deceased || deathDate || deathPlace || informant) {
-            document.getElementById('ai-success-status').style.display = 'block';
-        } else {
-            document.getElementById('ai-error-msg').textContent =
-                'Could not extract fields. Open Console (F12) for raw OCR text, then fill manually.';
-            document.getElementById('ai-error-status').style.display = 'block';
-        }
-
-    } catch (err) {
-        console.error('Tesseract error:', err);
-        document.getElementById('ai-reading-status').style.display = 'none';
-        document.getElementById('ai-error-msg').textContent =
-            'OCR error: ' + err.message + '. Check your internet connection and try again.';
-        document.getElementById('ai-error-status').style.display = 'block';
-    }
+    handleFilePreview(input, 'burial-cert-preview');
 }
 
 // ==================== UTILITY FUNCTIONS ====================
@@ -6003,35 +5836,6 @@ async function handleChangePassword(e) {
     }
 }
 
-// Custom Inspector Dropdown Functions
-function toggleInspectorDropdown() {
-    const dropdown = document.getElementById('burial-inspector-options');
-    const selected = document.getElementById('inspector-dropdown-selected');
-    
-    dropdown.classList.toggle('show');
-    selected.classList.toggle('active');
-}
-
-function selectInspector(value, name, rank) {
-    const hiddenInput = document.getElementById('burial-inspector');
-    const selectedDiv = document.getElementById('inspector-dropdown-selected');
-    const dropdown = document.getElementById('burial-inspector-options');
-    
-    // Update hidden input value
-    hiddenInput.value = value;
-    
-    // Update displayed text
-    if (value === '') {
-        selectedDiv.querySelector('.selected-text').textContent = 'Select Inspector';
-    } else {
-        selectedDiv.querySelector('.selected-text').textContent = name;
-    }
-    
-    // Close dropdown
-    dropdown.classList.remove('show');
-    selectedDiv.classList.remove('active');
-}
-
 // Close dropdown when clicking outside (all custom dropdowns: burial + permit)
 document.addEventListener('click', function(event) {
     document.querySelectorAll('.custom-dropdown-container').forEach(container => {
@@ -6229,6 +6033,13 @@ async function loadPSGCCemeteryTransferProvinces() {
                 provSelect.appendChild(opt);
             });
 
+        // A restore ran before provinces finished loading — apply it now
+        if (provSelect.dataset.pendingValue) {
+            provSelect.value = provSelect.dataset.pendingValue;
+            delete provSelect.dataset.pendingValue;
+            if (provSelect.value) provSelect.dispatchEvent(new Event('change'));
+        }
+
         provSelect.addEventListener('change', async function () {
             const muniSelect = document.getElementById('burial-cemetery-transfer-municipality');
             const provinceCode = this.value;
@@ -6256,7 +6067,14 @@ async function loadPSGCCemeteryTransferProvinces() {
                         muniSelect.appendChild(opt);
                     });
 
-                muniSelect.disabled = false;
+                // Keep disabled while the form is in view mode (labels handle display)
+                muniSelect.disabled = document.getElementById('burial-form').classList.contains('burial-view-mode');
+
+                // Apply a city stashed by loadBurialData now that options exist
+                if (muniSelect.dataset.pendingValue) {
+                    muniSelect.value = muniSelect.dataset.pendingValue;
+                    delete muniSelect.dataset.pendingValue;
+                }
             } catch (err) {
                 muniSelect.innerHTML = '<option value="">-- Failed to load --</option>';
                 console.error('PSGC cemetery transfer municipality fetch error:', err);
@@ -6289,6 +6107,13 @@ async function loadPSGCTransferProvinces() {
                 provSelect.appendChild(opt);
             });
 
+        // A restore ran before provinces finished loading — apply it now
+        if (provSelect.dataset.pendingValue) {
+            provSelect.value = provSelect.dataset.pendingValue;
+            delete provSelect.dataset.pendingValue;
+            if (provSelect.value) provSelect.dispatchEvent(new Event('change'));
+        }
+
         provSelect.addEventListener('change', async function () {
             const muniSelect = document.getElementById('burial-transfer-municipality');
             const provinceCode = this.value;
@@ -6316,7 +6141,14 @@ async function loadPSGCTransferProvinces() {
                         muniSelect.appendChild(opt);
                     });
 
-                muniSelect.disabled = false;
+                // Keep disabled while the form is in view mode (labels handle display)
+                muniSelect.disabled = document.getElementById('burial-form').classList.contains('burial-view-mode');
+
+                // Apply a city stashed by loadBurialData now that options exist
+                if (muniSelect.dataset.pendingValue) {
+                    muniSelect.value = muniSelect.dataset.pendingValue;
+                    delete muniSelect.dataset.pendingValue;
+                }
             } catch (err) {
                 muniSelect.innerHTML = '<option value="">-- Failed to load --</option>';
                 console.error('PSGC transfer municipality fetch error:', err);

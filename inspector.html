@@ -7,10 +7,9 @@
     <link rel="icon" type="image/png" href="Logo.png">
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.6.0/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/inspector.css?v=5">
+    <link rel="stylesheet" href="css/inspector.css?v=6">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
 </head>
@@ -1610,39 +1609,15 @@
                     <div class="form-control md:col-span-2">
 
                         <label class="label">
-                            <span class="label-text font-semibold">Death Certificate</span>
+                            <span class="label-text font-semibold">Death Certificate Required <span class="text-red-500">*</span></span>
                         </label>
                         <input type="file" class="file-input file-input-bordered file-input-success"
                                id="burial-death-cert"
                                data-testid="burial-death-cert"
                                accept="image/*,.pdf"
+                               required
                                onchange="handleDeathCertUpload(this)" />
                         <div id="burial-cert-preview" class="mt-2"></div>
-
-                        <!-- Hidden canvas used only for AI processing — never shown to user -->
-                        <canvas id="enhancer-canvas" style="display:none;"></canvas>
-
-                        <!-- Status Messages -->
-                        <div id="ai-reading-status" class="mt-2" style="display:none;">
-                            <div class="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-                                <span class="loading loading-spinner loading-sm text-blue-500"></span>
-                                <span class="text-sm text-blue-600 font-medium">Reading certificate...</span>
-                            </div>
-                        </div>
-
-                        <div id="ai-success-status" class="mt-2" style="display:none;">
-                            <div class="flex items-center gap-2 p-2 bg-emerald-50 border border-emerald-200 rounded-lg">
-                                <i class="fas fa-check-circle text-emerald-500"></i>
-                                <span class="text-sm text-emerald-600 font-medium">Fields filled from the certificate. Please verify before saving.</span>
-                            </div>
-                        </div>
-
-                        <div id="ai-error-status" class="mt-2" style="display:none;">
-                            <div class="flex items-center gap-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                <i class="fas fa-exclamation-triangle text-yellow-500"></i>
-                                <span class="text-sm text-yellow-600 font-medium" id="ai-error-msg">Could not read certificate. Fill fields manually.</span>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- Name of Deceased -->
@@ -1677,19 +1652,19 @@
 
                     <!-- Place of Death + Age -->
                     <div class="form-control">
-                        <label class="label"><span class="label-text font-semibold">Place of Death</span></label>
-                        <input type="text" id="burial-death-place" class="input input-bordered input-success" data-testid="burial-death-place" />
+                        <label class="label"><span class="label-text font-semibold">Place of Death <span class="text-red-500">*</span></span></label>
+                        <input type="text" id="burial-death-place" class="input input-bordered input-success" data-testid="burial-death-place" required />
                     </div>
 
                     <div class="form-control">
-                        <label class="label"><span class="label-text font-semibold">Age</span></label>
-                        <input type="text" id="burial-age" class="input input-bordered input-success" data-testid="burial-age" inputmode="numeric" placeholder="e.g. 46" />
+                        <label class="label"><span class="label-text font-semibold">Age <span class="text-red-500">*</span></span></label>
+                        <input type="text" id="burial-age" class="input input-bordered input-success" data-testid="burial-age" inputmode="numeric" placeholder="e.g. 46" required />
                     </div>
 
                     <!-- Cause of Death (used on burial permit print) -->
                     <div class="form-control md:col-span-2">
-                        <label class="label"><span class="label-text font-semibold">Cause of Death</span></label>
-                        <input type="text" id="burial-cause-of-death" class="input input-bordered input-success" data-testid="burial-cause-of-death" placeholder="e.g. Cardiac arrest" />
+                        <label class="label"><span class="label-text font-semibold">Cause of Death <span class="text-red-500">*</span></span></label>
+                        <input type="text" id="burial-cause-of-death" class="input input-bordered input-success" data-testid="burial-cause-of-death" placeholder="e.g. Cardiac arrest" required />
                     </div>
 
                     <!-- Name of Informant -->
@@ -1779,23 +1754,13 @@
                     </div>
                 </div>
 
-                    <!-- Inspector -->
+                    <!-- Inspector (locked — shows logged-in inspector, not editable) -->
                     <div class="form-control md:col-span-2">
-                        <label class="label"><span class="label-text font-semibold">Inspector</span></label>
-                        
-                        <!-- Custom Dropdown Container -->
-                        <div class="custom-dropdown-container">
-                            <input type="hidden" id="burial-inspector" name="burial-inspector" value="">
-                            <div class="custom-dropdown-selected" id="inspector-dropdown-selected" onclick="toggleInspectorDropdown()">
-                                <span class="selected-text">Select Inspector</span>
-                                <i class="fas fa-chevron-down dropdown-arrow"></i>
-                            </div>
-                            <div class="custom-dropdown-options" id="burial-inspector-options">
-                                <!-- Dynamically populated from inspector_accounts via populateBurialInspectorDropdown() -->
-                                <div class="custom-option" onclick="selectInspector('', 'Select Inspector', '')">
-                                    <span class="option-name">Select Inspector</span>
-                                </div>
-                            </div>
+                        <label class="label"><span class="label-text font-semibold">Inspector <i class="fas fa-lock text-gray-400 ml-1" title="Automatically set to the logged-in inspector — cannot be edited"></i></span></label>
+                        <input type="hidden" id="burial-inspector" name="burial-inspector" value="">
+                        <div class="input input-bordered input-success bg-gray-50 flex items-center gap-2 font-semibold text-gray-700 select-none" id="burial-inspector-display" data-testid="burial-inspector-display">
+                            <i class="fas fa-user-shield text-emerald-600"></i>
+                            <span id="burial-inspector-name">—</span>
                         </div>
                     </div>
                 </div>
@@ -2232,7 +2197,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
     <script src="js/import_common.js?v=1"></script>
-    <script src="js/inspector.js?v=6"></script>
+    <script src="js/inspector.js?v=7"></script>
 
     <script>
 document.addEventListener('click', function(e) {

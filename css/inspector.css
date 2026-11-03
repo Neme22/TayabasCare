@@ -2607,3 +2607,57 @@ select:valid {
 }
 
 /* ===== END DARK THEME ===== */
+
+/* ===== BURIAL VIEW MODE (read-only labels) ===== */
+.burial-view-value {
+    display: block;
+    width: 100%;
+    min-height: 42px;
+    padding: 10px 14px;
+    margin-top: 4px;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    color: #111827;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.5;
+    word-break: break-word;
+    white-space: pre-wrap;
+    user-select: none;
+}
+
+.burial-view-value:empty::before,
+.burial-view-value.is-empty::before {
+    content: '—';
+    color: #9ca3af;
+    font-weight: 400;
+}
+
+#burial-form.burial-view-mode input:not([type="hidden"]),
+#burial-form.burial-view-mode select,
+#burial-form.burial-view-mode textarea,
+#burial-form.burial-view-mode .file-input {
+    display: none !important;
+}
+
+#burial-form.burial-view-mode #burial-inspector-display {
+    display: flex !important;
+    opacity: 1;
+}
+
+#burial-form.burial-view-mode .realtime-clock-container {
+    display: none !important;
+}
+
+#burial-form.burial-view-mode .clock-icon-overlay {
+    display: none !important;
+}
+
+[data-theme="dark"] .burial-view-value {
+    background: #1e293b;
+    border-color: #334155;
+    color: #e2e8f0;
+}
+
+/* ===== END BURIAL VIEW MODE ===== */

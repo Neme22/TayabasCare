@@ -196,6 +196,19 @@ const Utils = {
         if (isNaN(date)) return 'N/A';
         return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     },
+    // "PSGCcode | City" or "Province | City" → readable place (city first)
+    burialPlace: (raw) => {
+        const s = (raw || '').trim();
+        if (!s) return 'N/A';
+        const parts = s.split('|').map(p => p.trim()).filter(Boolean);
+        if (parts.length >= 2) {
+            const city = parts[1];
+            const prov = parts[0];
+            if (/^\d+$/.test(prov)) return Utils.esc(city);
+            return Utils.esc(`${city}, ${prov}`);
+        }
+        return Utils.esc(parts[0]);
+    },
 
     // Single DaisyUI toast renderer used by Utils.showToast and adminShowNotification
     _renderToast: (message, type = 'success') => {
@@ -2208,7 +2221,7 @@ const BurialManager = {
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">Place to be Transferred</span>
-                    <span class="detail-value">${record.transfer || 'N/A'}</span>
+                    <span class="detail-value">${Utils.burialPlace(record.transfer)}</span>
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">Funeral Service</span>
@@ -2234,7 +2247,7 @@ const BurialManager = {
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">Cemetery to be Transferred</span>
-                    <span class="detail-value">${record.cemeteryTransfer || 'N/A'}</span>
+                    <span class="detail-value">${Utils.burialPlace(record.cemeteryTransfer)}</span>
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">Funeral Service</span>
