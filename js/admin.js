@@ -3204,13 +3204,7 @@ async function initApp() {
         });
     });
 
-    const menuToggle = document.getElementById('menuToggle');
-    if (menuToggle) {
-        menuToggle.addEventListener('click', () => {
-            const sidebarEl = document.getElementById('sidebar');
-            if (sidebarEl) sidebarEl.classList.toggle('active');
-        });
-    }
+    // menuToggle handled by MOBILE SIDEBAR block at end of file (backdrop + toggle)
 
     const addInspectorBtn = document.getElementById('addInspectorBtn');
     if (addInspectorBtn) {

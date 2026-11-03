@@ -134,7 +134,7 @@ body {
     width: 100%;
     box-sizing: border-box;
     position: relative;
-    z-index: 50;
+    z-index: 101;
 }
 
 /* Mobile hamburger + sidebar backdrop */
@@ -1802,7 +1802,7 @@ select:valid {
 
     .sidebar {
         position: fixed;
-        z-index: 100;
+        z-index: 102;
         transform: translateX(-100%);
         transition: transform 0.3s ease;
     }

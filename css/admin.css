@@ -800,10 +800,32 @@ dialog.modal[open] {
     }
 }
 
+/* Navbar above mobile sidebar backdrop (99) so hamburger stays clickable */
+.navbar {
+    position: relative;
+    z-index: 101;
+}
+
+#menuToggle {
+    display: none;
+}
+
 /* Responsive Styles */
 @media (max-width: 768px) {
+    #menuToggle {
+        display: inline-flex;
+        align-items: center;
+    }
+
     .sidebar {
+        position: fixed;
+        z-index: 102;
+        top: 0;
+        left: 0;
+        height: 100vh;
         transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        overflow-y: auto;
     }
 
     .sidebar.active {
