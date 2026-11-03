@@ -15,6 +15,48 @@ if (csrfNeeded()) {
     requireCsrf();
 }
 
+// Lazy migration: production DBs may still have status as an ENUM that rejects
+// 'Submitted' under strict SQL mode, and may lack the newer columns.
+// Mirrors the ensureBurialSexColumn() pattern in burial.php.
+function ensureInspectionSchema(): void {
+    global $db;
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $stmt = $db->query("SHOW COLUMNS FROM inspection_reports LIKE 'status'");
+        $col = $stmt->fetch();
+        if ($col && stripos($col['Type'], 'enum(') === 0) {
+            $db->exec("ALTER TABLE inspection_reports MODIFY status VARCHAR(50) DEFAULT 'Pending'");
+        }
+
+        $required = [
+            'inspection_reports' => [
+                'compliance_deadline DATE NULL',
+                'violation_codes TEXT NULL',
+                'establishment_id INT NULL',
+            ],
+            'inspection_history' => [
+                'compliance_deadline DATE NULL',
+                'violation_codes TEXT NULL',
+                'establishment_id INT NULL',
+            ],
+        ];
+        foreach ($required as $table => $columns) {
+            foreach ($columns as $def) {
+                $name = explode(' ', $def)[0];
+                $stmt = $db->query("SHOW COLUMNS FROM `$table` LIKE '$name'");
+                if (!$stmt->fetch()) {
+                    $db->exec("ALTER TABLE `$table` ADD COLUMN $def");
+                }
+            }
+        }
+    } catch (PDOException $e) {
+        error_log('ensureInspectionSchema: ' . $e->getMessage());
+    }
+}
+ensureInspectionSchema();
+
 /**
  * Check if the current user can modify a given inspection report.
  * Admin can modify any; inspectors can only modify their own.
@@ -303,7 +345,7 @@ function createReport() {
                 $input['inspector'] ?? '',
                 $input['location'] ?? '',
                 $input['status'] ?? 'Submitted',
-                date('Y-m-d H:i:s', strtotime($input['date'] ?? 'now')),
+                date('Y-m-d', strtotime($input['date'] ?? 'now')),
                 $violationCodes,
                 $establishmentId,
                 !empty($input['compliance_deadline']) ? $input['compliance_deadline'] : null,
@@ -329,7 +371,7 @@ function createReport() {
                 $establishment,
                 $input['location'] ?? '',
                 $input['status'] ?? 'Submitted',
-                date('Y-m-d H:i:s', strtotime($input['date'] ?? 'now')),
+                date('Y-m-d', strtotime($input['date'] ?? 'now')),
                 !empty($input['compliance_deadline']) ? $input['compliance_deadline'] : null,
                 $violationCodes,
                 $establishmentId
@@ -423,7 +465,7 @@ function updateReportFromJson($input) {
             $input['inspector'] ?? '',
             $input['location'] ?? '',
             $input['status'] ?? 'Submitted',
-            date('Y-m-d H:i:s', strtotime($input['date'] ?? 'now')),
+            date('Y-m-d', strtotime($input['date'] ?? 'now')),
             $violationCodes,
             $establishmentId,
             $id
@@ -513,7 +555,7 @@ function updateReport() {
             $input['inspector'] ?? '',
             $input['location'] ?? '',
             $input['status'] ?? 'Submitted',
-            date('Y-m-d H:i:s', strtotime($input['date'] ?? 'now')),
+            date('Y-m-d', strtotime($input['date'] ?? 'now')),
             $violationCodes,
             $establishmentId,
             $id
@@ -644,7 +686,7 @@ function updateReportWithFile() {
             $input['inspector'] ?? '',
             $input['location'] ?? '',
             $input['status'] ?? 'Submitted',
-            date('Y-m-d H:i:s', strtotime($input['date'] ?? 'now')),
+            date('Y-m-d', strtotime($input['date'] ?? 'now')),
             $violationCodes,
             $establishmentId,
             $id
