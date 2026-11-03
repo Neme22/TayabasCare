@@ -419,7 +419,6 @@ function getAdminRiskForEstablishment(businessName) {
     if (!match) return null;
     return {
         riskLevel:   match.riskLevel,
-        riskScore:   match.totalScore,
         daysToComply: match.riskLevel === 'HIGH' ? 7 : 30
     };
 }
@@ -439,7 +438,6 @@ function renderAdminRiskBadge(ai) {
             <span class="status-badge" style="background:${r.bg};color:${r.color};font-weight:700;border:1px solid ${r.color};">
                 ${r.icon} ${r.label}
             </span>
-            <span style="font-size:11px;color:${r.color};">Score: ${ai.riskScore}/100</span>
         </div>
     `;
 }
@@ -686,7 +684,7 @@ const Dashboard = {
         modal.innerHTML = `
             <div style="background:#fff;border-radius:16px;padding:28px;width:90%;max-width:750px;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative;">
                 <button onclick="document.getElementById('riskTrendModal')?.remove();if(riskTrendChartInstance){riskTrendChartInstance.destroy();riskTrendChartInstance=null;}" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;">&times;</button>
-                <h4 style="font-size:16px;font-weight:700;color:#374151;margin:0 0 4px;">Risk Score Trend (30 Days)</h4>
+                <h4 style="font-size:16px;font-weight:700;color:#374151;margin:0 0 4px;">Risk Level Trend (30 Days)</h4>
                 <span id="riskTrendInfo" style="font-size:11px;color:#9ca3af;">Loading...</span>
                 <div style="position:relative;height:320px;margin-top:12px;"><canvas id="riskTrendChart"></canvas></div>
             </div>`;
@@ -701,7 +699,7 @@ const Dashboard = {
             const json = await resp.json();
             if (!json.success || !json.data || json.data.length === 0) {
                 const infoEl = document.getElementById('riskTrendInfo');
-                if (infoEl) infoEl.textContent = 'Risk scores will appear after prescriptions are run';
+                if (infoEl) infoEl.textContent = 'Risk levels will appear after prescriptions are run';
                 return;
             }
 
@@ -718,24 +716,31 @@ const Dashboard = {
                     labels: labels,
                     datasets: [
                         {
-                            label: 'Avg Risk Score',
-                            data: data.map(d => Math.round(d.avg_score)),
-                            borderColor: '#7c3aed',
-                            backgroundColor: 'rgba(124, 58, 237, 0.1)',
-                            fill: true,
-                            tension: 0.3,
-                            pointRadius: 4,
-                            pointBackgroundColor: '#7c3aed'
-                        },
-                        {
                             label: 'HIGH Risk',
                             data: data.map(d => d.high_count),
                             borderColor: '#ef4444',
                             backgroundColor: 'rgba(239, 68, 68, 0.1)',
                             fill: false,
                             tension: 0.3,
-                            pointRadius: 3,
-                            yAxisID: 'y1'
+                            pointRadius: 3
+                        },
+                        {
+                            label: 'MODERATE Risk',
+                            data: data.map(d => d.mod_count),
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 3
+                        },
+                        {
+                            label: 'LOW Risk',
+                            data: data.map(d => d.low_count),
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 3
                         }
                     ]
                 },
@@ -746,17 +751,9 @@ const Dashboard = {
                     scales: {
                         y: {
                             beginAtZero: true,
-                            max: 100,
-                            title: { display: true, text: 'Avg Score', font: { size: 11 } },
-                            ticks: { font: { size: 10 } },
-                            grid: { color: 'rgba(0,0,0,0.05)' }
-                        },
-                        y1: {
-                            position: 'right',
-                            beginAtZero: true,
-                            title: { display: true, text: 'HIGH Count', font: { size: 11 } },
+                            title: { display: true, text: 'Establishments', font: { size: 11 } },
                             ticks: { stepSize: 1, font: { size: 10 } },
-                            grid: { display: false }
+                            grid: { color: 'rgba(0,0,0,0.05)' }
                         },
                         x: {
                             ticks: { font: { size: 10 } },
@@ -5310,11 +5307,11 @@ const PredictionEngine = {
         const levelRank = l => ({ HIGH: 2, MODERATE: 1, LOW: 0 }[l] ?? 0);
         filtered = [...filtered].sort((a, b) => {
             switch (sortBy) {
-                case 'high-first': return (levelRank(b.riskLevel) - levelRank(a.riskLevel)) || (b.totalScore - a.totalScore);
-                case 'low-first': return (levelRank(a.riskLevel) - levelRank(b.riskLevel)) || (a.totalScore - b.totalScore);
+                case 'high-first': return levelRank(b.riskLevel) - levelRank(a.riskLevel);
+                case 'low-first': return levelRank(a.riskLevel) - levelRank(b.riskLevel);
                 case 'name-az': return (a.businessName || '').localeCompare(b.businessName || '');
                 case 'recent': return new Date(b.lastInspected || 0) - new Date(a.lastInspected || 0);
-                default: return (levelRank(b.riskLevel) - levelRank(a.riskLevel)) || (b.totalScore - a.totalScore);
+                default: return levelRank(b.riskLevel) - levelRank(a.riskLevel);
             }
         });
 
@@ -5332,7 +5329,7 @@ const PredictionEngine = {
     renderTable: (results) => {
         const tbody = document.getElementById('predTableBody');
         if (!results.length) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:#9ca3af;">No results match your filter.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:#9ca3af;">No results match your filter.</td></tr>';
             return;
         }
 
@@ -5344,19 +5341,13 @@ const PredictionEngine = {
 
         tbody.innerHTML = results.map((r, i) => {
             const rs      = riskStyle[r.riskLevel] || riskStyle.LOW;
-            const scorePct= Math.min(100, r.totalScore);
-            const barColor= r.riskLevel === 'HIGH' ? '#ef4444' : r.riskLevel === 'MODERATE' ? '#f59e0b' : '#10b981';
             return `
             <tr style="border-bottom:1px solid #f3f4f6;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background=''">
                 <td style="padding:12px 16px;color:#9ca3af;font-size:12px;">${getSanitaryPermitNoForEstablishment(r.businessName)}</td>
                 <td style="padding:12px 16px;font-weight:600;color:#111827;max-width:200px;">
                     ${Utils.esc(r.businessName)}
-                    <div style="margin-top:4px;background:#e5e7eb;border-radius:4px;height:5px;width:120px;">
-                        <div style="width:${scorePct}%;background:${barColor};height:5px;border-radius:4px;transition:width 0.5s;"></div>
-                    </div>
                 </td>
                 <td style="padding:12px 16px;color:#6b7280;font-size:12px;">${Utils.esc(r.barangay) || '—'}</td>
-                <td style="padding:12px 16px;text-align:center;font-size:15px;font-weight:800;color:${barColor};">${r.totalScore}<span style="font-size:10px;font-weight:400;color:#9ca3af;">/100</span></td>
                 <td style="padding:12px 16px;text-align:center;">
                     <span style="background:${rs.bg};color:${rs.color};border:1px solid ${rs.border};font-size:11px;font-weight:700;padding:4px 12px;border-radius:999px;">${r.riskLevel}</span>
                 </td>
@@ -5386,8 +5377,9 @@ const PredictionEngine = {
 
         const factors = r.factors || {};
         const factorRows = Object.values(factors).map(f => {
-            const pct      = Math.round((f.score / f.max) * 100);
-            const barColor = pct >= 70 ? '#ef4444' : pct >= 40 ? '#f59e0b' : '#10b981';
+            const ratio     = f.max ? (f.score / f.max) : 0;
+            const status    = ratio >= 0.7 ? 'High' : ratio >= 0.4 ? 'Moderate' : 'Low';
+            const statusColor = status === 'High' ? '#ef4444' : status === 'Moderate' ? '#f59e0b' : '#10b981';
             const extra    = f.count !== undefined ? ` (${f.count} found)` :
                              f.days  !== undefined ? ` (${f.days} days ago)` :
                              f.rate  !== undefined ? ` (${f.rate}% compliant)` : '';
@@ -5395,10 +5387,7 @@ const PredictionEngine = {
             <div style="margin-bottom:14px;">
                 <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
                     <span style="font-size:15px;font-weight:600;color:#374151;">${f.label}${extra}</span>
-                    <span style="font-size:15px;font-weight:700;color:${barColor};">${f.score}/${f.max}</span>
-                </div>
-                <div style="background:#e5e7eb;border-radius:6px;height:10px;">
-                    <div style="width:${pct}%;background:${barColor};height:10px;border-radius:6px;transition:width 0.6s;"></div>
+                    <span style="font-size:15px;font-weight:700;color:${statusColor};">${status}</span>
                 </div>
             </div>`;
         }).join('');
@@ -5440,7 +5429,7 @@ const PredictionEngine = {
         modal.innerHTML = `
             <div style="background:#fff;border-radius:16px;padding:28px;width:92%;max-width:900px;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative;margin-bottom:40px;">
                 <button onclick="document.getElementById('predDetailModal')?.remove()" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;">&times;</button>
-                <h3 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 18px;">${Utils.esc(r.businessName)} &nbsp;<span style="font-size:15px;padding:5px 14px;border-radius:999px;background:${riskBg};color:${riskColor};font-weight:700;">${r.riskLevel} RISK · ${r.totalScore}/100</span></h3>
+                <h3 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 18px;">${Utils.esc(r.businessName)} &nbsp;<span style="font-size:15px;padding:5px 14px;border-radius:999px;background:${riskBg};color:${riskColor};font-weight:700;">${r.riskLevel} RISK</span></h3>
                 <div style="margin:0 0 18px;padding:14px 16px;background:#f9fafb;border-radius:10px;">
                     <h4 style="font-size:13px;font-weight:700;color:#6b7280;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.5px;">Open Violations</h4>
                     <div>${openViolHtml}</div>
@@ -5468,7 +5457,7 @@ const PredictionEngine = {
                                 <strong>Prescription basis:</strong> PD 856 — Sanitation Code of the Philippines
                             </div>
                             <button onclick="EstablishmentTrend.show('${Utils.esc(r.businessName).replace(/'/g, "\\'")}')" style="margin-top:12px;background:#7c3aed;border:none;color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">
-                                <i class="fas fa-chart-line" style="margin-right:6px;"></i>View Risk Score Trend
+                                <i class="fas fa-chart-line" style="margin-right:6px;"></i>View Risk Level Trend
                             </button>
                         </div>
                     </div>
@@ -5512,14 +5501,13 @@ const PredictionEngine = {
             alert('No prescription results to export. Run the analysis first.');
             return;
         }
-        const headers = ['#', 'Business Name', 'Barangay', 'Business Type', 'Risk Level', 'Score', 'Last Inspected', 'Total Violations', 'Compliance Rate', 'Open Violations'];
+        const headers = ['#', 'Business Name', 'Barangay', 'Business Type', 'Risk Level', 'Last Inspected', 'Total Violations', 'Compliance Rate', 'Open Violations'];
         const rows = results.map((r, i) => [
             i + 1,
             r.businessName || '',
             r.barangay || '',
             r.businessType || 'Other',
             r.riskLevel || '',
-            r.totalScore || 0,
             r.lastInspected || '',
             r.factors?.violations?.count ?? 0,
             (r.factors?.compliance?.rate ?? 'N/A') + '%',
@@ -6144,13 +6132,12 @@ async function exportAnalyticsExcel() {
                 'Business Name': r.businessName || '',
                 'Barangay': r.barangay || '',
                 'Risk Level': r.riskLevel || '',
-                'Score': r.totalScore || 0,
                 'Violations': r.factors?.violations?.count ?? 0,
                 'Compliance Rate': (r.factors?.compliance?.rate ?? '') + '%',
                 'Last Inspected': r.lastInspected || 'Never'
             }));
             const ws2 = XLSX.utils.json_to_sheet(riskRows);
-            ws2['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 8 }, { wch: 10 }, { wch: 15 }, { wch: 15 }];
+            ws2['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 10 }, { wch: 15 }, { wch: 15 }];
             XLSX.utils.book_append_sheet(workbook, ws2, 'Risk Prescriptions');
         }
 
@@ -6652,7 +6639,7 @@ const EstablishmentTrend = {
             modal.innerHTML = `
                 <div style="background:#fff;border-radius:16px;padding:28px;width:90%;max-width:700px;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative;">
                     <button onclick="document.getElementById('estabTrendModal')?.remove();if(EstablishmentTrend._chart){EstablishmentTrend._chart.destroy();EstablishmentTrend._chart=null;}" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;">&times;</button>
-                    <h4 style="font-size:16px;font-weight:700;color:#374151;margin:0 0 16px;">Risk Score Trend — ${establishmentName}</h4>
+                    <h4 style="font-size:16px;font-weight:700;color:#374151;margin:0 0 16px;">Risk Level Trend — ${Utils.esc(establishmentName)}</h4>
                     <div style="position:relative;height:300px;"><canvas id="estabTrendChart"></canvas></div>
                 </div>`;
 
@@ -6661,33 +6648,41 @@ const EstablishmentTrend = {
             const canvas = document.getElementById('estabTrendChart');
             if (EstablishmentTrend._chart) EstablishmentTrend._chart.destroy();
 
-            const scores = json.data.reverse();
+            const levelRank = { LOW: 0, MODERATE: 1, HIGH: 2 };
+            const levelColor = { LOW: '#10b981', MODERATE: '#f59e0b', HIGH: '#ef4444' };
+            const rows = json.data.reverse();
+            const pointColors = rows.map(s => levelColor[s.risk_level] || '#10b981');
             EstablishmentTrend._chart = new Chart(canvas, {
                 type: 'line',
                 data: {
-                    labels: scores.map(s => new Date(s.recorded_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })),
+                    labels: rows.map(s => new Date(s.recorded_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })),
                     datasets: [{
-                        label: 'Risk Score',
-                        data: scores.map(s => s.total_score),
+                        label: 'Risk Level',
+                        data: rows.map(s => levelRank[s.risk_level] ?? 0),
                         borderColor: '#7c3aed',
                         backgroundColor: 'rgba(124,58,237,0.1)',
-                        fill: true,
+                        fill: false,
                         tension: 0.3,
-                        pointRadius: 4
-                    }, {
-                        label: 'HIGH Threshold',
-                        data: scores.map(() => 60),
-                        borderColor: '#ef4444',
-                        borderDash: [5, 5],
-                        pointRadius: 0,
-                        fill: false
+                        pointRadius: 5,
+                        pointBackgroundColor: pointColors,
+                        pointBorderColor: pointColors
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: { y: { beginAtZero: true, max: 100 } },
-                    plugins: { legend: { position: 'bottom' } }
+                    scales: {
+                        y: {
+                            min: 0,
+                            max: 2,
+                            ticks: {
+                                stepSize: 1,
+                                font: { size: 11 },
+                                callback: v => ['LOW', 'MODERATE', 'HIGH'][v] || ''
+                            }
+                        }
+                    },
+                    plugins: { legend: { display: false } }
                 }
             });
         } catch (err) {

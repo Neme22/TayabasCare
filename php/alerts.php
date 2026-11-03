@@ -321,7 +321,7 @@ function generateHighRiskAlerts($db, &$alerts) {
                 'alert_type' => 'high_risk',
                 'establishment' => $name,
                 'barangay' => $record['barangay'] ?? '',
-                'message' => "{$name} has been classified as HIGH RISK{$openPart}. Score: {$scored['totalScore']}/100. {$violationCount} violation(s) on record with {$complianceRate}% compliance rate. Priority inspection is strongly recommended.",
+                'message' => "{$name} has been classified as HIGH RISK{$openPart}. {$violationCount} violation(s) on record with {$complianceRate}% compliance rate. Priority inspection is strongly recommended.",
                 'severity' => 'critical',
                 'risk_score' => $scored['totalScore']
             ];

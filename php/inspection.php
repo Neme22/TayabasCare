@@ -229,6 +229,11 @@ function getHistory($inspection_id) {
 function createReport() {
     global $db;
 
+    if (empty($_FILES['attachment']['tmp_name'])) {
+        errorResponse('Inspection paper attachment is required.', 400);
+        return;
+    }
+
     if (!empty($_POST) || !empty($_FILES)) {
         $input = $_POST;
     } elseif (!empty($GLOBALS['_json_input'])) {
@@ -580,6 +585,11 @@ function updateReportWithFile() {
     }
 
     requireReportOwnership($id);
+
+    if (empty($_FILES['attachment']['tmp_name'])) {
+        errorResponse('Inspection paper attachment is required.', 400);
+        return;
+    }
 
     try {
         $old = $db->prepare("SELECT * FROM inspection_reports WHERE id = ?");

@@ -2537,9 +2537,6 @@ function renderRiskBadge(ai) {
             <span class="badge badge-sm ${s.badge}">
                 ${s.icon} ${ai.riskLevel} RISK
             </span>
-            <span class="text-xs ${s.text} font-semibold">
-                Score: ${ai.totalScore ?? ai.riskScore ?? 0}/100
-            </span>
         </div>
     `;
 }
@@ -3421,6 +3418,10 @@ async function handleInspectionSubmit(e) {
         showNotification('Please enter the Recommendation.', 'warning');
         return;
     }
+    if (!document.getElementById('inspection-file').files[0]) {
+        showNotification('Please upload the Inspection Paper before saving.', 'warning');
+        return;
+    }
 
     // Auto-get barangay from sanitary records
     const sanitaryRecords = cachedSanitaryRecords || [];
@@ -4079,6 +4080,10 @@ function editInspectionReportById(id) {
 
         const newFileInput = document.getElementById('inspection-file');
         const newFileObj = newFileInput && newFileInput.files[0];
+        if (!newFileObj) {
+            showNotification('Please upload the Inspection Paper before saving.', 'warning');
+            return;
+        }
 
         const formData = new FormData();
         formData.append('id', id);

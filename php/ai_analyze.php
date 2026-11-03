@@ -69,7 +69,6 @@ Based on Presidential Decree No. 856 (Code on Sanitation of the Philippines), an
 Establishment: $businessName
 Barangay: $barangay
 Risk Level: $riskLevel
-Risk Score: $totalScore out of 100
 Total Violations on Record: $totalViolations
 Last Inspected: $lastInspected
 System Recommendations: $recoText

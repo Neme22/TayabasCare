@@ -437,13 +437,14 @@
 
                             <div class="form-control">
                                 <label class="label">
-                                    <span class="label-text font-semibold">Upload Inspection Paper</span>
-                                    <span class="label-text-alt text-emerald-600 font-medium">For documentation only</span>
+                                    <span class="label-text font-semibold">Upload Inspection Paper <span class="text-red-500">*</span></span>
+                                    <span class="label-text-alt text-emerald-600 font-medium">Required · image or PDF</span>
                                 </label>
                                 <input type="file" class="file-input file-input-bordered file-input-success w-full"
                                        data-testid="inspection-file-upload"
                                        id="inspection-file"
                                        accept="image/*,.pdf"
+                                       required
                                        onchange="handleFilePreview(this, 'inspection-preview'); document.getElementById('inspection-file-name') && (document.getElementById('inspection-file-name').textContent = this.files[0] ? this.files[0].name : 'No file chosen');" />
                                 <div id="inspection-preview" class="mt-3 space-y-2"></div>
                             </div>

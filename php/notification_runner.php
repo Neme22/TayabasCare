@@ -245,7 +245,7 @@ try {
             if (($scored['riskLevel'] ?? '') === 'HIGH') {
                 $openLabels = implode(', ', array_column($scored['matchedViolations'] ?? [], 'label'));
                 $openPart = $openLabels !== '' ? " — open: {$openLabels}" : '';
-                $highRiskItems[] = "{$name}{$openPart} (Score: {$scored['totalScore']}, Barangay: " . ($record['barangay'] ?? 'N/A') . ")";
+                $highRiskItems[] = "{$name}{$openPart} (Risk: HIGH, Barangay: " . ($record['barangay'] ?? 'N/A') . ")";
             }
 
             $violationCount = $scored['factors']['violations']['count'] ?? 0;
