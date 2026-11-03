@@ -45,6 +45,11 @@ body {
 /* Sidebar — Blue theme for Admin */
 .sidebar {
     background: linear-gradient(180deg, #1e40af 0%, #2563eb 100%);
+    width: 16rem;
+    min-width: 16rem;
+    flex-shrink: 0;
+    transform: none;
+    z-index: auto;
 }
 
 .sidebar-item {
@@ -807,29 +812,54 @@ dialog.modal[open] {
 }
 
 #menuToggle {
-    display: none;
+    display: none !important;
+}
+
+/* Desktop / wide (incl. Chrome "Desktop site"): sidebar always in flow */
+@media (min-width: 769px) {
+    .sidebar {
+        position: sticky !important;
+        transform: none !important;
+        display: block !important;
+        width: 16rem !important;
+        min-width: 16rem !important;
+        z-index: auto !important;
+        top: 0;
+        height: 100vh;
+    }
+
+    #menuToggle {
+        display: none !important;
+    }
+
+    #adminSidebarBackdrop {
+        display: none !important;
+    }
 }
 
 /* Responsive Styles */
 @media (max-width: 768px) {
     #menuToggle {
-        display: inline-flex;
+        display: inline-flex !important;
         align-items: center;
     }
 
     .sidebar {
-        position: fixed;
-        z-index: 102;
-        top: 0;
+        position: fixed !important;
         left: 0;
+        top: 0;
+        z-index: 102 !important;
+        width: 16rem !important;
+        min-width: 16rem !important;
+        max-width: 85vw;
         height: 100vh;
-        transform: translateX(-100%);
+        transform: translateX(-100%) !important;
         transition: transform 0.3s ease;
         overflow-y: auto;
     }
 
     .sidebar.active {
-        transform: translateX(0);
+        transform: translateX(0) !important;
     }
 
     .main-content {

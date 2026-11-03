@@ -7124,15 +7124,18 @@ function toggleMobileSidebar() {
     const bd = document.querySelector('.sidebar-backdrop');
     if (!sb) return;
     const open = sb.classList.toggle('open');
-    if (bd) bd.classList.toggle('show', open);
+    if (bd) {
+        bd.classList.toggle('show', open);
+        bd.style.display = open ? 'block' : '';
+    }
 }
 function closeMobileSidebar() {
     const sb = document.querySelector('.sidebar');
     const bd = document.querySelector('.sidebar-backdrop');
     if (sb) sb.classList.remove('open');
-    if (bd) bd.classList.remove('show');
+    if (bd) { bd.classList.remove('show'); bd.style.display = ''; }
 }
 document.addEventListener('click', function (e) {
     if (e.target.closest('.sidebar-item[data-testid]')) closeMobileSidebar();
-});
+}, true);
 // ==================== END MOBILE SIDEBAR ====================

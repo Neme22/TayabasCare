@@ -6726,7 +6726,8 @@ function openBurialImport(presetType) {
 (function () {
     const btn = document.getElementById('menuToggle');
     if (!btn) return;
-    btn.addEventListener('click', function () {
+    btn.addEventListener('click', function (e) {
+        e.stopPropagation();
         const sb = document.querySelector('.sidebar');
         if (!sb) return;
         const active = sb.classList.toggle('active');

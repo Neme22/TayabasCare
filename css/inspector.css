@@ -42,9 +42,14 @@ body {
     position: sticky;
     top: 0;
     height: 100vh;
+    width: 16rem;
+    min-width: 16rem;
+    flex-shrink: 0;
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: rgba(255,255,255,0.15) transparent;
+    transform: none;
+    z-index: auto;
 }
 
 .sidebar::-webkit-scrollbar {
@@ -139,7 +144,7 @@ body {
 
 /* Mobile hamburger + sidebar backdrop */
 .mobile-sidebar-btn {
-    display: none;
+    display: none !important;
 }
 
 .sidebar-backdrop {
@@ -1783,9 +1788,32 @@ select:valid {
 }
 
 /* ==================== RESPONSIVE ==================== */
+/* Desktop / wide (incl. Chrome "Desktop site"): sidebar always in flow */
+@media (min-width: 769px) {
+    .sidebar {
+        position: sticky !important;
+        transform: none !important;
+        display: block !important;
+        width: 16rem !important;
+        min-width: 16rem !important;
+        z-index: auto !important;
+        top: 0;
+        height: 100vh;
+    }
+
+    .mobile-sidebar-btn {
+        display: none !important;
+    }
+
+    .sidebar-backdrop,
+    .sidebar-backdrop.show {
+        display: none !important;
+    }
+}
+
 @media (max-width: 768px) {
     .mobile-sidebar-btn {
-        display: inline-flex;
+        display: inline-flex !important;
         align-items: center;
     }
 
@@ -1801,14 +1829,20 @@ select:valid {
     }
 
     .sidebar {
-        position: fixed;
-        z-index: 102;
-        transform: translateX(-100%);
+        position: fixed !important;
+        left: 0;
+        top: 0;
+        z-index: 102 !important;
+        width: 16rem !important;
+        min-width: 16rem !important;
+        max-width: 85vw;
+        height: 100vh;
+        transform: translateX(-100%) !important;
         transition: transform 0.3s ease;
     }
 
     .sidebar.open {
-        transform: translateX(0);
+        transform: translateX(0) !important;
     }
 
     .days-badge-inspector {
