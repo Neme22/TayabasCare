@@ -351,11 +351,19 @@ body {
 /* Table Styles */
 .table-container {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
 }
 
 .data-table {
     width: 100%;
     border-collapse: collapse;
+}
+
+.flex-1,
+.flex > .flex-1 {
+    min-width: 0;
+    max-width: 100%;
 }
 
 .data-table thead {
@@ -842,6 +850,35 @@ dialog.modal[open] {
     #menuToggle {
         display: inline-flex !important;
         align-items: center;
+    }
+
+    .table-container,
+    .overflow-x-auto {
+        overflow: auto !important;
+        -webkit-overflow-scrolling: touch;
+        max-width: 100%;
+        max-height: min(70vh, 520px);
+    }
+
+    .data-table {
+        min-width: 640px;
+    }
+
+    .data-table th {
+        padding: 6px 8px;
+        font-size: 10px;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .data-table td {
+        padding: 6px 8px;
+        font-size: 12px;
+        white-space: nowrap;
+        max-width: 140px;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .sidebar {
