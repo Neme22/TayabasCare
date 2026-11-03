@@ -254,8 +254,7 @@ const FormDrafts = {
         if (!modal || !modal.open) return;
         const fields = {};
         for (let i = 1; i <= 24; i++) {
-            const el = document.getElementById('acc-f' + i);
-            if (el) fields['f' + i] = el.value;
+            fields['f' + i] = getAccFieldValue(i);
         }
         const draft = {
             editId: (document.getElementById('acc-record-id') || {}).value || '',
@@ -1844,15 +1843,63 @@ function setBurialInspector(name) {
 const ACC_AUTO_FIELDS = [5, 6, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
 const ACC_MANUAL_FIELDS = [1, 2, 3, 4, 7, 8, 9, 10, 11, 12];
 
-function lockAccAutoFields() {
-    ACC_AUTO_FIELDS.forEach(n => {
-        const el = document.getElementById(`acc-f${n}`);
-        if (el) {
-            el.readOnly = true;
-            el.style.background = '#f1f5f9';
-            el.style.cursor = 'not-allowed';
-        }
-    });
+// Locked auto fields are <span> (not inputs) so they cannot be edited via Inspect Element.
+function setAccFieldValue(n, v) {
+    const el = document.getElementById(`acc-f${n}`);
+    if (!el) return;
+    const num = parseFloat(v) || 0;
+    if (el.tagName === 'SPAN') el.textContent = String(num);
+    else el.value = num;
+}
+
+function getAccFieldValue(n) {
+    const el = document.getElementById(`acc-f${n}`);
+    if (!el) return 0;
+    if (el.tagName === 'SPAN') return parseFloat(el.textContent) || 0;
+    return parseFloat(el.value) || 0;
+}
+
+function resetAccLockedFields() {
+    ACC_AUTO_FIELDS.forEach(n => setAccFieldValue(n, 0));
+    const inspDisplay = document.getElementById('acc-inspector-display');
+    if (inspDisplay) inspDisplay.textContent = '—';
+}
+
+// View mode: hide editable controls, show label/spans for every field.
+function applyAccViewLabels(rec) {
+    const form = document.getElementById('accomplishment-form');
+    if (!form || !rec) return;
+    form.classList.add('acc-view-mode');
+    form.querySelectorAll('.acc-editable').forEach(el => { el.hidden = true; });
+    // Period shows as one plain label (e.g. "November 2026")
+    setAccPeriodDisplay(rec.month, rec.year);
+    const setView = (id, text) => {
+        const el = document.getElementById(id);
+        if (el) { el.textContent = text == null || text === '' ? '—' : String(text); el.hidden = false; }
+    };
+    ACC_MANUAL_FIELDS.forEach(n => setView(`acc-f${n}-view`, rec.fields[n - 1] || 0));
+    const inspDisplay = document.getElementById('acc-inspector-display');
+    if (inspDisplay) inspDisplay.textContent = rec.inspector || '—';
+    ACC_AUTO_FIELDS.forEach(n => setAccFieldValue(n, rec.fields[n - 1] || 0));
+}
+
+// Back to Add mode: restore editable controls, hide view spans.
+function clearAccViewLabels() {
+    const form = document.getElementById('accomplishment-form');
+    if (!form) return;
+    form.classList.remove('acc-view-mode');
+    form.querySelectorAll('.acc-editable').forEach(el => { el.hidden = false; });
+    form.querySelectorAll('.acc-view-value').forEach(el => { el.hidden = true; el.textContent = ''; });
+    const period = document.getElementById('acc-period-display');
+    if (period) period.hidden = false;
+}
+
+function setAccPeriodDisplay(month, year) {
+    const el = document.getElementById('acc-period-display');
+    if (!el) return;
+    const m = parseInt(month, 10);
+    const y = parseInt(year, 10);
+    el.textContent = (m >= 1 && m <= 12 && y) ? `${MONTH_NAMES[m]} ${y}` : '—';
 }
 
 async function openAccomplishmentModal(recordId = null) {
@@ -1860,6 +1907,8 @@ async function openAccomplishmentModal(recordId = null) {
     const title = document.getElementById('accomplishment-modal-title');
     const form  = document.getElementById('accomplishment-form');
     form.reset();
+    clearAccViewLabels();
+    resetAccLockedFields();
     document.getElementById('acc-record-id').value = '';
 
     const now = new Date();
@@ -1867,39 +1916,37 @@ async function openAccomplishmentModal(recordId = null) {
     const currentYear  = now.getFullYear();
 
     const saveBtn = form.querySelector('button[type="submit"]');
+    let viewRec = null;
 
     if (recordId) {
         title.textContent = 'View Accomplishment Record';
         const records = await getAllAccomplishmentRecords();
         const rec = records.find(r => String(r.id) === String(recordId));
         if (rec) {
+            viewRec = rec;
             document.getElementById('acc-record-id').value = rec.id;
             document.getElementById('acc-inspector').value = rec.inspector;
-            // Fill hidden month value and display name
             document.getElementById('acc-month').value = rec.month;
             document.getElementById('acc-month-display').value = rec.month;
             document.getElementById('acc-year').value = rec.year;
-            for (let i = 1; i <= 24; i++) {
-                const el = document.getElementById(`acc-f${i}`);
-                if (el) el.value = rec.fields[i-1] || 0;
-            }
+            setAccPeriodDisplay(rec.month, rec.year);
+            for (let i = 1; i <= 24; i++) setAccFieldValue(i, rec.fields[i - 1] || 0);
+            // Saved records are view-only — every field renders as a label/span
+            applyAccViewLabels(rec);
         }
-        // Saved records are view-only for the inspector — no editing, no save
-        form.querySelectorAll('input, select').forEach(el => { el.disabled = true; });
         if (saveBtn) saveBtn.style.display = 'none';
     } else {
         title.textContent = 'Add Accomplishment Record';
-        // Ensure everything is editable again (form.reset does not clear disabled)
-        form.querySelectorAll('input, select').forEach(el => { el.disabled = false; });
+        clearAccViewLabels();
         if (saveBtn) saveBtn.style.display = '';
-        // Auto-fill current month and year
+        // Auto current month/year — no pickers
         document.getElementById('acc-month').value = currentMonth;
         document.getElementById('acc-month-display').value = currentMonth;
         document.getElementById('acc-year').value = currentYear;
-        for (let i = 1; i <= 24; i++) {
-            const el = document.getElementById(`acc-f${i}`);
-            if (el) el.value = 0;
-        }
+        setAccPeriodDisplay(currentMonth, currentYear);
+        for (let i = 1; i <= 24; i++) setAccFieldValue(i, 0);
+        // Pull the month's auto-recorded values into the locked spans
+        refreshAccomplishmentAutoFields();
     }
 
     // Always auto-fill inspector from logged-in user (both add and view)
@@ -1907,24 +1954,17 @@ async function openAccomplishmentModal(recordId = null) {
     const inspHidden  = document.getElementById('acc-inspector');
     const inspDisplay = document.getElementById('acc-inspector-display');
     if (recordId) {
-        // keep the record's own inspector (inputs are disabled anyway)
-        if (inspDisplay && !inspDisplay.value && inspHidden) inspDisplay.value = inspHidden.value;
+        if (viewRec) inspDisplay.textContent = viewRec.inspector || loggedName || '—';
     } else {
         if (inspHidden)  inspHidden.value  = loggedName;
-        if (inspDisplay) inspDisplay.value = loggedName;
+        if (inspDisplay) inspDisplay.textContent = loggedName || '—';
     }
-
-    // Auto-recorded fields (3.1/3.2, 8.1/8.2, 9.x, 10.x) — locked for inspectors
-    lockAccAutoFields();
-
-    // Pull the month's records into the locked fields (inspections, permits, health cards, burial)
-    refreshAccomplishmentAutoFields();
 
     modal.showModal();
 }
 
 // Fetches computed auto-recorded values for the modal's selected month/year
-// and fills the locked inputs. Server returns { "5": n, "6": n, "13": …, "15": … }
+// and fills the locked <span>s. Server returns { "5": n, "6": n, "13": …, "15": … }
 // keyed by 1-based form field number.
 async function refreshAccomplishmentAutoFields() {
     const month = document.getElementById('acc-month').value;
@@ -1936,13 +1976,10 @@ async function refreshAccomplishmentAutoFields() {
         if (!result.success || !result.data || typeof result.data.auto !== 'object' || result.data.auto === null) return;
         const auto = result.data.auto;
         Object.entries(auto).forEach(([fnum, val]) => {
-            const el = document.getElementById(`acc-f${fnum}`);
-            if (!el) return;
             // Only overwrite when the source has records for this month;
             // otherwise keep whatever is already shown (historical rows).
-            if (Number(val) > 0) el.value = val;
+            if (Number(val) > 0) setAccFieldValue(fnum, val);
         });
-        lockAccAutoFields();
     } catch (e) {
         console.warn('Could not load auto accomplishment fields:', e);
     }
@@ -1975,8 +2012,7 @@ async function saveAccomplishmentRecord() {
 
     const fields = [];
     for (let i = 1; i <= 24; i++) {
-        const el = document.getElementById(`acc-f${i}`);
-        fields.push(el ? (parseFloat(el.value) || 0) : 0);
+        fields.push(getAccFieldValue(i));
     }
 
     const existingId = document.getElementById('acc-record-id').value;
@@ -6976,6 +7012,31 @@ function openBurialImport(presetType) {
             const active = window._activeBurialType || presetType || 'cadaver';
             await loadBurialRecords(active);
         }
+    });
+}
+function openAccomplishmentImport() {
+    if (typeof ImportFlow === 'undefined') { showNotification('Import library failed to load.', 'error'); return; }
+    ImportFlow.open({
+        module: 'accomplishment',
+        title: 'Import Old Accomplishment Records',
+        accept: '.xlsx,.xls,.csv,.docx',
+        typeSelect: false,
+        columns: [
+            { key: 'inspector', label: 'Inspector' },
+            { key: 'month', label: 'Month' },
+            { key: 'year', label: 'Year' },
+            { key: 'f1', label: 'F1' },
+            { key: 'f5', label: 'F3.1' },
+            { key: 'f13', label: 'F8.1' },
+            { key: 'f15', label: 'F9.1' },
+            { key: 'f19', label: 'F10.1' },
+            { key: '_issue', label: 'Issues' }
+        ],
+        parseFile: ImportFlow.parseAccomplishmentFile,
+        buildPayload: (rows) => ({ rows }),
+        endpoint: 'import_accomplishment.php',
+        notify: showNotification,
+        onSuccess: async () => { await loadAccomplishmentRecords(); }
     });
 }
 // ==================== END BULK IMPORT (INSPECTOR) ====================

@@ -2661,3 +2661,172 @@ select:valid {
 }
 
 /* ===== END BURIAL VIEW MODE ===== */
+
+/* ===== ACCOMPLISHMENT MODAL — LOCKED / VIEW LABELS ===== */
+.acc-locked-value {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 6rem;
+    height: 2rem;
+    padding: 0 0.75rem;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.5rem;
+    color: #475569;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    cursor: not-allowed;
+    user-select: none;
+}
+
+.acc-locked-value.acc-inspector-value {
+    justify-content: flex-start;
+    min-width: 12rem;
+    width: 100%;
+    max-width: 100%;
+    background: #f8fafc;
+}
+
+.acc-view-value {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    padding: 0 0.25rem;
+    font-weight: 600;
+    color: #111827;
+    font-variant-numeric: tabular-nums;
+}
+
+.acc-view-value[hidden] {
+    display: none !important;
+}
+
+#accomplishment-form .acc-editable[hidden] {
+    display: none !important;
+}
+
+[data-theme="dark"] .acc-locked-value {
+    background: #1e293b;
+    border-color: #334155;
+    color: #e2e8f0;
+}
+
+[data-theme="dark"] .acc-view-value {
+    color: #f1f5f9;
+}
+
+/* ===== END ACCOMPLISHMENT MODAL LOCKED / VIEW LABELS ===== */
+
+/* View mode: locked fields render as plain values, same as manual view labels */
+#accomplishment-form.acc-view-mode .acc-locked-value {
+    background: transparent;
+    border: none;
+    padding: 0 0.25rem;
+    min-width: 0;
+    height: auto;
+    color: #111827;
+    font-weight: 600;
+    cursor: default;
+    user-select: text;
+    justify-content: flex-start;
+}
+
+#accomplishment-form.acc-view-mode .acc-locked-value.acc-inspector-value {
+    background: transparent;
+    border: none;
+    min-width: 0;
+    width: auto;
+}
+
+[data-theme="dark"] #accomplishment-form.acc-view-mode .acc-locked-value {
+    background: transparent;
+    border: none;
+    color: #f1f5f9;
+}
+
+/* Consistent value column + row rhythm for accomplishment activity rows */
+#accomplishment-form .grid > .flex.items-center.gap-2 {
+    min-height: 2rem;
+    align-items: center;
+}
+
+#accomplishment-form .acc-view-value,
+#accomplishment-form.acc-view-mode .acc-locked-value {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    width: 6rem;
+    min-width: 6rem;
+    max-width: 6rem;
+    margin-left: 0.5rem;
+    padding: 0;
+    height: 1.75rem;
+    font-weight: 600;
+    color: #111827;
+    font-variant-numeric: tabular-nums;
+    background: transparent !important;
+    border: none !important;
+    cursor: default;
+    user-select: text;
+}
+
+#accomplishment-form.acc-view-mode .acc-locked-value.acc-inspector-value {
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    margin-left: 0;
+}
+
+[data-theme="dark"] #accomplishment-form.acc-view-mode .acc-locked-value,
+[data-theme="dark"] #accomplishment-form .acc-view-value {
+    color: #f1f5f9;
+}
+
+/* Add mode: locked chips align to same column as editable inputs (w-24) */
+#accomplishment-form:not(.acc-view-mode) .acc-locked-value:not(.acc-inspector-value) {
+    width: 6rem;
+    min-width: 6rem;
+    max-width: 6rem;
+    margin-left: 0.5rem;
+    justify-content: flex-start;
+    padding: 0 0.75rem;
+}
+
+/* Add mode: locked chips match editable input-sm w-24 exactly (same column) */
+#accomplishment-form:not(.acc-view-mode) .acc-locked-value:not(.acc-inspector-value) {
+    width: 6rem !important;
+    min-width: 6rem !important;
+    max-width: 6rem !important;
+    height: 2rem !important;
+    margin-left: 0 !important;
+    padding: 0 0.75rem !important;
+    justify-content: flex-start !important;
+    box-sizing: border-box;
+    font-weight: 400;
+    font-size: 0.875rem;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.5rem;
+    color: #475569;
+}
+
+/* View mode: month + year sit side by side as plain labels */
+#accomplishment-form.acc-view-mode #acc-month-view,
+#accomplishment-form.acc-view-mode #acc-year-view {
+    display: inline-flex !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    margin-right: 0.75rem;
+    height: auto !important;
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    font-weight: 600;
+}
+
+#accomplishment-form.acc-view-mode #acc-month-view[hidden],
+#accomplishment-form.acc-view-mode #acc-year-view[hidden] {
+    display: none !important;
+}

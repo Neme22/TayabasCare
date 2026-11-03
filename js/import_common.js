@@ -885,11 +885,88 @@
         }
     };
 
+    // ---------------- accomplishment parsing ----------------
+    const ACC_ALIASES = (() => {
+        const a = {
+            inspector: 'inspector', inspectorname: 'inspector', name: 'inspector',
+            month: 'month', mon: 'month',
+            year: 'year', yr: 'year'
+        };
+        for (let i = 1; i <= 24; i++) {
+            a['f' + i] = 'f' + i;
+            a['field' + i] = 'f' + i;
+            a[String(i)] = 'f' + i;
+        }
+        return a;
+    })();
+    const ACC_HEADER_KEYS = new Set(Object.keys(ACC_ALIASES));
+
+    function parseAccMonth(val) {
+        const s = str(val).toLowerCase();
+        if (!s) return 0;
+        if (MONTHS[s]) return MONTHS[s];
+        const n = parseInt(s, 10);
+        return (n >= 1 && n <= 12) ? n : 0;
+    }
+
+    function toCount(val) {
+        if (val === null || val === undefined || val === '') return 0;
+        const n = parseFloat(String(val).replace(/[^\d.-]/g, ''));
+        return isNaN(n) || n < 0 ? 0 : Math.round(n);
+    }
+
+    function mapAccomplishmentRows(rawRows) {
+        const header = rawRows[0].map(normKey);
+        const canon = header.map(h => ACC_ALIASES[h] || '');
+        return rawRows.slice(1).map(r => {
+            const o = {};
+            canon.forEach((f, i) => { if (f && o[f] === undefined) o[f] = r[i]; });
+            const fields = [];
+            for (let i = 1; i <= 24; i++) fields.push(toCount(o['f' + i]));
+            const month = parseAccMonth(o.month);
+            const year = parseInt(str(o.year), 10);
+            return {
+                inspector: str(o.inspector),
+                month,
+                year: (year >= 2000 && year <= 2099) ? year : 0,
+                fields,
+                _status: 'ok',
+                _issue: ''
+            };
+        }).map(r => {
+            if (!r.inspector) { r._status = 'error'; r._issue = 'Missing inspector name'; }
+            else if (!r.month) { r._status = 'error'; r._issue = 'Missing or invalid month'; }
+            else if (!r.year) { r._status = 'error'; r._issue = 'Missing or invalid year'; }
+            return r;
+        }).filter(r => r.inspector || r.month || r.year || r.fields.some(v => v));
+    }
+
+    async function parseAccomplishmentFile(file) {
+        const ext = extOf(file);
+        let rawRows;
+        if (SHEET_EXTS.includes(ext)) rawRows = await readSheetRows(file);
+        else if (ext === 'docx') rawRows = await readDocxTables(file);
+        else throw new Error('Unsupported file type. Use .xlsx, .xls, .csv or .docx.');
+        if (!rawRows.length) return { rows: [], validRows: [] };
+        if (!detectHeader(rawRows[0], ACC_HEADER_KEYS)) {
+            return {
+                rows: rawRows.slice(1).map(() => ({
+                    inspector: '', month: 0, year: 0, fields: [],
+                    _status: 'error', _issue: 'Unrecognized layout — add a header row (inspector, month, year, f1, f2, … f24)'
+                })),
+                validRows: []
+            };
+        }
+        const rows = mapAccomplishmentRows(rawRows);
+        return { rows, validRows: rows.filter(r => r._status !== 'error') };
+    }
+
     window.ImportFlow = ImportFlow;
     // Exposed for reuse/testing
     window.ImportFlow.parseSanitaryFile = parseSanitaryFile;
     window.ImportFlow.parseInspectionFile = parseInspectionFile;
     window.ImportFlow.parseBurialFile = parseBurialFile;
+    window.ImportFlow.parseAccomplishmentFile = parseAccomplishmentFile;
     window.ImportFlow.normalizeDate = normalizeDate;
     window.ImportFlow.splitPersonnelName = splitPersonnelName;
 })();

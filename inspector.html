@@ -9,7 +9,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/inspector.css?v=6">
+    <link rel="stylesheet" href="css/inspector.css?v=7">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
 </head>
@@ -763,9 +763,14 @@
             <div id="accomplishment-module" class="module-content hidden">
                 <div class="page-header no-print">
                     <h2>Accomplishment</h2>
-                    <button class="btn btn-success text-white" onclick="openAccomplishmentModal()">
-                        <i class="fas fa-plus"></i>Add Monthly Accomplishment
-                    </button>
+                    <div class="flex gap-2">
+                        <button class="btn btn-outline btn-success" onclick="openAccomplishmentImport()">
+                            <i class="fas fa-file-import"></i>Import Old Records
+                        </button>
+                        <button class="btn btn-success text-white" onclick="openAccomplishmentModal()">
+                            <i class="fas fa-plus"></i>Add Monthly Accomplishment
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Filter Controls -->
@@ -1802,35 +1807,31 @@
                         <div class="form-control md:col-span-2">
                             <label class="label"><span class="label-text font-semibold">Inspector</span></label>
                             <input type="hidden" id="acc-inspector">
-                            <input type="text" id="acc-inspector-display" class="input input-bordered input-success bg-gray-100 cursor-not-allowed" readonly>
+                            <span id="acc-inspector-display" class="acc-locked-value acc-inspector-value" title="Locked to logged-in inspector">—</span>
                         </div>
 
-                        <!-- Month -->
-                        <div class="form-control">
-                            <label class="label"><span class="label-text font-semibold">Month <span class="text-red-500">*</span></span></label>
+                        <!-- Period: auto current month/year in Add; plain label in View -->
+                        <div class="form-control md:col-span-2" id="acc-period-field">
+                            <label class="label"><span class="label-text font-semibold">Period</span></label>
                             <input type="hidden" id="acc-month">
-                            <select id="acc-month-display" class="select select-bordered select-success" onchange="document.getElementById('acc-month').value = this.value; refreshAccomplishmentAutoFields();" required>
-                                <option value="">-- Select Month --</option>
-                                <option value="1">January</option>
-                                <option value="2">February</option>
-                                <option value="3">March</option>
-                                <option value="4">April</option>
-                                <option value="5">May</option>
-                                <option value="6">June</option>
-                                <option value="7">July</option>
-                                <option value="8">August</option>
-                                <option value="9">September</option>
-                                <option value="10">October</option>
-                                <option value="11">November</option>
-                                <option value="12">December</option>
-                            </select>
+                            <input type="hidden" id="acc-year">
+                            <span id="acc-period-display" class="acc-locked-value acc-inspector-value">—</span>
                         </div>
-
-                        <!-- Year -->
-                        <div class="form-control">
-                            <label class="label"><span class="label-text font-semibold">Year <span class="text-red-500">*</span></span></label>
-                            <input type="number" id="acc-year" class="input input-bordered input-success" min="2000" max="2099" placeholder="e.g. 2024" onchange="refreshAccomplishmentAutoFields();" required>
-                        </div>
+                        <!-- Hidden legacy select (draft restore targets this id) -->
+                        <select id="acc-month-display" hidden onchange="document.getElementById('acc-month').value = this.value; refreshAccomplishmentAutoFields();">
+                            <option value="1">January</option>
+                            <option value="2">February</option>
+                            <option value="3">March</option>
+                            <option value="4">April</option>
+                            <option value="5">May</option>
+                            <option value="6">June</option>
+                            <option value="7">July</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
 
                         <!-- Activity Fields -->
                         <div class="form-control md:col-span-2">
@@ -1838,99 +1839,109 @@
                             <div class="grid grid-cols-1 gap-2 text-sm">
                                 <div class="flex items-center gap-2">
                                     <label class="w-80 text-gray-700">1. Inspection &amp; Monitoring of Water Sources</label>
-                                    <input type="number" id="acc-f1" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <input type="number" id="acc-f1" class="input input-bordered input-success input-sm w-24 acc-editable" min="0" value="0">
+                                    <span id="acc-f1-view" class="acc-view-value" hidden></span>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <label class="w-80 text-gray-700">2. Water Refilling Station w/ Sanitary Permit</label>
-                                    <input type="number" id="acc-f2" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <input type="number" id="acc-f2" class="input input-bordered input-success input-sm w-24 acc-editable" min="0" value="0">
+                                    <span id="acc-f2-view" class="acc-view-value" hidden></span>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <label class="w-80 text-gray-700 pl-4">— Bacteriological</label>
-                                    <input type="number" id="acc-f3" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <input type="number" id="acc-f3" class="input input-bordered input-success input-sm w-24 acc-editable" min="0" value="0">
+                                    <span id="acc-f3-view" class="acc-view-value" hidden></span>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <label class="w-80 text-gray-700 pl-4">— Physical/Chemical</label>
-                                    <input type="number" id="acc-f4" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <input type="number" id="acc-f4" class="input input-bordered input-success input-sm w-24 acc-editable" min="0" value="0">
+                                    <span id="acc-f4-view" class="acc-view-value" hidden></span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">3.1 Food Establishments <i class="fas fa-lock text-gray-400" title="Auto-recorded from inspection reports — cannot be edited"></i></label>
-                                    <input type="number" id="acc-f5" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from inspection reports — cannot be edited">
+                                    <label class="w-80 text-gray-700">3.1 Food Establishments </label>
+                                    <span id="acc-f5" class="acc-locked-value acc-auto-field" title="Auto-recorded from inspection reports — cannot be edited">0</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">3.2 Non-Food Establishments <i class="fas fa-lock text-gray-400" title="Auto-recorded from inspection reports — cannot be edited"></i></label>
-                                    <input type="number" id="acc-f6" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from inspection reports — cannot be edited">
+                                    <label class="w-80 text-gray-700">3.2 Non-Food Establishments </label>
+                                    <span id="acc-f6" class="acc-locked-value acc-auto-field" title="Auto-recorded from inspection reports — cannot be edited">0</span>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <label class="w-80 text-gray-700">4. Distribution of Toilet Bowl with Cement</label>
-                                    <input type="number" id="acc-f7" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <input type="number" id="acc-f7" class="input input-bordered input-success input-sm w-24 acc-editable" min="0" value="0">
+                                    <span id="acc-f7-view" class="acc-view-value" hidden></span>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <label class="w-80 text-gray-700">5. Infectious Waste Collection</label>
-                                    <input type="number" id="acc-f8" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <input type="number" id="acc-f8" class="input input-bordered input-success input-sm w-24 acc-editable" min="0" value="0">
+                                    <span id="acc-f8-view" class="acc-view-value" hidden></span>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <label class="w-80 text-gray-700">6. Attending Sanitary Complaints</label>
-                                    <input type="number" id="acc-f9" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <input type="number" id="acc-f9" class="input input-bordered input-success input-sm w-24 acc-editable" min="0" value="0">
+                                    <span id="acc-f9-view" class="acc-view-value" hidden></span>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <label class="w-80 text-gray-700">7.1 Clean Up</label>
-                                    <input type="number" id="acc-f10" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <input type="number" id="acc-f10" class="input input-bordered input-success input-sm w-24 acc-editable" min="0" value="0">
+                                    <span id="acc-f10-view" class="acc-view-value" hidden></span>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <label class="w-80 text-gray-700">7.2 Misting Activity</label>
-                                    <input type="number" id="acc-f11" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <input type="number" id="acc-f11" class="input input-bordered input-success input-sm w-24 acc-editable" min="0" value="0">
+                                    <span id="acc-f11-view" class="acc-view-value" hidden></span>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <label class="w-80 text-gray-700">7.3 Disinfection</label>
-                                    <input type="number" id="acc-f12" class="input input-bordered input-success input-sm w-24" min="0" value="0">
+                                    <input type="number" id="acc-f12" class="input input-bordered input-success input-sm w-24 acc-editable" min="0" value="0">
+                                    <span id="acc-f12-view" class="acc-view-value" hidden></span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">8.1 Issuance Sanitary Permit - Food Est. <i class="fas fa-lock text-gray-400" title="Auto-recorded from sanitary permit records — cannot be edited"></i></label>
-                                    <input type="number" id="acc-f13" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from sanitary permit records — cannot be edited">
+                                    <label class="w-80 text-gray-700">8.1 Issuance Sanitary Permit - Food Est. </label>
+                                    <span id="acc-f13" class="acc-locked-value acc-auto-field" title="Auto-recorded from sanitary permit records — cannot be edited">0</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">8.2 Issuance Sanitary Permit - Non-Food Est. <i class="fas fa-lock text-gray-400" title="Auto-recorded from sanitary permit records — cannot be edited"></i></label>
-                                    <input type="number" id="acc-f14" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from sanitary permit records — cannot be edited">
+                                    <label class="w-80 text-gray-700">8.2 Issuance Sanitary Permit - Non-Food Est. </label>
+                                    <span id="acc-f14" class="acc-locked-value acc-auto-field" title="Auto-recorded from sanitary permit records — cannot be edited">0</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">9.1 Health Card - Food Est. (M) <i class="fas fa-lock text-gray-400" title="Auto-recorded from sanitary (health card) records — cannot be edited"></i></label>
-                                    <input type="number" id="acc-f15" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from sanitary (health card) records — cannot be edited">
+                                    <label class="w-80 text-gray-700">9.1 Health Card - Food Est. (M) </label>
+                                    <span id="acc-f15" class="acc-locked-value acc-auto-field" title="Auto-recorded from sanitary (health card) records — cannot be edited">0</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">9.1 Health Card - Food Est. (F) <i class="fas fa-lock text-gray-400" title="Auto-recorded from sanitary (health card) records — cannot be edited"></i></label>
-                                    <input type="number" id="acc-f16" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from sanitary (health card) records — cannot be edited">
+                                    <label class="w-80 text-gray-700">9.1 Health Card - Food Est. (F) </label>
+                                    <span id="acc-f16" class="acc-locked-value acc-auto-field" title="Auto-recorded from sanitary (health card) records — cannot be edited">0</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">9.2 Health Card - Non-Food Est. (M) <i class="fas fa-lock text-gray-400" title="Auto-recorded from sanitary (health card) records — cannot be edited"></i></label>
-                                    <input type="number" id="acc-f17" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from sanitary (health card) records — cannot be edited">
+                                    <label class="w-80 text-gray-700">9.2 Health Card - Non-Food Est. (M) </label>
+                                    <span id="acc-f17" class="acc-locked-value acc-auto-field" title="Auto-recorded from sanitary (health card) records — cannot be edited">0</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">9.2 Health Card - Non-Food Est. (F) <i class="fas fa-lock text-gray-400" title="Auto-recorded from sanitary (health card) records — cannot be edited"></i></label>
-                                    <input type="number" id="acc-f18" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from sanitary (health card) records — cannot be edited">
+                                    <label class="w-80 text-gray-700">9.2 Health Card - Non-Food Est. (F) </label>
+                                    <span id="acc-f18" class="acc-locked-value acc-auto-field" title="Auto-recorded from sanitary (health card) records — cannot be edited">0</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">10.1 Certificate of Exhumation (M) <i class="fas fa-lock text-gray-400" title="Auto-recorded from burial records — cannot be edited"></i></label>
-                                    <input type="number" id="acc-f19" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from burial records — cannot be edited">
+                                    <label class="w-80 text-gray-700">10.1 Certificate of Exhumation (M) </label>
+                                    <span id="acc-f19" class="acc-locked-value acc-auto-field" title="Auto-recorded from burial records — cannot be edited">0</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">10.1 Certificate of Exhumation (F) <i class="fas fa-lock text-gray-400" title="Auto-recorded from burial records — cannot be edited"></i></label>
-                                    <input type="number" id="acc-f20" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from burial records — cannot be edited">
+                                    <label class="w-80 text-gray-700">10.1 Certificate of Exhumation (F) </label>
+                                    <span id="acc-f20" class="acc-locked-value acc-auto-field" title="Auto-recorded from burial records — cannot be edited">0</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">10.2 Transfer of Skeletal (M) <i class="fas fa-lock text-gray-400" title="Auto-recorded from burial records — cannot be edited"></i></label>
-                                    <input type="number" id="acc-f21" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from burial records — cannot be edited">
+                                    <label class="w-80 text-gray-700">10.2 Transfer of Skeletal (M) </label>
+                                    <span id="acc-f21" class="acc-locked-value acc-auto-field" title="Auto-recorded from burial records — cannot be edited">0</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">10.2 Transfer of Skeletal (F) <i class="fas fa-lock text-gray-400" title="Auto-recorded from burial records — cannot be edited"></i></label>
-                                    <input type="number" id="acc-f22" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from burial records — cannot be edited">
+                                    <label class="w-80 text-gray-700">10.2 Transfer of Skeletal (F) </label>
+                                    <span id="acc-f22" class="acc-locked-value acc-auto-field" title="Auto-recorded from burial records — cannot be edited">0</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">10.3 Transfer of Cadaver (M) <i class="fas fa-lock text-gray-400" title="Auto-recorded from burial records — cannot be edited"></i></label>
-                                    <input type="number" id="acc-f23" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from burial records — cannot be edited">
+                                    <label class="w-80 text-gray-700">10.3 Transfer of Cadaver (M) </label>
+                                    <span id="acc-f23" class="acc-locked-value acc-auto-field" title="Auto-recorded from burial records — cannot be edited">0</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <label class="w-80 text-gray-700">10.3 Transfer of Cadaver (F) <i class="fas fa-lock text-gray-400" title="Auto-recorded from burial records — cannot be edited"></i></label>
-                                    <input type="number" id="acc-f24" class="input input-bordered input-success input-sm w-24 acc-auto-field" min="0" value="0" readonly title="Auto-recorded from burial records — cannot be edited">
+                                    <label class="w-80 text-gray-700">10.3 Transfer of Cadaver (F) </label>
+                                    <span id="acc-f24" class="acc-locked-value acc-auto-field" title="Auto-recorded from burial records — cannot be edited">0</span>
                                 </div>
                             </div>
                         </div>
@@ -2198,8 +2209,8 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
-    <script src="js/import_common.js?v=1"></script>
-    <script src="js/inspector.js?v=9"></script>
+    <script src="js/import_common.js?v=2"></script>
+    <script src="js/inspector.js?v=10"></script>
 
     <script>
 document.addEventListener('click', function(e) {
