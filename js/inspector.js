@@ -4465,8 +4465,15 @@ function openBurialModal(mode, type, id = null) {
     const title = document.getElementById('burial-modal-title');
     const submitBtn = document.getElementById('burial-submit-btn');
     const printBtn = document.getElementById('burial-print-btn');
-    
+
     form.reset();
+    // Always wipe view labels + prior file preview so View→Add never reuses a cert
+    clearBurialViewLabels();
+    const certPreview = document.getElementById('burial-cert-preview');
+    if (certPreview) certPreview.innerHTML = '';
+    const fileInput = document.getElementById('burial-death-cert');
+    if (fileInput) fileInput.value = '';
+
     document.getElementById('burial-mode').value = mode;
     document.getElementById('burial-type').value = type;
     document.getElementById('burial-id').value = id || '';
@@ -4474,7 +4481,7 @@ function openBurialModal(mode, type, id = null) {
     // Show/hide fields based on burial type
     const cadaverFields = document.getElementById('cadaver-fields');
     const skeletalFields = document.getElementById('skeletal-fields');
-    
+
     if (type === 'cadaver') {
         if (cadaverFields) cadaverFields.style.display = 'grid';
         if (skeletalFields) skeletalFields.style.display = 'none';
@@ -4485,7 +4492,6 @@ function openBurialModal(mode, type, id = null) {
     }
 
     // Handle button visibility and input states
-    clearBurialViewLabels();
     if (mode === 'add') {
         title.textContent = `Add ${type.charAt(0).toUpperCase() + type.slice(1)} Record`;
         submitBtn.style.display = 'inline-flex';
@@ -4787,10 +4793,11 @@ function loadBurialData(type, index) {
         document.getElementById('burial-or-skeletal').value = record.orNumberSkeletal || record.orNumber || '';
     }
 
-    // 5. Show download link if a death certificate file exists
+    // 5. Death certificate preview — always rebuild (clear when none) for all categories
     const certPreview = document.getElementById('burial-cert-preview');
-    if (certPreview && record.filePath) {
-        certPreview.innerHTML = `
+    if (certPreview) {
+        if (record.filePath) {
+            certPreview.innerHTML = `
             <div class="flex items-center gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
                 <i class="fas ${record.fileName && record.fileName.toLowerCase().includes('.pdf') ? 'fa-file-pdf text-red-500' : 'fa-file-image text-blue-500'} text-2xl"></i>
                 <div class="flex-1">
@@ -4801,6 +4808,9 @@ function loadBurialData(type, index) {
                 </a>
             </div>
         `;
+        } else {
+            certPreview.innerHTML = '';
+        }
     }
 }
 
@@ -4933,8 +4943,11 @@ function editBurial(type, id) {
 
 function closeBurialModal() {
     clearBurialViewLabels();
+    const certPreview = document.getElementById('burial-cert-preview');
+    if (certPreview) certPreview.innerHTML = '';
+    const fileInput = document.getElementById('burial-death-cert');
+    if (fileInput) fileInput.value = '';
     document.getElementById('burial-modal').close();
-    document.getElementById('burial-cert-preview').innerHTML = '';
 }
 
 // ── Burial permit print helpers ──────────────────────────────────────────
