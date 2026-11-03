@@ -7118,3 +7118,21 @@ function openBurialImport(presetType) {
     });
 }
 // ==================== END BULK IMPORT (INSPECTOR) ====================
+// ==================== MOBILE SIDEBAR ====================
+function toggleMobileSidebar() {
+    const sb = document.querySelector('.sidebar');
+    const bd = document.querySelector('.sidebar-backdrop');
+    if (!sb) return;
+    const open = sb.classList.toggle('open');
+    if (bd) bd.classList.toggle('show', open);
+}
+function closeMobileSidebar() {
+    const sb = document.querySelector('.sidebar');
+    const bd = document.querySelector('.sidebar-backdrop');
+    if (sb) sb.classList.remove('open');
+    if (bd) bd.classList.remove('show');
+}
+document.addEventListener('click', function (e) {
+    if (e.target.closest('.sidebar-item[data-testid]')) closeMobileSidebar();
+});
+// ==================== END MOBILE SIDEBAR ====================

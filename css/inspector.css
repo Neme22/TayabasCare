@@ -131,6 +131,19 @@ body {
     border-bottom: 1px solid rgba(0,0,0,0.08);
     min-height: 56px;
     padding: 0 16px;
+    width: 100%;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 50;
+}
+
+/* Mobile hamburger + sidebar backdrop */
+.mobile-sidebar-btn {
+    display: none;
+}
+
+.sidebar-backdrop {
+    display: none;
 }
 
 .navbar .avatar .rounded-full {
@@ -1771,6 +1784,22 @@ select:valid {
 
 /* ==================== RESPONSIVE ==================== */
 @media (max-width: 768px) {
+    .mobile-sidebar-btn {
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .sidebar-backdrop.show {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.45);
+        z-index: 99;
+    }
+
     .sidebar {
         position: fixed;
         z-index: 100;

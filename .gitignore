@@ -28,7 +28,6 @@ Desktop.ini
 uploads/
 
 # Local logo source backup (Logo.png is the served asset)
-LogoOriginal.png
 
 # Debug screenshots
 screenshot_*.png

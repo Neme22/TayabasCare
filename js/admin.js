@@ -6728,3 +6728,34 @@ function openBurialImport(presetType) {
     });
 }
 // ==================== END BULK IMPORT — BURIAL (admin) ====================
+// ==================== MOBILE SIDEBAR (ADMIN) ====================
+(function () {
+    const btn = document.getElementById('menuToggle');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+        const sb = document.querySelector('.sidebar');
+        if (!sb) return;
+        const active = sb.classList.toggle('active');
+        let bd = document.getElementById('adminSidebarBackdrop');
+        if (!bd) {
+            bd = document.createElement('div');
+            bd.id = 'adminSidebarBackdrop';
+            bd.style.cssText = 'display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:99;';
+            document.body.appendChild(bd);
+            bd.addEventListener('click', function () {
+                sb.classList.remove('active');
+                bd.style.display = 'none';
+            });
+        }
+        bd.style.display = active ? 'block' : 'none';
+    });
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('.sidebar-item')) {
+            const sb = document.querySelector('.sidebar');
+            if (sb) sb.classList.remove('active');
+            const bd = document.getElementById('adminSidebarBackdrop');
+            if (bd) bd.style.display = 'none';
+        }
+    });
+})();
+// ==================== END MOBILE SIDEBAR (ADMIN) ====================
