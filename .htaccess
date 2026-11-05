@@ -14,9 +14,9 @@
 # Clean URLs: /admin, /inspector (no .html in address bar)
 RewriteEngine On
 
-# Redirect .html URLs to clean versions (subdir-safe: relative to this directory)
+# Redirect .html URLs to clean versions (capture path from THE_REQUEST — works at root and in subdirs)
 RewriteCond %{THE_REQUEST} \s([^\s?]+)\.html(?:\?[^\s]*)?\s
-RewriteRule ^(.+)\.html$ $1 [R=301,L,QSA]
+RewriteRule ^ %1 [R=301,L,QSA]
 
 # Map clean URLs to the real files
 RewriteCond %{REQUEST_FILENAME} !-f
