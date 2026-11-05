@@ -2664,6 +2664,12 @@ function filterSanitaryRecords() {
             !seen.has(String(record.businessName || record.business_name || '').toLowerCase()));
     }
     
+    // Category filter — show only the selected permit category
+    const catSel = CatSort.value('insp-sanitary-cat');
+    if (catSel) {
+        filtered = filtered.filter(r => categoryFromPermit(r.permitNo) === catSel);
+    }
+
     // Sort
     filtered = [...filtered].sort((a, b) => {
         switch (sortBy) {
@@ -3760,6 +3766,12 @@ function filterInspectionReports() {
             (r.establishment || '').toLowerCase().includes(searchTerm) ||
             (r.location || '').toLowerCase().includes(searchTerm)
         );
+    }
+
+    // Category filter — show only the selected permit category
+    const catSel = CatSort.value('insp-reports-cat');
+    if (catSel) {
+        filtered = filtered.filter(r => _reportCategory(r) === catSel);
     }
 
     // Sort
@@ -5937,6 +5949,55 @@ const PERMIT3_LABELS = {
     WRS: 'Water Refiling Station'
 };
 
+// ==================== ESTABLISHMENT CATEGORY SORT ====================
+// Category = 3rd segment of permitNo. Options list acronym + full name,
+// matching the Sanitary Permit 3rd-row dropdown.
+function categoryFromPermit(permitNo) {
+    const parts = String(permitNo || '').split('-');
+    return parts.length >= 3 ? String(parts[2] || '').toUpperCase() : '';
+}
+
+// Selected category → 0, other categories → 1, missing/unknown → 2 (bottom).
+// No selection → 0 for all (existing sort only).
+function categoryRank(cat, selected) {
+    if (!selected) return 0;
+    if (cat === selected) return 0;
+    if (!cat) return 2;
+    return 1;
+}
+
+function _reportCategory(r) {
+    if (r && r.permitNo) return categoryFromPermit(r.permitNo);
+    const name = String((r && r.establishment) || '').toLowerCase();
+    const rec = (window._sanitaryRecordsForPermit || cachedSanitaryRecords || [])
+        .find(s => String(s.businessName || s.business_name || '').toLowerCase() === name);
+    return categoryFromPermit(rec && (rec.permitNo || rec.permit_no));
+}
+
+const CatSort = {
+    refresh: {
+        'insp-sanitary-cat': () => setSanitaryFilter(),
+        'insp-reports-cat': () => { TablePaging.setPage('insp-reports', 1); filterInspectionReports(); },
+        'insp-ih-cat': () => sortIHEstablishments()
+    },
+    value(id) {
+        const el = document.getElementById(id);
+        if (!el) return '';
+        if (el.tagName === 'SELECT') return el.value || '';
+        return el.dataset.value || '';
+    },
+    toggle() {},
+    closeAll() {},
+    select() {},
+    _fill() {},
+    init() {}
+};
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => CatSort.init());
+} else {
+    CatSort.init();
+}
+
 function setPermit3(code) {
     const input = document.getElementById('sanitary-permit-3');
     const label = document.getElementById('sanitary-permit-3-label');
@@ -6664,12 +6725,17 @@ async function loadIHEstablishments() {
         const name = (r.establishment || '').trim();
         if (!name) return;
         if (!estabMap[name]) {
+            // Stash permitNo from matching sanitary record for category sort
+            const sRec = (cachedSanitaryRecords || []).find(s =>
+                String(s.businessName || s.business_name || '').toLowerCase() === name.toLowerCase()
+            );
             estabMap[name] = {
                 name,
                 barangay: r.location || 'N/A',
                 count: 0,
                 violations: 0,
-                lastDate: null
+                lastDate: null,
+                permitNo: (sRec && (sRec.permitNo || sRec.permit_no)) || ''
             };
         }
         estabMap[name].count++;
@@ -6738,7 +6804,12 @@ function sortIHEstablishments() {
 }
 
 function sortIHList(list, sortBy) {
-    return [...list].sort((a, b) => {
+    const catSel = CatSort.value('insp-ih-cat');
+    let rows = list;
+    if (catSel) {
+        rows = rows.filter(e => categoryFromPermit(e.permitNo) === catSel);
+    }
+    return [...rows].sort((a, b) => {
         switch (sortBy) {
             case 'recent': return (b.lastDate || 0) - (a.lastDate || 0);
             case 'name-az': return a.name.localeCompare(b.name);

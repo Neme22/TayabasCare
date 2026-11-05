@@ -1205,6 +1205,20 @@ dialog.modal[open] {
     color: #D97706;
 }
 
+/* Burial category badge colors */
+.type-burial-cadaver {
+    background-color: #FEF3C7;
+    color: #D97706;
+}
+.type-burial-skeletal {
+    background-color: #EDE9FE;
+    color: #7C3AED;
+}
+.type-burial-exhumation {
+    background-color: #FFE4E6;
+    color: #E11D48;
+}
+
 .type-reports {
     background-color: #FCE7F3;
     color: #DB2777;
@@ -2775,4 +2789,75 @@ dialog.modal::backdrop {
 }
 .brgy-chip:active {
     cursor: grabbing;
+}
+
+/* ===== ESTABLISHMENT CATEGORY SORT (permit 3rd-row style) ===== */
+.cat-sort {
+    position: relative;
+    display: inline-block;
+    font-size: 13px;
+}
+.cat-sort-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 14px;
+    color: #374151;
+    cursor: pointer;
+    min-width: 160px;
+    min-height: 48px;
+    justify-content: space-between;
+    box-sizing: border-box;
+}
+.cat-sort-btn:focus {
+    outline: none;
+    border-color: #10b981;
+}
+.cat-sort-btn:hover {
+    border-color: #d1d5db;
+}
+.cat-sort-caret {
+    font-size: 10px;
+    color: #9ca3af;
+}
+.cat-sort-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 220px;
+    max-height: 320px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    z-index: 1000;
+    padding: 4px 0;
+}
+.cat-sort-option {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 12px;
+    cursor: pointer;
+}
+.cat-sort-option:hover {
+    background: #f9fafb;
+}
+.cat-sort-option[data-val=""] {
+    background: #f0fdf4;
+}
+.cat-sort-acronym {
+    font-weight: 700;
+    font-size: 13px;
+    color: #111827;
+}
+.cat-sort-full {
+    font-size: 11px;
+    color: #6b7280;
+    line-height: 1.2;
 }

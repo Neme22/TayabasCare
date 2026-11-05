@@ -410,6 +410,67 @@ function getSanitaryPermitNoForEstablishment(establishmentName) {
     return (match && match.permitNo) ? match.permitNo : 'N/A';
 }
 
+// ==================== ESTABLISHMENT CATEGORY SORT ====================
+// Category = 3rd segment of permitNo (001-00-FM → FM). Options list acronym
+// with full name underneath, matching the Sanitary Permit 3rd-row dropdown.
+const PERMIT3_LABELS = {
+    FM: 'Food Manufacturing',
+    FR: 'Food Retail',
+    FS: 'Food Serving',
+    IE: 'Industrial Establishment',
+    IS: 'Individual Services',
+    NFC: 'Non Food Commercial',
+    PDD: 'Public Disposal of Death',
+    PPI: 'Public Place Institu.',
+    PPL: 'Public Place Lodging',
+    PPO: 'Public Place Others',
+    PPR: 'Public Place Recreational',
+    PPT: 'Public Place Tonsorial',
+    PPTD: 'Public Place Transfort Depo',
+    RFV: 'Raw Food Vendor',
+    SFV: 'Street Food Vendor',
+    WRS: 'Water Refiling Station'
+};
+
+function categoryFromPermit(permitNo) {
+    const parts = String(permitNo || '').split('-');
+    return parts.length >= 3 ? String(parts[2] || '').toUpperCase() : '';
+}
+
+// Selected category → 0, other categories → 1, missing/unknown → 2 (bottom).
+// No selection → 0 for all (existing sort only).
+function categoryRank(cat, selected) {
+    if (!selected) return 0;
+    if (cat === selected) return 0;
+    if (!cat) return 2;
+    return 1;
+}
+
+const CatSort = {
+    refresh: {
+        'admin-sanitary-cat': () => { TablePaging.setPage('sanitary', 1); SanitaryManager.applyFilters(); },
+        'admin-reports-cat': () => { TablePaging.setPage('reports', 1); ReportsManager.applyFilters(); },
+        'admin-ih-cat': () => adminSortIHEstablishments(),
+        'admin-pred-cat': () => { TablePaging.setPage('prediction', 1); PredictionEngine.filter(); }
+    },
+    value(id) {
+        const el = document.getElementById(id);
+        if (!el) return '';
+        if (el.tagName === 'SELECT') return el.value || '';
+        return el.dataset.value || '';
+    },
+    toggle() {},
+    closeAll() {},
+    select() {},
+    _fill() {},
+    init() {}
+};
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => CatSort.init());
+} else {
+    CatSort.init();
+}
+
 function getAdminRiskForEstablishment(businessName) {
     if (!businessName) return null;
     if (!PredictionEngine.results || PredictionEngine.results.length === 0) return null;
@@ -1737,6 +1798,12 @@ const SanitaryManager = {
             });
         }
 
+        // Category filter — show only the selected permit category
+        const catSel = CatSort.value('admin-sanitary-cat');
+        if (catSel) {
+            filtered = filtered.filter(r => categoryFromPermit(r.permitNo) === catSel);
+        }
+
         // Sort
         const sorted = [...filtered].sort((a, b) => {
             switch (sortBy) {
@@ -2135,8 +2202,12 @@ const BurialManager = {
         const sortEl = document.getElementById('admin-burial-sort');
         const q = (searchEl?.value || '').trim().toLowerCase();
         const sortBy = sortEl?.value || 'newest';
+        const catSel = document.getElementById('admin-burial-cat')?.value || '';
 
         let filtered = BurialManager._allRecords;
+        if (catSel) {
+            filtered = filtered.filter(r => r.categoryType === catSel);
+        }
         if (q) {
             filtered = filtered.filter(r =>
                 (r.deceased || '').toLowerCase().includes(q) ||
@@ -2171,7 +2242,7 @@ const BurialManager = {
 
         tbody.innerHTML = displayed.map((record, index) => `
             <tr data-testid="burial-row-${index}">
-                <td><span class="type-badge type-burial">${record.category}</span></td>
+                <td><span class="type-badge type-burial-${record.categoryType}">${record.category}</span></td>
                 <td>${Utils.esc(record.deceased) || 'N/A'}</td>
                 <td>${Utils.formatDate(record.datetime || record.deathDate)}</td>
                 <td>${Utils.esc(record.informant) || 'N/A'}</td>
@@ -2391,6 +2462,14 @@ const ReportsManager = {
                 (r.establishment || '').toLowerCase().includes(q) ||
                 (r.inspector || '').toLowerCase().includes(q) ||
                 (r.location || '').toLowerCase().includes(q)
+            );
+        }
+
+        // Category filter — show only the selected permit category
+        const catSel = CatSort.value('admin-reports-cat');
+        if (catSel) {
+            filtered = filtered.filter(r =>
+                categoryFromPermit(getSanitaryPermitNoForEstablishment(r.establishment)) === catSel
             );
         }
 
@@ -5303,6 +5382,14 @@ const PredictionEngine = {
             return matchRisk && matchSearch;
         });
 
+        // Category filter — show only the selected permit category
+        const catSel = CatSort.value('admin-pred-cat');
+        if (catSel) {
+            filtered = filtered.filter(r =>
+                categoryFromPermit(r.permitNo || getSanitaryPermitNoForEstablishment(r.businessName)) === catSel
+            );
+        }
+
         // Sort
         const levelRank = l => ({ HIGH: 2, MODERATE: 1, LOW: 0 }[l] ?? 0);
         filtered = [...filtered].sort((a, b) => {
@@ -6340,7 +6427,14 @@ function adminSortIHEstablishments() {
 }
 
 function adminSortIHList(list, sortBy) {
-    return [...list].sort((a, b) => {
+    const catSel = CatSort.value('admin-ih-cat');
+    let rows = list;
+    if (catSel) {
+        rows = rows.filter(e =>
+            categoryFromPermit(getSanitaryPermitNoForEstablishment(e.name)) === catSel
+        );
+    }
+    return [...rows].sort((a, b) => {
         switch (sortBy) {
             case 'recent': return (b.lastDate || 0) - (a.lastDate || 0);
             case 'name-az': return a.name.localeCompare(b.name);
