@@ -288,7 +288,7 @@ async function login() {
 
             // Map role to local page — never use server-supplied redirect URLs
             const role = result.data.role;
-            window.location.href = role === 'admin' ? 'admin.html' : 'inspector.html';
+            window.location.href = role === 'admin' ? 'admin' : 'inspector';
         } else {
             alert(result.message || "Invalid username or password");
         }

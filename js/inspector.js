@@ -136,10 +136,10 @@ function renderNumberedPager(elId, info, key) {
         const resp = await fetch(`${API_BASE_URL}/auth.php`);
         const data = await resp.json();
         if (!data.success || (data.data && data.data.role !== 'inspector')) {
-            window.location.href = 'index.html';
+            window.location.href = 'index';
         }
     } catch (e) {
-        window.location.href = 'index.html';
+        window.location.href = 'index';
     }
 })();
 
@@ -2407,7 +2407,7 @@ function handleLogout() {
         }).finally(() => {
             localStorage.clear();
             Object.entries(savedDrafts).forEach(([k, v]) => localStorage.setItem(k, v));
-            window.location.href = 'index.html';
+            window.location.href = 'index';
         });
     }
 }
@@ -2509,7 +2509,7 @@ function handleLogout() {
             draftKeys.forEach(k => { const v = localStorage.getItem(k); if (v) savedDrafts[k] = v; });
             localStorage.clear();
             Object.entries(savedDrafts).forEach(([k, v]) => localStorage.setItem(k, v));
-            window.location.href = 'index.html?reason=idle';
+            window.location.href = 'index?reason=idle';
         });
     }
 

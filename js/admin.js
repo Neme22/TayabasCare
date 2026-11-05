@@ -3306,11 +3306,11 @@ async function initApp() {
         const sessResp = await fetch(`${API_BASE_URL}/auth.php`);
         sessData = await sessResp.json();
         if (!sessData.success || (sessData.data && sessData.data.role !== 'admin')) {
-            window.location.href = 'index.html';
+            window.location.href = 'index';
             return;
         }
     } catch (e) {
-        window.location.href = 'index.html';
+        window.location.href = 'index';
         return;
     }
 
@@ -3778,7 +3778,7 @@ function handleLogout() {
             credentials: 'include'
         }).finally(() => {
             localStorage.clear();
-            window.location.href = 'index.html';
+            window.location.href = 'index';
         });
     }
 }
@@ -3873,7 +3873,7 @@ function handleLogout() {
             credentials: 'include'
         }).finally(() => {
             localStorage.clear();
-            window.location.href = 'index.html?reason=idle';
+            window.location.href = 'index?reason=idle';
         });
     }
 

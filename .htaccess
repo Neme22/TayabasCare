@@ -10,3 +10,21 @@
 <Files ".env">
     Require all denied
 </Files>
+
+# Clean URLs: /admin, /inspector (no .html in address bar)
+RewriteEngine On
+
+# Redirect .html URLs to clean versions (subdir-safe: relative to this directory)
+RewriteCond %{THE_REQUEST} \s([^\s?]+)\.html(?:\?[^\s]*)?\s
+RewriteRule ^(.+)\.html$ $1 [R=301,L,QSA]
+
+# Map clean URLs to the real files
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^admin/?$ admin.html [L,QSA]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^inspector/?$ inspector.html [L,QSA]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^index/?$ index.html [L,QSA]

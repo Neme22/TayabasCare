@@ -133,7 +133,7 @@ function login() {
                 'email'    => $user['email'] ?? '',
                 'role'     => $user['role'],
                 'fullName' => $fullName,
-                'redirect' => $user['role'] === 'admin' ? 'admin.html' : 'inspector.html',
+                'redirect' => $user['role'] === 'admin' ? 'admin' : 'inspector',
                 'csrf_token' => csrfToken()
             ], 'Login successful');
         } else {
