@@ -1725,9 +1725,22 @@ const QUARTER_MONTHS = { 1: [1,2,3], 2: [4,5,6], 3: [7,8,9], 4: [10,11,12] };
 
 // Dynamic inspector column map — built from database via inspector_accounts API
 let INSPECTOR_COL_MAP = {};
-let _inspectorNamesList = []; // First 5 inspector full_names, ordered by id
+let _inspectorNamesList = []; // First 5 inspector full_names, Excel display order
 let _inspectorsFullList = []; // All inspectors: { fullName, role } — burial dropdown + permit print
 let _inspectorRoleByName = {}; // lowercased fullName → role_title
+
+// Excel display order: Rommel, Michael, April, Olive, Zaldy (Rizaldy)
+const EXCEL_NAME_ORDER = ['ROMMEL', 'MICHAEL', 'APRIL', 'OLIVE', 'ZALDY', 'RIZALDY'];
+
+function sortNamesExcelOrder(names) {
+    const rank = (fullName) => {
+        const first = String(fullName || '').trim().split(/\s+/)[0].toUpperCase();
+        let idx = EXCEL_NAME_ORDER.indexOf(first);
+        if (idx < 0 && (first === 'RIZALDY' || first === 'ZALDY')) idx = 4;
+        return idx < 0 ? 99 : idx;
+    };
+    return (names || []).slice().sort((a, b) => rank(a) - rank(b));
+}
 
 async function buildInspectorColumnMap() {
     try {
@@ -1744,11 +1757,12 @@ async function buildInspectorColumnMap() {
             });
 
             const inspectors = json.data.slice(0, 5); // Max 5 columns
-            _inspectorNamesList = inspectors.map(i => i.fullName);
+            _inspectorNamesList = sortNamesExcelOrder(inspectors.map(i => i.fullName));
             INSPECTOR_COL_MAP = {};
-            inspectors.forEach((insp, idx) => {
-                // Only map full name — first name aliases would cause double-counting in report totals
-                INSPECTOR_COL_MAP[insp.fullName] = idx;
+            const byName = {};
+            inspectors.forEach(insp => { byName[insp.fullName] = insp; });
+            _inspectorNamesList.forEach((name, idx) => {
+                if (byName[name]) INSPECTOR_COL_MAP[name] = idx;
             });
         }
     } catch (e) {
@@ -1812,16 +1826,38 @@ function populateInspectorReportHeaders() {
         }
     });
 
-    // Update "Submitted By" signatures
+    // One straight row of 5 equal cells + degrees (under "Submitted By:")
     const sigContainer = document.getElementById('inspector-signatures');
     if (sigContainer) {
-        sigContainer.innerHTML = _inspectorNamesList.map(name =>
-            `<td class="text-center px-2 pb-1">
-                <div style="border-bottom: 1px solid black; margin-bottom:4px; padding-bottom: 20px;"></div>
-                <p class="font-semibold">${esc(name)}</p>
-                <p style="font-size:11px;color:#6b7280;">Sanitary Inspector</p>
-            </td>`
-        ).join('');
+        const DEGREES = {
+            ROMMEL: 'LPT, MMPA',
+            MICHAEL: 'RN',
+            OLIVE: 'RND, LPT',
+            APRIL: 'RN',
+            ZALDY: 'RN',
+            RIZALDY: 'RN'
+        };
+        const ROLES = {
+            ROMMEL: 'Sanitation Inspector',
+            MICHAEL: 'Sanitation Inspector',
+            OLIVE: 'Sanitation Inspector',
+            APRIL: 'Sanitation Inspector',
+            ZALDY: 'Sanitation Inspector',
+            RIZALDY: 'Sanitation Inspector'
+        };
+        const cells = sortNamesExcelOrder(_inspectorNamesList).slice(0, 5).map(name => {
+            const first = String(name || '').trim().split(/\s+/)[0].toUpperCase();
+            const key = (first === 'RIZALDY') ? 'ZALDY' : first;
+            const deg = DEGREES[key] || '';
+            const role = ROLES[key] || 'Sanitation Inspector';
+            const label = deg ? `${name}, ${deg}` : name;
+            return `<td class="text-center px-2 pb-1 sig-cell">
+                <div class="sig-line"></div>
+                <p class="sig-name">${esc(String(label).toUpperCase())}</p>
+                <p class="sig-role">${esc(role)}</p>
+            </td>`;
+        }).join('');
+        sigContainer.innerHTML = cells;
     }
 }
 

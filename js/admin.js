@@ -2818,18 +2818,37 @@ const ADMIN_QUARTER_MONTHS = { 1: [1,2,3], 2: [4,5,6], 3: [7,8,9], 4: [10,11,12]
 let ADMIN_INSPECTOR_COL_MAP = {};
 let _adminInspectorNames = [];
 
+// Excel display order: Rommel, Michael, April, Olive, Zaldy (Rizaldy)
+const ADMIN_EXCEL_NAME_ORDER = ['ROMMEL', 'MICHAEL', 'APRIL', 'OLIVE', 'ZALDY', 'RIZALDY'];
+
+function sortNamesExcelOrder(names) {
+    const rank = (fullName) => {
+        const first = String(fullName || '').trim().split(/\s+/)[0].toUpperCase();
+        let idx = ADMIN_EXCEL_NAME_ORDER.indexOf(first);
+        // Rizaldy counts as Zaldy
+        if (idx < 0 && (first === 'RIZALDY' || first === 'ZALDY')) idx = 4;
+        return idx < 0 ? 99 : idx;
+    };
+    return (names || []).slice().sort((a, b) => rank(a) - rank(b));
+}
+
 async function buildAdminInspectorColumnMap() {
     try {
         const resp = await fetch(`${API_BASE_URL}/inspector.php`);
         const json = await resp.json();
         if (json.success && Array.isArray(json.data)) {
             const inspectors = json.data.slice(0, 5);
-            _adminInspectorNames = inspectors.map(i => i.fullName);
+            _adminInspectorNames = sortNamesExcelOrder(inspectors.map(i => i.fullName));
             ADMIN_INSPECTOR_COL_MAP = {};
-            inspectors.forEach((insp, idx) => {
-                // Only map full name — first name aliases would cause double-counting
-                ADMIN_INSPECTOR_COL_MAP[insp.fullName] = idx;
+            // Rebuild map in Excel display order so column indices match headers
+            const byName = {};
+            inspectors.forEach(insp => { byName[insp.fullName] = insp; });
+            _adminInspectorNames.forEach((name, idx) => {
+                if (byName[name]) ADMIN_INSPECTOR_COL_MAP[name] = idx;
             });
+            // Refresh headers + signatures so they share the same name order
+            populateInspectorColumns();
+            renderInspectorSignatures(inspectors);
             return true;
         }
         console.warn('Failed to build admin inspector column map: invalid response');
@@ -2849,11 +2868,15 @@ async function ensureAdminInspectorColumnMap() {
     const cached = DataStore.inspectors;
     if (Array.isArray(cached) && cached.length > 0) {
         const inspectors = cached.slice(0, 5);
-        _adminInspectorNames = inspectors.map(i => i.fullName || i.full_name || '');
+        _adminInspectorNames = sortNamesExcelOrder(inspectors.map(i => i.fullName || i.full_name || ''));
         ADMIN_INSPECTOR_COL_MAP = {};
-        inspectors.forEach((insp, idx) => {
+        const byName = {};
+        inspectors.forEach(insp => {
             const name = insp.fullName || insp.full_name || '';
-            if (name) ADMIN_INSPECTOR_COL_MAP[name] = idx;
+            if (name) byName[name] = insp;
+        });
+        _adminInspectorNames.forEach((name, idx) => {
+            if (name && byName[name]) ADMIN_INSPECTOR_COL_MAP[name] = idx;
         });
         return _adminInspectorNames.length > 0;
     }
@@ -3041,18 +3064,50 @@ function renderInspectorSignatures(inspectors) {
     const row = document.getElementById('accomplishmentInspectorsRow');
     if (!row) return;
 
-    if (inspectors.length === 0) {
-        row.innerHTML = '<td class="text-center px-2 pb-1"><div style="border-bottom:1px solid black;margin-bottom:4px;padding-bottom:20px;"></div><p class="font-semibold">No Inspectors</p></td>';
+    // Excel order + academic degrees beside names (from inspector roster)
+    const DEGREES = {
+        ROMMEL: 'LPT, MMPA',
+        MICHAEL: 'RN',
+        OLIVE: 'RND, LPT',
+        APRIL: 'RN',
+        ZALDY: 'RN',
+        RIZALDY: 'RN'
+    };
+    const ROLES = {
+        ROMMEL: 'Sanitation Inspector',
+        MICHAEL: 'Sanitation Inspector',
+        OLIVE: 'Sanitation Inspector',
+        APRIL: 'Sanitation Inspector',
+        ZALDY: 'Sanitation Inspector',
+        RIZALDY: 'Sanitation Inspector'
+    };
+    const names = sortNamesExcelOrder(
+        (_adminInspectorNames && _adminInspectorNames.length > 0)
+            ? _adminInspectorNames.slice(0, 5)
+            : (inspectors || []).slice(0, 5).map(i => i.fullName || i.full_name || '')
+    );
+
+    if (names.length === 0) {
+        row.innerHTML = '<td class="text-center px-2 pb-1" colspan="5"><div class="sig-line"></div><p class="font-semibold">No Inspectors</p></td>';
         return;
     }
 
-    row.innerHTML = inspectors.map(inspector => `
-        <td class="text-center px-2 pb-1">
-            <div style="border-bottom: 1px solid black; margin-bottom:4px; padding-bottom: 20px;"></div>
-            <p class="font-semibold">${Utils.esc(inspector.fullName || inspector.full_name || '')}</p>
-            <p>${Utils.esc(inspector.role || inspector.role_title || 'Sanitation Inspector')}</p>
-        </td>
-    `).join('');
+    // One straight row of 5 equal cells spanning full width (under "Submitted By:")
+    const cells = names.map(name => {
+        const first = String(name || '').trim().split(/\s+/)[0].toUpperCase();
+        const key = (first === 'RIZALDY') ? 'ZALDY' : first;
+        const deg = DEGREES[key] || '';
+        const role = ROLES[key] || 'Sanitation Inspector';
+        const label = deg ? `${name}, ${deg}` : name;
+        return `
+        <td class="text-center px-2 pb-1 sig-cell">
+            <div class="sig-line"></div>
+            <p class="sig-name">${Utils.esc(String(label).toUpperCase())}</p>
+            <p class="sig-role">${Utils.esc(role)}</p>
+        </td>`;
+    }).join('');
+
+    row.innerHTML = cells;
 }
 
 function adminShowReportResult(totals, periodLabel, typeLabel) {
