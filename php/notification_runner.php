@@ -248,9 +248,9 @@ try {
                 $highRiskItems[] = "{$name}{$openPart} (Risk: HIGH, Barangay: " . ($record['barangay'] ?? 'N/A') . ")";
             }
 
-            $violationCount = $scored['factors']['violations']['count'] ?? 0;
+            $violationCount = $scored['openViolationCount'] ?? count($scored['matchedViolations'] ?? []);
             if ($violationCount >= 3) {
-                $violationThresholdItems[] = "{$name} — {$violationCount} violations on record";
+                $violationThresholdItems[] = "{$name} — {$violationCount} open violation(s) on record";
             }
         }
 

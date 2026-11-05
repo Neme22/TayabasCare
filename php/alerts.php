@@ -313,17 +313,18 @@ function generateHighRiskAlerts($db, &$alerts) {
         $scored = calculateRiskScore($name, $myInspections, $sanitaryRecord);
 
         if (($scored['riskLevel'] ?? '') === 'HIGH') {
-            $complianceRate = $scored['factors']['compliance']['rate'] ?? 'N/A';
-            $violationCount = $scored['factors']['violations']['count'] ?? 0;
+            $merits = $scored['merits'] ?? $scored['totalScore'] ?? 0;
+            $demerits = $scored['demerits'] ?? (100 - $merits);
+            $violationCount = $scored['openViolationCount'] ?? count($scored['matchedViolations'] ?? []);
             $openLabels = implode(', ', array_column($scored['matchedViolations'] ?? [], 'label'));
-            $openPart = $openLabels !== '' ? " — open serious violation(s): {$openLabels}" : '';
+            $openPart = $openLabels !== '' ? " — open violation(s): {$openLabels}" : '';
             $alerts[] = [
                 'alert_type' => 'high_risk',
                 'establishment' => $name,
                 'barangay' => $record['barangay'] ?? '',
-                'message' => "{$name} has been classified as HIGH RISK{$openPart}. {$violationCount} violation(s) on record with {$complianceRate}% compliance rate. Priority inspection is strongly recommended.",
+                'message' => "{$name} has been classified as HIGH RISK{$openPart}. {$merits}/100 merits ({$demerits} demerits from {$violationCount} open violation(s)). Priority inspection is strongly recommended.",
                 'severity' => 'critical',
-                'risk_score' => $scored['totalScore']
+                'risk_score' => $merits
             ];
         }
     }

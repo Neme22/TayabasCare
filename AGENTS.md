@@ -6,7 +6,7 @@ A PHP + vanilla JS web app for sanitary inspection and risk prediction in Tayaba
 
 ## Project objectives
 
-See `objectives.md`. In short: digitize inspection records, score establishments by violation risk (5-factor formula in `php/risk_utils.php`), and provide dashboards for the City Health Office.
+See `objectives.md`. In short: digitize inspection records, score establishments by merit-based violation risk (`php/risk_utils.php`), and provide dashboards for the City Health Office.
 
 ## Running locally
 
@@ -47,8 +47,9 @@ All state-changing endpoints (POST/PUT/DELETE) require a CSRF token via `X-CSRF-
 | `cluster_lib.php` | Shared cluster helpers: `fixedClusterBarangays()` (the fixed 66→5 partition, zone families never split), `clusterOwners()`, `clusterBarangaysForSession()`, `ensureClusterTables()`. Used by clusters/inspection/inspection_schedules. |
 | `burial.php` | CRUD for `burial_records` (cadaver/skeletal/exhumation). |
 | `archive.php` | Soft-delete store. No auto-expiry — archived items stay until an admin restores or permanently deletes them. |
-| `risk_utils.php` | **Risk scoring engine.** 5-factor formula (0-100): violations, time since last inspection, establishment type, compliance rate, pending follow-ups. Shared by predict/alerts/pattern_analysis. |
-| `predict.php` | GET endpoint returning risk scores for all establishments. Uses `risk_utils.php` for scoring. |
+| `risk_utils.php` | **Risk scoring engine.** Merit system (0–100): 100 start, −5 per open violation finding, +5 when complied. LOW=100, MODERATE=99–65, HIGH≤64. Shared by prescribe/alerts/pattern_analysis. |
+| `predict.php` | GET endpoint returning merit scores for all establishments. Uses `risk_utils.php`. Strips `adminRiskRemarks` for non-admins. |
+| `risk_remarks.php` | Admin-only POST to save/clear `sanitary_records.admin_risk_remarks` (CSRF required). |
 | `ai_analyze.php` | Calls OpenRouter API for AI risk narrative. Rate-limited (10/hr). |
 | `forgot_password.php` | OTP-based password reset (send_otp / verify_otp / reset_password). |
 | `change_password.php` | Self-service password change (supports legacy MD5/plaintext migration). |
@@ -115,18 +116,30 @@ All tables use InnoDB + utf8mb4. Key tables:
 - **`violation_categories`** — violation code reference
 - **`accomplishment_records`** — monthly accomplishment per inspector
 
-## Risk prediction formula (`php/risk_utils.php`)
+## Risk scoring formula (`php/risk_utils.php`)
 
-5 factors, 100-point scale:
-1. **Previous violations** (0–25): keyword scan + `complied` flag, 8 pts each
-2. **Time since last inspection** (0–20): 0–30 days=0, 31–60=5, 61–90=10, 91–180=15, 180+=20
-3. **Establishment category** (0–20): keyword match on business name (food/health=20, retail/office=12, other=5)
-4. **Compliance history** (0–20): inverse of compliance rate
-5. **Pending follow-ups** (0–15): 5 pts each pending item
+Merit system (0–100), not the old 5-factor score:
 
-Risk levels: HIGH >= 60, MODERATE >= 30, LOW < 30.
+1. Every establishment starts at **100 merits**.
+2. Each **open** (not-yet-complied) violation finding costs **5 demerits**.
+3. Complying a violation removes those 5 demerits and restores **5 merits**.
+4. Formula: `merits = max(0, 100 − 5 × openViolationCount)`.
 
-Inspection revisions (from `inspection_history`) are deduplicated by `report_date` before scoring — editing a report N times does not inflate its risk score.
+Risk levels from merits:
+
+| Level | Merits |
+|---|---|
+| **LOW** | exactly **100** |
+| **MODERATE** | **99–65** |
+| **HIGH** | **64 and below** |
+
+`totalScore` is an alias of `merits` for alerts/pattern/AI. Severity maps on open violations are only for chip colors, not for `riskLevel`.
+
+**Admin risk remark**: `sanitary_records.admin_risk_remarks` (TEXT, lazily ALTERed). Free text on the Prescribe detail modal (e.g. "High risk but not risky"). Admin-only — `predict.php` strips `adminRiskRemarks` for non-admin sessions; save via `php/risk_remarks.php` (POST + CSRF).
+
+Module name in UI: **Prescribe / Prescription** (endpoint file still `predict.php`).
+
+Inspection revisions (from `inspection_history`) are deduplicated by `report_date` before scoring — editing a report N times does not inflate demerits.
 
 ## Security notes
 

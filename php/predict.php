@@ -5,9 +5,9 @@ require_once 'csrf.php';
 // matchEstablishment() is now defined in risk_utils.php
 
 // ============================================================
-// TAYABASCARE VIOLATION PREDICTION ENGINE
+// TAYABASCARE PRESCRIPTION ENGINE
 // Based on PD 856 - Code on Sanitation of the Philippines
-// 5-Factor Risk Scoring Formula (per thesis objectives)
+// Merit scoring: 100 start, -5 per open violation, LOW=100 / MOD=65-99 / HIGH<=64
 // ============================================================
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit(); }
@@ -20,6 +20,16 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 
 // Return risk scores for all establishments from MySQL sanitary_records
 try {
+    // Lazy migration: admin-only free-text remark on the Prescribe detail view
+    try {
+        $col = $db->query("SHOW COLUMNS FROM sanitary_records LIKE 'admin_risk_remarks'");
+        if (!$col->fetch()) {
+            $db->exec("ALTER TABLE sanitary_records ADD COLUMN admin_risk_remarks TEXT NULL AFTER remarks");
+        }
+    } catch (PDOException $e) {
+        error_log('ensure admin_risk_remarks: ' . $e->getMessage());
+    }
+
     $stmt = $db->query("SELECT * FROM sanitary_records ORDER BY created_at DESC");
     $records = $stmt->fetchAll();
 
@@ -68,6 +78,7 @@ try {
             $scored['barangay']        = $record['barangay'] ?? '';
             $scored['permitNo']        = $record['permit_no'] ?? '';
             $scored['inspectorRemarks'] = [];
+            $scored['adminRiskRemarks'] = $record['admin_risk_remarks'] ?? null;
             $results[] = $scored;
             continue;
         }
@@ -85,6 +96,7 @@ try {
         $scored['businessName'] = $name;
         $scored['barangay']     = $record['barangay'] ?? '';
         $scored['permitNo']     = $record['permit_no'] ?? '';
+        $scored['adminRiskRemarks'] = $record['admin_risk_remarks'] ?? null;
         // Include actual inspector remarks/recommendations from submitted reports
         $inspectorRemarks = array_values(array_filter(array_map(function($i) {
             $rec     = trim($i['recommendation'] ?? '');
@@ -95,10 +107,10 @@ try {
         $results[] = $scored;
     }
 
-    // Sort by severity first, then score descending
+    // Sort worst-first: HIGH → MODERATE → LOW, then lowest merits
     usort($results, fn($a, $b) =>
         (VIOLATION_SEVERITY_RANK[$b['riskLevel']] <=> VIOLATION_SEVERITY_RANK[$a['riskLevel']])
-        ?: ($b['totalScore'] <=> $a['totalScore']));
+        ?: (($a['merits'] ?? $a['totalScore'] ?? 0) <=> ($b['merits'] ?? $b['totalScore'] ?? 0)));
 
     // Log risk scores to history table (create table if needed)
     // CSRF required for this GET-side write — skip logging if token is absent
@@ -115,17 +127,13 @@ try {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             foreach ($results as $r) {
-                $factors = $r['factors'] ?? [];
                 $logStmt->execute([
                     $r['businessName'] ?? '',
                     $r['barangay'] ?? '',
-                    $r['totalScore'] ?? 0,
+                    $r['merits'] ?? $r['totalScore'] ?? 0,
                     $r['riskLevel'] ?? 'LOW',
-                    $factors['violations']['score'] ?? 0,
-                    $factors['timeSinceLast']['score'] ?? 0,
-                    $factors['estabType']['score'] ?? 0,
-                    $factors['compliance']['score'] ?? 0,
-                    $factors['followUp']['score'] ?? 0
+                    $r['demerits'] ?? 0,
+                    0, 0, 0, 0
                 ]);
             }
         }
@@ -134,9 +142,18 @@ try {
     }
     }
 
+    // Admin-only remark must not ship to inspector sessions
+    $isAdmin = (($_SESSION['role'] ?? '') === 'admin');
+    if (!$isAdmin) {
+        foreach ($results as &$r) {
+            unset($r['adminRiskRemarks']);
+        }
+        unset($r);
+    }
+
     echo json_encode(['success' => true, 'data' => $results, 'message' => ''], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE);
 } catch (PDOException $e) {
     error_log('predict.php error: ' . $e->getMessage());
-    echo json_encode(['success' => false, 'data' => null, 'message' => 'Prediction engine error. Please try again.']);
+    echo json_encode(['success' => false, 'data' => null, 'message' => 'Prescription engine error. Please try again.']);
 }
 exit();

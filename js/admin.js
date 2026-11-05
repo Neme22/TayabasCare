@@ -5269,7 +5269,7 @@ const PredictionEngine = {
             PredictionEngine.results = results;
             PredictionEngine.updateSummary(results);
             PredictionEngine.renderTable(results);
-            statusEl.textContent = `Last run: ${new Date().toLocaleTimeString('en-PH')} · ${results.length} establishments prescribed`;
+            statusEl.textContent = `Prescription last run: ${new Date().toLocaleTimeString('en-PH')} · ${results.length} establishments prescribed`;
 
             // Update sidebar badge with HIGH count
             const highCount = results.filter(r => r.riskLevel === 'HIGH').length;
@@ -5277,7 +5277,7 @@ const PredictionEngine = {
             if (badge) { badge.textContent = highCount; badge.style.display = highCount > 0 ? 'inline-block' : 'none'; }
 
         } catch (err) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;color:#ef4444;">Error: ${Utils.esc(err.message)}. Make sure XAMPP is running and predict.php is in the php folder.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;color:#ef4444;">Error: ${Utils.esc(err.message)}. Make sure XAMPP is running and the prescription endpoint is reachable.</td></tr>`;
             statusEl.textContent = '';
         }
     },
@@ -5329,7 +5329,7 @@ const PredictionEngine = {
     renderTable: (results) => {
         const tbody = document.getElementById('predTableBody');
         if (!results.length) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:#9ca3af;">No results match your filter.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:#9ca3af;">No results match your filter.</td></tr>';
             return;
         }
 
@@ -5351,6 +5351,7 @@ const PredictionEngine = {
                 <td style="padding:12px 16px;text-align:center;">
                     <span style="background:${rs.bg};color:${rs.color};border:1px solid ${rs.border};font-size:11px;font-weight:700;padding:4px 12px;border-radius:999px;">${r.riskLevel}</span>
                 </td>
+                <td style="padding:12px 16px;text-align:center;font-size:13px;font-weight:700;color:#374151;">${r.merits ?? r.totalScore ?? 0}<span style="font-weight:400;color:#9ca3af;">/100</span></td>
                 <td style="padding:12px 16px;text-align:center;font-size:12px;color:#374151;">${r.lastInspected}</td>
                 <td style="padding:12px 16px;text-align:center;font-size:12px;color:#374151;">${r.totalInspections}</td>
                 <td style="padding:12px 16px;">
@@ -5375,22 +5376,10 @@ const PredictionEngine = {
         const riskColor = r.riskLevel === 'HIGH' ? '#ef4444' : r.riskLevel === 'MODERATE' ? '#d97706' : '#059669';
         const riskBg    = r.riskLevel === 'HIGH' ? '#fef2f2' : r.riskLevel === 'MODERATE' ? '#fffbeb' : '#ecfdf5';
 
-        const factors = r.factors || {};
-        const factorRows = Object.values(factors).map(f => {
-            const ratio     = f.max ? (f.score / f.max) : 0;
-            const status    = ratio >= 0.7 ? 'High' : ratio >= 0.4 ? 'Moderate' : 'Low';
-            const statusColor = status === 'High' ? '#ef4444' : status === 'Moderate' ? '#f59e0b' : '#10b981';
-            const extra    = f.count !== undefined ? ` (${f.count} found)` :
-                             f.days  !== undefined ? ` (${f.days} days ago)` :
-                             f.rate  !== undefined ? ` (${f.rate}% compliant)` : '';
-            return `
-            <div style="margin-bottom:14px;">
-                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                    <span style="font-size:15px;font-weight:600;color:#374151;">${f.label}${extra}</span>
-                    <span style="font-size:15px;font-weight:700;color:${statusColor};">${status}</span>
-                </div>
-            </div>`;
-        }).join('');
+        const merits      = r.merits ?? r.totalScore ?? 0;
+        const demerits    = r.demerits ?? (100 - merits);
+        const openCount   = r.openViolationCount ?? (r.matchedViolations || []).length;
+        const meritColor  = r.riskLevel === 'HIGH' ? '#ef4444' : r.riskLevel === 'MODERATE' ? '#d97706' : '#059669';
 
         const recoHtml = (r.recommendations || []).map(rec =>
             `<li style="margin-bottom:10px;color:#374151;font-size:15px;line-height:1.6;">📌 ${Utils.esc(rec)}</li>`
@@ -5401,6 +5390,8 @@ const PredictionEngine = {
                 `<li style="margin-bottom:10px;color:#374151;font-size:15px;line-height:1.6;">📋 ${Utils.esc(rec)}</li>`
               ).join('')
             : '<li style="color:#9ca3af;font-size:15px;">No inspector remarks on record yet.</li>';
+
+        const adminRemarkVal = Utils.esc(r.adminRiskRemarks || '');
 
         // Open violations (severity chips from matchedViolations)
         const chipColors = {
@@ -5431,6 +5422,19 @@ const PredictionEngine = {
                 <button onclick="document.getElementById('predDetailModal')?.remove()" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;">&times;</button>
                 <h3 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 18px;">${Utils.esc(r.businessName)} &nbsp;<span style="font-size:15px;padding:5px 14px;border-radius:999px;background:${riskBg};color:${riskColor};font-weight:700;">${r.riskLevel} RISK</span></h3>
                 <div style="margin:0 0 18px;padding:14px 16px;background:#f9fafb;border-radius:10px;">
+                    <h4 style="font-size:13px;font-weight:700;color:#6b7280;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.5px;">Merit Score</h4>
+                    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+                        <div style="font-size:28px;font-weight:800;color:${meritColor};">${merits}<span style="font-size:16px;font-weight:600;color:#9ca3af;">/100</span></div>
+                        <div style="font-size:14px;color:#374151;line-height:1.6;">
+                            <strong>${demerits}</strong> demerits · <strong>${openCount}</strong> open violation${openCount === 1 ? '' : 's'}<br>
+                            <span style="color:#6b7280;font-size:13px;">${merits === 100 ? 'LOW — perfect merits' : merits >= 65 ? 'MODERATE — 99–65 merits' : 'HIGH — 64 or below merits'}</span>
+                        </div>
+                    </div>
+                    <div style="margin-top:10px;height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden;">
+                        <div style="height:100%;width:${merits}%;background:${meritColor};border-radius:999px;"></div>
+                    </div>
+                </div>
+                <div style="margin:0 0 18px;padding:14px 16px;background:#f9fafb;border-radius:10px;">
                     <h4 style="font-size:13px;font-weight:700;color:#6b7280;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.5px;">Open Violations</h4>
                     <div>${openViolHtml}</div>
                     ${levelReasonHtml}
@@ -5438,11 +5442,7 @@ const PredictionEngine = {
                 <div id="predDetailBody">
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
                         <div>
-                            <h4 style="font-size:15px;font-weight:700;color:#6b7280;margin:0 0 14px;text-transform:uppercase;letter-spacing:0.5px;">Factor Breakdown</h4>
-                            ${factorRows}
-                        </div>
-                        <div>
-                            <h4 style="font-size:15px;font-weight:700;color:#6b7280;margin:0 0 14px;text-transform:uppercase;letter-spacing:0.5px;">Recommendations</h4>
+                            <h4 style="font-size:15px;font-weight:700;color:#6b7280;margin:0 0 14px;text-transform:uppercase;letter-spacing:0.5px;">Prescription</h4>
                             <div style="max-height:200px;overflow-y:auto;padding-right:6px;">
                                 <ul style="list-style:none;padding:0;margin:0;">${recoHtml}</ul>
                             </div>
@@ -5450,8 +5450,18 @@ const PredictionEngine = {
                             <div style="max-height:200px;overflow-y:auto;padding-right:6px;">
                                 <ul style="list-style:none;padding:0;margin:0;">${remarksHtml}</ul>
                             </div>
-                            <div style="margin-top:20px;padding:16px;background:#f9fafb;border-radius:8px;font-size:15px;color:#374151;line-height:2;">
+                            <h4 style="font-size:15px;font-weight:700;color:#6b7280;margin:16px 0 8px;text-transform:uppercase;letter-spacing:0.5px;">Admin Risk Remark</h4>
+                            <p style="margin:0 0 6px;font-size:12px;color:#9ca3af;">Admin only — not shown to inspectors. e.g. "High risk but not risky"</p>
+                            <textarea id="adminRiskRemarkInput" rows="3" style="width:100%;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="Optional admin note on this risk level...">${adminRemarkVal}</textarea>
+                            <button type="button" id="saveAdminRiskRemarkBtn" onclick="PredictionEngine.saveAdminRemark('${Utils.esc(r.businessName).replace(/'/g, "\\'")}')" style="margin-top:8px;background:#111827;border:none;color:#fff;padding:7px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">
+                                <i class="fas fa-save" style="margin-right:6px;"></i>Save Remark
+                            </button>
+                        </div>
+                        <div>
+                            <div style="margin-top:0;padding:16px;background:#f9fafb;border-radius:8px;font-size:15px;color:#374151;line-height:2;">
                                 <strong>Barangay:</strong> ${Utils.esc(r.barangay) || 'N/A'}<br>
+                                <strong>Merits:</strong> ${merits}/100 (${demerits} demerits)<br>
+                                <strong>Open Violations:</strong> ${openCount}<br>
                                 <strong>Total Inspections on Record:</strong> ${r.totalInspections}<br>
                                 <strong>Last Inspected:</strong> ${r.lastInspected}<br>
                                 <strong>Prescription basis:</strong> PD 856 — Sanitation Code of the Philippines
@@ -5480,8 +5490,8 @@ const PredictionEngine = {
                 body: JSON.stringify({
                     businessName:    r.businessName,
                     riskLevel:       r.riskLevel,
-                    totalScore:      r.totalScore,
-                    totalViolations: r.factors?.violations?.count ?? 0,
+                    totalScore:      merits,
+                    totalViolations: openCount,
                     lastInspected:   r.lastInspected,
                     barangay:        r.barangay,
                     recommendations: r.recommendations || []
@@ -5495,23 +5505,51 @@ const PredictionEngine = {
         }
     },
 
+    saveAdminRemark: async (businessName) => {
+        const input = document.getElementById('adminRiskRemarkInput');
+        const btn = document.getElementById('saveAdminRiskRemarkBtn');
+        if (!input) return;
+        const remark = input.value.trim();
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...'; }
+        try {
+            const resp = await fetch(`${API_BASE_URL}/risk_remarks.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ businessName, remark })
+            });
+            const json = await resp.json();
+            if (!json.success) throw new Error(json.message || 'Save failed');
+            const idx = PredictionEngine.results.findIndex(x => x.businessName === businessName);
+            if (idx >= 0) PredictionEngine.results[idx].adminRiskRemarks = remark === '' ? null : remark;
+            if (typeof Utils.showToast === 'function') Utils.showToast(json.message || 'Risk remark saved.', 'success');
+            else alert(json.message || 'Risk remark saved.');
+        } catch (err) {
+            if (typeof Utils.showToast === 'function') Utils.showToast(err.message || 'Could not save remark.', 'error');
+            else alert(err.message || 'Could not save remark.');
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save" style="margin-right:6px;"></i>Save Remark'; }
+        }
+    },
+
     exportCSV: () => {
         const results = PredictionEngine.results;
         if (!results || results.length === 0) {
             alert('No prescription results to export. Run the analysis first.');
             return;
         }
-        const headers = ['#', 'Business Name', 'Barangay', 'Business Type', 'Risk Level', 'Last Inspected', 'Total Violations', 'Compliance Rate', 'Open Violations'];
+        const headers = ['#', 'Business Name', 'Barangay', 'Business Type', 'Risk Level', 'Merits', 'Demerits', 'Last Inspected', 'Open Violations', 'Open Violation Labels', 'Admin Risk Remark'];
         const rows = results.map((r, i) => [
             i + 1,
             r.businessName || '',
             r.barangay || '',
             r.businessType || 'Other',
             r.riskLevel || '',
+            r.merits ?? r.totalScore ?? 0,
+            r.demerits ?? (100 - (r.merits ?? r.totalScore ?? 0)),
             r.lastInspected || '',
-            r.factors?.violations?.count ?? 0,
-            (r.factors?.compliance?.rate ?? 'N/A') + '%',
-            (r.matchedViolations || []).map(v => v.label).join('; ')
+            r.openViolationCount ?? (r.matchedViolations || []).length,
+            (r.matchedViolations || []).map(v => v.label).join('; '),
+            r.adminRiskRemarks || ''
         ]);
         const csv = [headers, ...rows].map(row => row.map(v => `"${v}"`).join(',')).join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
@@ -6132,8 +6170,10 @@ async function exportAnalyticsExcel() {
                 'Business Name': r.businessName || '',
                 'Barangay': r.barangay || '',
                 'Risk Level': r.riskLevel || '',
-                'Violations': r.factors?.violations?.count ?? 0,
-                'Compliance Rate': (r.factors?.compliance?.rate ?? '') + '%',
+                'Merits': r.merits ?? r.totalScore ?? 0,
+                'Demerits': r.demerits ?? (100 - (r.merits ?? r.totalScore ?? 0)),
+                'Open Violations': r.openViolationCount ?? (r.matchedViolations || []).length,
+                'Admin Risk Remark': r.adminRiskRemarks || '',
                 'Last Inspected': r.lastInspected || 'Never'
             }));
             const ws2 = XLSX.utils.json_to_sheet(riskRows);
