@@ -4037,6 +4037,144 @@ function closeSettingsModal() {
     modal.close();
 }
 
+// ==================== DATABASE BACKUP (Settings) ====================
+function openBackupModal() {
+    closeSettingsModal();
+    const modal = document.getElementById('backup-modal');
+    if (modal) modal.showModal();
+    BackupManager.load();
+}
+function closeBackupModal() {
+    const modal = document.getElementById('backup-modal');
+    if (modal) modal.close();
+}
+
+const BackupManager = {
+    load: async () => {
+        const tbody = document.getElementById('backupTableBody');
+        const status = document.getElementById('backup-status');
+        if (status) status.textContent = 'Loading…';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Loading…</td></tr>';
+        try {
+            const r = await fetch(`${API_BASE_URL}/backup.php?action=list`, { credentials: 'include' });
+            const j = await r.json();
+            if (!j.success) throw new Error(j.message || 'Failed to load');
+            BackupManager._data = j.data || { dumps: [] };
+            if (status) {
+                const n = (BackupManager._data.dumps || []).length;
+                status.textContent = n === 0 ? 'No backups yet — create one now.' : `${n} backup(s) available`;
+            }
+            BackupManager.render();
+        } catch (e) {
+            if (tbody) tbody.innerHTML = `<tr><td colspan="4" class="empty-state">${Utils.esc(e.message)}</td></tr>`;
+            if (status) status.textContent = '';
+        }
+    },
+
+    render: () => {
+        const tbody = document.getElementById('backupTableBody');
+        if (!tbody) return;
+        const dumps = (BackupManager._data && BackupManager._data.dumps) || [];
+        if (!dumps.length) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No backups yet. Click <strong>Create Backup Now</strong>.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = dumps.map(d => {
+            const dt = new Date((d.mtime || 0) * 1000);
+            const when = isNaN(dt) ? '—' : dt.toLocaleString();
+            const size = d.size >= 1048576
+                ? (d.size / 1048576).toFixed(2) + ' MB'
+                : Math.max(1, Math.round(d.size / 1024)) + ' KB';
+            return `<tr>
+                <td style="font-family:monospace;font-size:12px;word-break:break-all;">${Utils.esc(d.file)}</td>
+                <td>${size}</td>
+                <td>${Utils.esc(when)}</td>
+                <td style="white-space:nowrap;">
+                    <button class="btn btn-secondary btn-small" onclick="BackupManager.download('${Utils.esc(d.file)}')" data-testid="download-backup-btn">
+                        <i class="bi bi-download"></i> Download
+                    </button>
+                    <button class="btn btn-danger btn-small" onclick="BackupManager.restore('${Utils.esc(d.file)}')" data-testid="restore-backup-btn">
+                        <i class="bi bi-arrow-counterclockwise"></i> Restore
+                    </button>
+                </td>
+            </tr>`;
+        }).join('');
+    },
+
+    create: async () => {
+        const btn = document.getElementById('btnCreateBackup');
+        const status = document.getElementById('backup-status');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split mr-1"></i>Creating…'; }
+        if (status) status.textContent = 'Creating backup… do not close this window.';
+        try {
+            const token = _csrfToken || await _fetchCsrfToken();
+            const r = await fetch(`${API_BASE_URL}/backup.php`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-Token': token || ''
+                },
+                body: 'action=create'
+            });
+            const j = await r.json();
+            if (!j.success) throw new Error(j.message || 'Backup failed');
+            Utils.showToast(j.message || 'Backup created', 'success');
+            await BackupManager.load();
+        } catch (e) {
+            Utils.showToast(e.message || 'Backup failed', 'error');
+            if (status) status.textContent = '';
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-plus-circle mr-1"></i>Create Backup Now'; }
+        }
+    },
+
+    download: (file) => {
+        // Browser download (CSRF not required for GET download of own file)
+        const a = document.createElement('a');
+        a.href = `${API_BASE_URL}/backup.php?action=download&file=${encodeURIComponent(file)}`;
+        a.download = file;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    },
+
+    restore: async (file) => {
+        const ok = confirm(
+            'RESTORE DATABASE?\n\n' +
+            'This will OVERWRITE the live database with:\n' + file + '\n\n' +
+            'Type/click OK only if you are sure. Have a recent backup first.'
+        );
+        if (!ok) return;
+        const yes = prompt('Type YES to confirm restore (live data will be replaced):');
+        if (yes !== 'YES') { Utils.showToast('Restore cancelled', 'info'); return; }
+
+        const status = document.getElementById('backup-status');
+        if (status) status.textContent = 'Restoring… this may take a moment.';
+        try {
+            const token = _csrfToken || await _fetchCsrfToken();
+            const body = new URLSearchParams({ action: 'restore', file: file });
+            const r = await fetch(`${API_BASE_URL}/backup.php`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-Token': token || ''
+                },
+                body: body.toString()
+            });
+            const j = await r.json();
+            if (!j.success) throw new Error(j.message || 'Restore failed');
+            Utils.showToast(j.message || 'Database restored', 'success');
+            if (status) status.textContent = 'Restore complete — reloading…';
+            setTimeout(() => location.reload(), 1200);
+        } catch (e) {
+            Utils.showToast(e.message || 'Restore failed', 'error');
+            if (status) status.textContent = '';
+        }
+    }
+};
+
 // ==================== THEME TOGGLE ====================
 function toggleTheme() {
     const html = document.documentElement;

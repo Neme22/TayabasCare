@@ -34,3 +34,8 @@ screenshot_*.png
 
 # Encrypted file storage (runtime)
 storage/
+
+# Database dumps (keep folder via .gitkeep; never commit dumps)
+backups/*.sql
+backups/*.log
+
