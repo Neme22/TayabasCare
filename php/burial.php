@@ -2,6 +2,7 @@
 require_once 'auth_check.php';
 require_once 'activity_log.php';
 require_once 'csrf.php';
+require_once 'storage.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 
@@ -73,35 +74,7 @@ switch($method) {
 
 function validateFileUpload() {
     if (empty($_FILES['attachment']['tmp_name'])) return [null, null];
-
-    $allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'pdf'];
-    $maxSize = 10 * 1024 * 1024; // 10MB
-    $ext = strtolower(pathinfo($_FILES['attachment']['name'], PATHINFO_EXTENSION));
-
-    if (!in_array($ext, $allowedExts)) {
-        errorResponse('File type not allowed. Allowed: ' . implode(', ', $allowedExts), 400);
-    }
-    if ($_FILES['attachment']['size'] > $maxSize) {
-        errorResponse('File too large. Maximum size is 10MB.', 400);
-    }
-
-    $finfo = finfo_open(FILEINFO_MIME_TYPE);
-    $mime = finfo_file($finfo, $_FILES['attachment']['tmp_name']);
-    finfo_close($finfo);
-    $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'];
-    if (!in_array($mime, $allowedMimes)) {
-        errorResponse('Invalid file type detected.', 400);
-    }
-
-    $uploadDir = __DIR__ . '/../uploads/burial/';
-    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-    $safeName = uniqid('burial_', true) . '.' . $ext;
-    if (move_uploaded_file($_FILES['attachment']['tmp_name'], $uploadDir . $safeName)) {
-        // Sanitize original filename before storing
-        $originalName = preg_replace('/[\x00-\x1f\x7f<>"\'`]/', '', $_FILES['attachment']['name']);
-        return [$originalName, 'uploads/burial/' . $safeName];
-    }
-    return [null, null];
+    return receiveEncryptedUpload('burial');
 }
 
 function getRecords() {
@@ -113,6 +86,7 @@ function getRecords() {
         $grouped = ['cadaver' => [], 'skeletal' => [], 'exhumation' => []];
 
         foreach ($records as $r) {
+            $r = decryptRow('burial_records', $r);
             $formatted = [
                 'id' => (int)$r['id'],
                 'datetime' => $r['datetime'],
@@ -170,14 +144,14 @@ function createRecord() {
         $stmt->execute([
             $input['type'] ?? 'cadaver',
             $input['datetime'] ?? date('Y-m-d H:i:s'),
-            $input['deceased'] ?? '',
+            encryptField($input['deceased'] ?? '', 'burial_records.deceased'),
             $input['deathDate'] ?? null,
-            $input['deathPlace'] ?? '',
-            $input['causeOfDeath'] ?? '',
-            $input['informant'] ?? '',
+            encryptField($input['deathPlace'] ?? '', 'burial_records.death_place'),
+            encryptField($input['causeOfDeath'] ?? '', 'burial_records.cause_of_death'),
+            encryptField($input['informant'] ?? '', 'burial_records.informant'),
             $input['inspector'] ?? '',
-            $sexInput,
-            $input['age'] ?? '',
+            encryptField($sexInput, 'burial_records.sex'),
+            encryptField($input['age'] ?? '', 'burial_records.age'),
             $input['origin'] ?? '',
             $input['transfer'] ?? '',
             $input['funeral'] ?? '',
@@ -225,6 +199,7 @@ function updateRecord() {
         errorResponse('Record not found', 404);
         return;
     }
+    $current = decryptRow('burial_records', $current);
 
     $fileName = $current['file_name'];
     $filePath = $current['file_path'];
@@ -249,11 +224,15 @@ function updateRecord() {
         ");
 
         $stmt->execute([
-            $input['type'] ?? 'cadaver', $input['datetime'] ?? '', $input['deceased'] ?? '', $input['deathDate'] ?? null,
-            $input['deathPlace'] ?? '', $input['causeOfDeath'] ?? ($current['cause_of_death'] ?? ''),
-            $input['informant'] ?? '', $input['inspector'] ?? '',
-            $input['sex'] ?? ($current['sex'] ?? ''),
-            $input['age'] ?? ($current['age'] ?? ''),
+            $input['type'] ?? 'cadaver', $input['datetime'] ?? '',
+            encryptField($input['deceased'] ?? '', 'burial_records.deceased'),
+            $input['deathDate'] ?? null,
+            encryptField($input['deathPlace'] ?? '', 'burial_records.death_place'),
+            encryptField($input['causeOfDeath'] ?? ($current['cause_of_death'] ?? ''), 'burial_records.cause_of_death'),
+            encryptField($input['informant'] ?? '', 'burial_records.informant'),
+            $input['inspector'] ?? '',
+            encryptField($input['sex'] ?? ($current['sex'] ?? ''), 'burial_records.sex'),
+            encryptField($input['age'] ?? ($current['age'] ?? ''), 'burial_records.age'),
             $input['origin'] ?? '', $input['transfer'] ?? '', $input['funeral'] ?? '',
             $input['cemeteryOrigin'] ?? '', $input['cemeteryTransfer'] ?? '', $input['orNumber'] ?? '',
             $fileName, $filePath,
@@ -287,7 +266,7 @@ function deleteRecord() {
             INSERT INTO archive_data (archive_type, sub_type, data_json, reason, expiry_date)
             VALUES ('burial', ?, ?, ?, NULL)
         ");
-        $archiveStmt->execute([$record['type'], json_encode($record), $reason]);
+        $archiveStmt->execute([$record['type'], encryptField(json_encode($record), 'archive_data.data_json'), $reason]);
 
         $deleteStmt = $db->prepare("DELETE FROM burial_records WHERE id = ?");
         $deleteStmt->execute([$id]);

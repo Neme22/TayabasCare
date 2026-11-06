@@ -169,6 +169,8 @@ function accomplishmentComputeAutoFields($db, array $names, $month, $year) {
         ");
         $stmt->execute(array_merge([$month, $year], $p2));
         foreach ($stmt->fetchAll() as $r) {
+            $r['sex'] = decryptField($r['sex'] ?? '', 'sanitary_records.sex') ?? '';
+            $r['personnel_list'] = decryptField($r['personnel_list'] ?? '[]', 'sanitary_records.personnel_list') ?? '[]';
             $isFood = accomplishmentPermitIsFood($r['permit_no'] ?? '');
 
             // 8.1/8.2: one permit issued per record
@@ -209,6 +211,7 @@ function accomplishmentComputeAutoFields($db, array $names, $month, $year) {
             'cadaver'    => ['M' => 22, 'F' => 23],
         ];
         foreach ($stmt->fetchAll() as $r) {
+            $r['sex'] = decryptField($r['sex'] ?? '', 'burial_records.sex') ?? '';
             $type = $r['type'] ?? '';
             $abbr = strtoupper(substr(trim($r['sex'] ?? ''), 0, 1));
             if (isset($idxMap[$type]) && ($abbr === 'M' || $abbr === 'F')) {

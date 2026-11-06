@@ -3,6 +3,7 @@ require_once 'auth_check.php';
 require_once 'activity_log.php';
 require_once 'csrf.php';
 require_once 'cluster_lib.php';
+require_once 'storage.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 
@@ -95,6 +96,7 @@ switch($method) {
         }
         break;
     case 'POST':
+        requireRole(['admin', 'inspector']);
         if (!empty($_POST['id'])) {
             // Multipart form-data update with file upload
             updateReportWithFile();
@@ -140,6 +142,7 @@ function getReports() {
             $reports = $stmt->fetchAll();
         }
         $formatted = array_map(function($r) {
+            $r = decryptRow('inspection_reports', $r);
             $aiAnalysis = null;
             if (!empty($r['ai_analysis'])) {
                 $decoded = json_decode($r['ai_analysis'], true);
@@ -202,6 +205,7 @@ function getHistory($inspection_id) {
         $rows = $stmt->fetchAll();
 
         $formatted = array_map(function($r) {
+            $r = decryptRow('inspection_history', $r);
             return [
                 'id'             => (int)$r['id'],
                 'inspection_id'  => (int)$r['inspection_id'],
@@ -245,38 +249,7 @@ function createReport() {
     $fileName = '';
     $filePath = '';
     if (!empty($_FILES['attachment']['tmp_name'])) {
-        // Validate file upload
-        $allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx'];
-        $maxSize = 10 * 1024 * 1024; // 10MB
-        $ext = strtolower(pathinfo($_FILES['attachment']['name'], PATHINFO_EXTENSION));
-
-        if (!in_array($ext, $allowedExts)) {
-            errorResponse('File type not allowed. Allowed: ' . implode(', ', $allowedExts), 400);
-            return;
-        }
-        if ($_FILES['attachment']['size'] > $maxSize) {
-            errorResponse('File too large. Maximum size is 10MB.', 400);
-            return;
-        }
-        $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $mime = finfo_file($finfo, $_FILES['attachment']['tmp_name']);
-        finfo_close($finfo);
-        $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf',
-            'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-        if (!in_array($mime, $allowedMimes)) {
-            errorResponse('Invalid file type detected.', 400);
-            return;
-        }
-
-        $uploadDir = __DIR__ . '/../uploads/inspections/';
-        if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-        $safeName = uniqid('insp_', true) . '.' . $ext;
-        if (move_uploaded_file($_FILES['attachment']['tmp_name'], $uploadDir . $safeName)) {
-            // Sanitize original filename before storing (strip control chars, HTML)
-            $fileName = preg_replace('/[\x00-\x1f\x7f<>"\'`]/', '', $_FILES['attachment']['name']);
-            $filePath = 'uploads/inspections/' . $safeName;
-        }
+        [$fileName, $filePath] = receiveEncryptedUpload('inspections');
     }
     
     // Parse violation codes from form data
@@ -342,7 +315,7 @@ function createReport() {
                 WHERE establishment = ?
             ");
             $stmt->execute([
-                $fileName ?: ($input['file'] ?? ''),
+                encryptField($fileName ?: ($input['file'] ?? ''), 'inspection_reports.file_name'),
                 $filePath ?: $existing['file_path'],
                 $input['recommendation'] ?? '',
                 $input['remarks'] ?? '',
@@ -367,7 +340,7 @@ function createReport() {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             $stmt->execute([
-                $fileName ?: ($input['file'] ?? ''),
+                encryptField($fileName ?: ($input['file'] ?? ''), 'inspection_reports.file_name'),
                 $filePath,
                 $input['recommendation'] ?? '',
                 $input['remarks'] ?? '',
@@ -462,7 +435,7 @@ function updateReportFromJson($input) {
             WHERE id = ?
         ");
         $stmt->execute([
-            $input['file'] ?? '',
+            encryptField($input['file'] ?? '', 'inspection_reports.file_name'),
             $input['recommendation'] ?? '',
             $input['remarks'] ?? '',
             $input['complied'] ?? 0,
@@ -552,7 +525,7 @@ function updateReport() {
             WHERE id = ?
         ");
         $stmt->execute([
-            $input['file'] ?? '',
+            encryptField($input['file'] ?? '', 'inspection_reports.file_name'),
             $input['recommendation'] ?? '',
             $input['remarks'] ?? '',
             $input['complied'] ?? 0,
@@ -605,36 +578,7 @@ function updateReportWithFile() {
         $fileName = $current['file_name'];
         $filePath = $current['file_path'];
         if (!empty($_FILES['attachment']['tmp_name'])) {
-            // Validate file upload
-            $allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx'];
-            $maxSize = 10 * 1024 * 1024;
-            $ext = strtolower(pathinfo($_FILES['attachment']['name'], PATHINFO_EXTENSION));
-            if (!in_array($ext, $allowedExts)) {
-                errorResponse('File type not allowed.', 400);
-                return;
-            }
-            if ($_FILES['attachment']['size'] > $maxSize) {
-                errorResponse('File too large. Maximum size is 10MB.', 400);
-                return;
-            }
-            $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            $mime = finfo_file($finfo, $_FILES['attachment']['tmp_name']);
-            finfo_close($finfo);
-            $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf',
-                'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-            if (!in_array($mime, $allowedMimes)) {
-                errorResponse('Invalid file type detected.', 400);
-                return;
-            }
-
-            $uploadDir = __DIR__ . '/../uploads/inspections/';
-            if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-            $safeName = uniqid('insp_', true) . '.' . $ext;
-            if (move_uploaded_file($_FILES['attachment']['tmp_name'], $uploadDir . $safeName)) {
-                $fileName = preg_replace('/[\x00-\x1f\x7f<>"\'`]/', '', $_FILES['attachment']['name']);
-                $filePath = 'uploads/inspections/' . $safeName;
-            }
+            [$fileName, $filePath] = receiveEncryptedUpload('inspections');
         }
 
         $hist = $db->prepare("
@@ -687,7 +631,7 @@ function updateReportWithFile() {
             WHERE id = ?
         ");
         $stmt->execute([
-            $fileName,
+            encryptField($fileName, 'inspection_reports.file_name'),
             $filePath,
             $input['recommendation'] ?? '',
             $input['remarks'] ?? '',
@@ -734,7 +678,7 @@ function deleteReport() {
             INSERT INTO archive_data (archive_type, data_json, reason, expiry_date)
             VALUES ('report', ?, ?, NULL)
         ");
-        $archiveStmt->execute([json_encode($report), $reason]);
+        $archiveStmt->execute([encryptField(json_encode($report), 'archive_data.data_json'), $reason]);
 
         $deleteStmt = $db->prepare("DELETE FROM inspection_reports WHERE id = ?");
         $deleteStmt->execute([$id]);

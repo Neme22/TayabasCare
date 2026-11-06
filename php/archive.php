@@ -23,11 +23,17 @@ function getArchive() {
         $items = $stmt->fetchAll();
         
         $formatted = array_map(function($i) {
+            $json = decryptField($i['data_json'], 'archive_data.data_json');
+            $data = json_decode($json ?? 'null', true);
+            if (is_array($data)) {
+                $innerTable = ['sanitary' => 'sanitary_records', 'burial' => 'burial_records', 'report' => 'inspection_reports'][$i['archive_type']] ?? null;
+                if ($innerTable) $data = decryptRow($innerTable, $data);
+            }
             return [
                 'id' => (int)$i['id'],
                 'type' => $i['archive_type'],
                 'subType' => $i['sub_type'],
-                'data' => json_decode($i['data_json'], true),
+                'data' => $data,
                 'reason' => $i['reason'],
                 'archivedDate' => $i['archived_at']
             ];
@@ -55,10 +61,14 @@ function restoreItem() {
             return;
         }
 
-        $data = json_decode($item['data_json'], true);
+        $json = decryptField($item['data_json'], 'archive_data.data_json');
+        $data = json_decode($json ?? 'null', true);
+        if (!is_array($data)) $data = [];
         $type = $item['archive_type'];
         $subType = $item['sub_type'] ?? '';
-        
+        $innerTable = ['sanitary' => 'sanitary_records', 'burial' => 'burial_records', 'report' => 'inspection_reports'][$type] ?? null;
+        if ($innerTable) $data = decryptRow($innerTable, $data);
+
         if ($type === 'sanitary') {
             $stmt = $db->prepare("INSERT INTO sanitary_records
                 (record_no, date, permit_no, personnel_no, business_name,
@@ -66,15 +76,20 @@ function restoreItem() {
                  personnel_list, sex, result_xray, result_stool, barangay,
                  building_street, corporation_name, remarks, business_type)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $personnel = is_string($data['personnel_list'] ?? null) ? $data['personnel_list'] : json_encode($data['personnel_list'] ?? []);
             $stmt->execute([
                 $data['record_no'] ?? '', $data['date'] ?? null, $data['permit_no'] ?? '',
                 $data['personnel_no'] ?? '', $data['business_name'] ?? '',
-                $data['owner_first_name'] ?? '', $data['owner_middle_name'] ?? '',
-                $data['owner_last_name'] ?? '',
-                is_string($data['personnel_list'] ?? null) ? $data['personnel_list'] : json_encode($data['personnel_list'] ?? []),
-                $data['sex'] ?? '', $data['result_xray'] ?? 0, $data['result_stool'] ?? 0,
-                $data['barangay'] ?? '', $data['building_street'] ?? '',
-                $data['corporation_name'] ?? '', $data['remarks'] ?? '',
+                encryptField($data['owner_first_name'] ?? '', 'sanitary_records.owner_first_name'),
+                encryptField($data['owner_middle_name'] ?? '', 'sanitary_records.owner_middle_name'),
+                encryptField($data['owner_last_name'] ?? '', 'sanitary_records.owner_last_name'),
+                encryptField($personnel, 'sanitary_records.personnel_list'),
+                encryptField($data['sex'] ?? '', 'sanitary_records.sex'),
+                $data['result_xray'] ?? 0, $data['result_stool'] ?? 0,
+                $data['barangay'] ?? '',
+                encryptField($data['building_street'] ?? '', 'sanitary_records.building_street'),
+                encryptField($data['corporation_name'] ?? '', 'sanitary_records.corporation_name'),
+                $data['remarks'] ?? '',
                 $data['business_type'] ?? 'Other'
             ]);
         } elseif ($type === 'burial') {
@@ -83,20 +98,27 @@ function restoreItem() {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([
                 $subType ?: $data['type'] ?? 'cadaver',
-                $data['datetime'] ?? '', $data['deceased'] ?? '', $data['death_date'] ?? null,
-                $data['death_place'] ?? '', $data['cause_of_death'] ?? $data['causeOfDeath'] ?? '',
-                $data['informant'] ?? '', $data['inspector'] ?? '',
-                $data['sex'] ?? '', $data['age'] ?? '',
+                $data['datetime'] ?? '',
+                encryptField($data['deceased'] ?? '', 'burial_records.deceased'),
+                $data['death_date'] ?? null,
+                encryptField($data['death_place'] ?? '', 'burial_records.death_place'),
+                encryptField($data['cause_of_death'] ?? $data['causeOfDeath'] ?? '', 'burial_records.cause_of_death'),
+                encryptField($data['informant'] ?? '', 'burial_records.informant'),
+                $data['inspector'] ?? '',
+                encryptField($data['sex'] ?? '', 'burial_records.sex'),
+                encryptField($data['age'] ?? '', 'burial_records.age'),
                 $data['origin'] ?? '', $data['transfer'] ?? '', $data['funeral'] ?? '',
                 $data['cemetery_origin'] ?? '', $data['cemetery_transfer'] ?? '', $data['or_number'] ?? '',
-                $data['file_name'] ?? null, $data['file_path'] ?? null
+                $data['file_name'] ?? null,
+                $data['file_path'] ?? null
             ]);
         } elseif ($type === 'report') {
             $stmt = $db->prepare("INSERT INTO inspection_reports
                 (file_name, recommendation, remarks, complied, inspector_name, establishment, location, status, report_date, file_path, compliance_deadline, violation_codes, establishment_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([
-                $data['file_name'] ?? '', $data['recommendation'] ?? '', $data['remarks'] ?? '',
+                encryptField($data['file_name'] ?? '', 'inspection_reports.file_name'),
+                $data['recommendation'] ?? '', $data['remarks'] ?? '',
                 $data['complied'] ?? 0, $data['inspector_name'] ?? '',
                 $data['establishment'] ?? '', $data['location'] ?? '',
                 $data['status'] ?? 'Submitted', $data['report_date'] ?? null,

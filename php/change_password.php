@@ -1,6 +1,7 @@
 <?php
 require_once 'auth_check.php';
 require_once 'csrf.php';
+require_once 'activity_log.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     errorResponse('Invalid request method', 405);
@@ -8,6 +9,25 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 if (csrfNeeded()) {
     requireCsrf();
+}
+
+// Rate limit: max 5 failed attempts per IP+user within 15 minutes
+try {
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+    $uid = $_SESSION['user_id'] ?? 0;
+    $rateStmt = $db->prepare("
+        SELECT COUNT(*) as cnt FROM activity_log
+        WHERE action = 'CHANGE_PASSWORD' AND details LIKE '%FAILED%'
+        AND (ip_address = ? OR user_id = ?)
+        AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+    ");
+    $rateStmt->execute([$ip, $uid]);
+    if ((int)($rateStmt->fetch()['cnt'] ?? 0) >= 5) {
+        errorResponse('Too many failed attempts. Please try again in 15 minutes.', 429);
+    }
+} catch (PDOException $e) {
+    error_log('change_password rate check failed: ' . $e->getMessage());
+    errorResponse('Service temporarily unavailable. Please try again later.', 503);
 }
 
 $input = json_decode(file_get_contents('php://input'), true);
@@ -59,6 +79,9 @@ try {
     }
 
     if (!$isPasswordCorrect) {
+        try {
+            logActivity($db, 'CHANGE_PASSWORD', 'auth', $userId, $_SESSION['username'] ?? '', 'FAILED: Incorrect current password');
+        } catch (Exception $e) {}
         errorResponse('Current password is incorrect', 401);
     }
     

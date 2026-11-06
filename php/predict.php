@@ -48,6 +48,7 @@ try {
     $seen = [];
 
     foreach ($records as $record) {
+        $record = decryptRow('sanitary_records', $record);
         $name = $record['business_name'];
         if (isset($seen[$name])) continue;
         $seen[$name] = true;

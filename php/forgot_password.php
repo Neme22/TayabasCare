@@ -62,7 +62,9 @@ function sendOTP($input) {
             errorResponse('Too many password reset requests. Please try again later.', 429);
         }
     } catch (PDOException $e) {
-        // If rate check fails, allow attempt
+        // Fail closed: rate check must run before issuing OTPs
+        error_log('OTP send rate check failed: ' . $e->getMessage());
+        errorResponse('Service temporarily unavailable. Please try again later.', 503);
     }
 
     try {
@@ -105,7 +107,7 @@ function sendOTP($input) {
             VALUES (?, ?, ?)
             ON DUPLICATE KEY UPDATE otp = VALUES(otp), expires_at = VALUES(expires_at), used = 0
         ");
-        $stmt->execute([$user['id'], $otp, $expires]);
+        $stmt->execute([$user['id'], password_hash($otp, PASSWORD_DEFAULT), $expires]);
 
         $mail = new PHPMailer(true);
         try {
@@ -177,7 +179,9 @@ function verifyOTP($input) {
             errorResponse('Too many failed OTP attempts. Please try again in 15 minutes.', 429);
         }
     } catch (PDOException $e) {
-        // If rate check fails, allow attempt
+        // Fail closed: rate check must run before verifying OTPs
+        error_log('OTP verify rate check failed: ' . $e->getMessage());
+        errorResponse('Service temporarily unavailable. Please try again later.', 503);
     }
 
     try {
@@ -205,7 +209,12 @@ function verifyOTP($input) {
             errorResponse('Invalid or expired OTP.', 400);
         }
 
-        if (!hash_equals($record['otp'], $otp)) {
+        // Hashed OTPs (password_hash) via password_verify; legacy plaintext rows via hash_equals
+        $otpOk = password_verify($otp, $record['otp']);
+        if (!$otpOk && !str_starts_with($record['otp'], '$')) {
+            $otpOk = hash_equals($record['otp'], $otp);
+        }
+        if (!$otpOk) {
             // Log failed attempt for rate limiting
             try {
                 require_once __DIR__ . '/activity_log.php';

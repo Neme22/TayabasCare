@@ -24,6 +24,8 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // Load secrets (API keys, mail credentials) — must precede DB constants
 require_once __DIR__ . '/secrets.php';
+// Field/file encryption helpers (AES-256-GCM) — key from APP_ENCRYPTION_KEY
+require_once __DIR__ . '/crypto.php';
 
 // Database Configuration (overridable via php/.env; fallbacks = local XAMPP)
 define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
@@ -46,6 +48,8 @@ class Database {
             $options = [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+                PDO::ATTR_STRINGIFY_FETCHES => false,
             ];
             $this->conn = new PDO($dsn, $this->user, $this->pass, $options);
             return $this->conn;

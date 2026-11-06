@@ -46,7 +46,9 @@ function login() {
                 errorResponse('Too many failed login attempts. Please try again in 15 minutes.', 429);
             }
         } catch (PDOException $e) {
-            // If rate check fails, allow login attempt
+            // Fail closed: if rate check cannot run, do not allow the attempt
+            error_log('Login rate check failed: ' . $e->getMessage());
+            errorResponse('Service temporarily unavailable. Please try again later.', 503);
         }
     }
 

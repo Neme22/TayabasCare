@@ -42,7 +42,7 @@ try {
     }
 
     $update = $db->prepare("UPDATE sanitary_records SET admin_risk_remarks = ? WHERE id = ?");
-    $update->execute([$remark === '' ? null : $remark, $row['id']]);
+    $update->execute([$remark === '' ? null : encryptField($remark, 'sanitary_records.admin_risk_remarks'), $row['id']]);
 
     jsonResponse(true, [
         'businessName' => $businessName,

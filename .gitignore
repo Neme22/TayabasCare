@@ -31,3 +31,6 @@ uploads/
 
 # Debug screenshots
 screenshot_*.png
+
+# Encrypted file storage (runtime)
+storage/

@@ -57,8 +57,9 @@ function getRecords() {
     try {
         $stmt = $db->query("SELECT * FROM sanitary_records ORDER BY created_at DESC");
         $records = $stmt->fetchAll();
-        
+
         $formatted = array_map(function($r) {
+            $r = decryptRow('sanitary_records', $r);
             return [
                 'id' => (int)$r['id'],
                 'no' => $r['record_no'] ?? '',
@@ -118,16 +119,16 @@ function createRecord() {
             $input['permitNo'] ?? '',
             $input['personnelNo'] ?? '',
             $input['businessName'] ?? '',
-            $input['owner']['first'] ?? '',
-            $input['owner']['middle'] ?? '',
-            $input['owner']['last'] ?? '',
-            json_encode($input['personnel_list'] ?? $input['personnel'] ?? []),
-            $input['sex'] ?? '',
+            encryptField($input['owner']['first'] ?? '', 'sanitary_records.owner_first_name'),
+            encryptField($input['owner']['middle'] ?? '', 'sanitary_records.owner_middle_name'),
+            encryptField($input['owner']['last'] ?? '', 'sanitary_records.owner_last_name'),
+            encryptField(json_encode($input['personnel_list'] ?? $input['personnel'] ?? []), 'sanitary_records.personnel_list'),
+            encryptField($input['sex'] ?? '', 'sanitary_records.sex'),
             $input['result']['xray'] ?? 0,
             $input['result']['stool'] ?? 0,
             $input['barangay'] ?? '',
-            $input['buildingStreet'] ?? 'N/A',
-            $input['corporationName'] ?? '',
+            encryptField($input['buildingStreet'] ?? 'N/A', 'sanitary_records.building_street'),
+            encryptField($input['corporationName'] ?? '', 'sanitary_records.corporation_name'),
             $input['remarks'] ?? '',
             $input['businessType'] ?? 'Other',
             accomplishmentSessionFullName($db)  // inspector attribution for accomplishment auto-counts
@@ -164,6 +165,7 @@ function updateRecord() {
     $cur->execute([$input['id'] ?? 0]);
     $current = $cur->fetch();
     if (!$current) { errorResponse('Record not found.', 404); return; }
+    $current = decryptRow('sanitary_records', $current);
 
     // Inspectors may only change the owner's Result (x-ray/stool) and the
     // personnel data — permit, business, barangay, building, corporation,
@@ -203,16 +205,16 @@ function updateRecord() {
             $input['permitNo'] ?? '',
             $input['personnelNo'] ?? '',
             $input['businessName'] ?? '',
-            $input['owner']['first'] ?? '',
-            $input['owner']['middle'] ?? '',
-            $input['owner']['last'] ?? '',
-            json_encode($input['personnel_list'] ?? $input['personnel'] ?? []),
-            $input['sex'] ?? '',
+            encryptField($input['owner']['first'] ?? '', 'sanitary_records.owner_first_name'),
+            encryptField($input['owner']['middle'] ?? '', 'sanitary_records.owner_middle_name'),
+            encryptField($input['owner']['last'] ?? '', 'sanitary_records.owner_last_name'),
+            encryptField(json_encode($input['personnel_list'] ?? $input['personnel'] ?? []), 'sanitary_records.personnel_list'),
+            encryptField($input['sex'] ?? '', 'sanitary_records.sex'),
             $input['result']['xray'] ?? 0,
             $input['result']['stool'] ?? 0,
             $input['barangay'] ?? '',
-            $input['buildingStreet'] ?? 'N/A',
-            $input['corporationName'] ?? '',
+            encryptField($input['buildingStreet'] ?? 'N/A', 'sanitary_records.building_street'),
+            encryptField($input['corporationName'] ?? '', 'sanitary_records.corporation_name'),
             $input['remarks'] ?? '',
             $input['businessType'] ?? $current['business_type'],
             accomplishmentSessionFullName($db),
@@ -251,7 +253,7 @@ function deleteRecord() {
             INSERT INTO archive_data (archive_type, data_json, reason, expiry_date)
             VALUES ('sanitary', ?, ?, NULL)
         ");
-        $archiveStmt->execute([json_encode($record), $reason]);
+        $archiveStmt->execute([encryptField(json_encode($record), 'archive_data.data_json'), $reason]);
 
         $deleteStmt = $db->prepare("DELETE FROM sanitary_records WHERE id = ?");
         $deleteStmt->execute([$id]);

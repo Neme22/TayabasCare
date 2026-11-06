@@ -62,7 +62,7 @@ if (strlen($newPassword) > 72) {
 
 // Normalize code: uppercase, strip non-alphanumerics (dashes optional)
 $normalized = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', (string)$code));
-$codeHash = hash('sha256', $normalized);
+$codeHash = hash_hmac('sha256', $normalized, encKey());
 
 try {
     // Single lookup — no enumeration of why a code failed

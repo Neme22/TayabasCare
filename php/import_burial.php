@@ -56,12 +56,13 @@ if (!is_array($rows) || count($rows) === 0) {
     errorResponse('No rows to import', 400);
 }
 
-// Dedup keys: deceased | death_date | type
+// Dedup keys: deceased | death_date | type (deceased is encrypted — decrypt in PHP)
 $existingKeys = [];
 try {
-    $stmt = $db->query("SELECT LOWER(TRIM(deceased)) as name, IFNULL(death_date, '') as ddate, type FROM burial_records");
+    $stmt = $db->query("SELECT deceased, IFNULL(death_date, '') as ddate, type FROM burial_records");
     foreach ($stmt->fetchAll() as $r) {
-        $existingKeys[$r['name'] . '|' . strtolower(trim($r['ddate'])) . '|' . $r['type']] = true;
+        $name = decryptField($r['deceased'] ?? '', 'burial_records.deceased') ?? '';
+        $existingKeys[strtolower(trim($name)) . '|' . strtolower(trim($r['ddate'])) . '|' . $r['type']] = true;
     }
 } catch (PDOException $e) {
     // proceed without duplicate detection
@@ -121,14 +122,14 @@ foreach ($rows as $i => $row) {
         $stmt->execute([
             $type,
             $datetime,
-            $deceased,
+            encryptField($deceased, 'burial_records.deceased'),
             $deathDate !== '' ? $deathDate : null,
-            trim($row['deathPlace'] ?? ''),
-            trim($row['causeOfDeath'] ?? ''),
-            trim($row['informant'] ?? ''),
+            encryptField(trim($row['deathPlace'] ?? ''), 'burial_records.death_place'),
+            encryptField(trim($row['causeOfDeath'] ?? ''), 'burial_records.cause_of_death'),
+            encryptField(trim($row['informant'] ?? ''), 'burial_records.informant'),
             $inspectorName,
-            trim($row['sex'] ?? ''),
-            trim($row['age'] ?? ''),
+            encryptField(trim($row['sex'] ?? ''), 'burial_records.sex'),
+            encryptField(trim($row['age'] ?? ''), 'burial_records.age'),
             trim($row['origin'] ?? ''),
             trim($row['transfer'] ?? ''),
             trim($row['funeral'] ?? ''),

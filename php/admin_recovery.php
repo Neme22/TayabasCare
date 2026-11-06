@@ -101,7 +101,7 @@ function handleGenerate($input = []) {
             $raw = bin2hex(random_bytes(8)); // 16 hex chars
             $formatted = strtoupper(substr($raw, 0, 4) . '-' . substr($raw, 4, 4) . '-' . substr($raw, 8, 4) . '-' . substr($raw, 12, 4));
             $plaintextCodes[] = $formatted;
-            $hash = hash('sha256', normalizeRecoveryCode($formatted));
+            $hash = hash_hmac('sha256', normalizeRecoveryCode($formatted), encKey());
             $hashed[] = $hash;
             $insert->execute([$user['id'], $hash, $expiresAt]);
         }
