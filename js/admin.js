@@ -296,7 +296,7 @@ const Utils = {
                     placeholder="Reason (optional)"
                     onkeydown="if(event.key==='Enter'){document.getElementById('archiveConfirmBtn').click();}">
             </div>
-            <div class="modal-action justify-end">
+            <div class="modal-action justify-end">
                 <button class="btn btn-error" id="archiveConfirmBtn" data-testid="archive-confirm-btn">
                     <i class="bi bi-archive"></i> Archive
                 </button>
@@ -7039,3 +7039,60 @@ function openBurialImport(presetType) {
     });
 })();
 // ==================== END MOBILE SIDEBAR (ADMIN) ====================
+
+// ==================== MODAL BACKDROP CLICK-TO-CLOSE (ADMIN) ====================
+let _adminModalMouseDownTarget = null;
+document.addEventListener('mousedown', function (e) {
+    _adminModalMouseDownTarget = e.target;
+});
+
+document.addEventListener('click', function (e) {
+    const openDialogs = document.querySelectorAll('dialog[open]');
+    if (!openDialogs || !openDialogs.length) return;
+
+    const dialog = e.target.closest('dialog[open]') || openDialogs[openDialogs.length - 1];
+    if (!dialog) return;
+
+    const box = dialog.querySelector('.modal-box');
+    if (box) {
+        if (box.contains(e.target)) return;
+        if (_adminModalMouseDownTarget && box.contains(_adminModalMouseDownTarget)) return;
+    }
+
+    if (_adminModalMouseDownTarget && !dialog.contains(_adminModalMouseDownTarget) && _adminModalMouseDownTarget !== dialog) return;
+
+    const isBackdropClick = (
+        e.target === dialog ||
+        e.target.classList.contains('modal-backdrop') ||
+        Boolean(e.target.closest('.modal-backdrop')) ||
+        (dialog.contains(e.target) && (!box || !box.contains(e.target)))
+    );
+
+    if (isBackdropClick) {
+        closeAdminModalSafely(dialog);
+    }
+});
+
+function closeAdminModalSafely(dialog) {
+    if (!dialog) return;
+    const id = dialog.id;
+    if (id === 'modal' && typeof Utils !== 'undefined' && typeof Utils.closeModal === 'function') {
+        Utils.closeModal();
+    } else if (id === 'profile-modal' && typeof closeProfileModal === 'function') {
+        closeProfileModal();
+    } else if (id === 'settings-modal' && typeof closeSettingsModal === 'function') {
+        closeSettingsModal();
+    } else if (id === 'backup-modal' && typeof closeBackupModal === 'function') {
+        closeBackupModal();
+    } else if (id === 'recovery-codes-modal' && typeof closeRecoveryCodesModal === 'function') {
+        closeRecoveryCodesModal();
+    } else if (id === 'change-password-modal' && typeof closeChangePasswordModal === 'function') {
+        closeChangePasswordModal();
+    } else if (id === 'notif-detail-modal') {
+        if (typeof dialog.close === 'function') dialog.close();
+    } else {
+        if (typeof dialog.close === 'function') dialog.close();
+        if (!id) dialog.remove();
+    }
+}
+// ==================== END MODAL BACKDROP CLICK-TO-CLOSE (ADMIN) ====================

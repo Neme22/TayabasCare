@@ -2939,7 +2939,7 @@ function openSanitaryModal(mode, index = null) {
     } else if (mode === 'edit') {
         title.textContent = 'Edit Sanitary Record';
         submitBtn.style.display = 'inline-flex';
-        printBtn.style.display = 'none';
+        printBtn.style.display = 'inline-flex';
         loadSanitaryData(index);
         lockSanitaryExceptResults();
     } else if (mode === 'view') {
@@ -2947,7 +2947,7 @@ function openSanitaryModal(mode, index = null) {
         // Saving performs a PUT (mode switched to 'edit').
         title.textContent = 'Edit Sanitary Record';
         submitBtn.style.display = 'inline-flex';
-        printBtn.style.display = 'none';
+        printBtn.style.display = 'inline-flex';
         loadSanitaryData(index);
         lockSanitaryExceptResults();
         document.getElementById('sanitary-mode').value = 'edit';
@@ -3269,6 +3269,9 @@ function permitInspectorName() {
 }
 
 function printSanitary(id) {
+    if (!id) {
+        id = document.getElementById('sanitary-id')?.value;
+    }
     const record = cachedSanitaryRecords.find(r => r.id == id);
     if (!record) {
         showNotification('Record not found', 'error');
@@ -7130,3 +7133,64 @@ document.addEventListener('click', function (e) {
     if (e.target.closest('.sidebar-item[data-testid]')) closeMobileSidebar();
 }, true);
 // ==================== END MOBILE SIDEBAR ====================
+
+// ==================== MODAL BACKDROP CLICK-TO-CLOSE ====================
+let _inspModalMouseDownTarget = null;
+document.addEventListener('mousedown', function (e) {
+    _inspModalMouseDownTarget = e.target;
+});
+
+document.addEventListener('click', function (e) {
+    const openDialogs = document.querySelectorAll('dialog[open]');
+    if (!openDialogs || !openDialogs.length) return;
+
+    const dialog = e.target.closest('dialog[open]') || openDialogs[openDialogs.length - 1];
+    if (!dialog) return;
+
+    const box = dialog.querySelector('.modal-box');
+    if (box) {
+        if (box.contains(e.target)) return;
+        if (_inspModalMouseDownTarget && box.contains(_inspModalMouseDownTarget)) return;
+    }
+
+    if (_inspModalMouseDownTarget && !dialog.contains(_inspModalMouseDownTarget) && _inspModalMouseDownTarget !== dialog) return;
+
+    const isBackdropClick = (
+        e.target === dialog ||
+        e.target.classList.contains('modal-backdrop') ||
+        Boolean(e.target.closest('.modal-backdrop')) ||
+        (dialog.contains(e.target) && (!box || !box.contains(e.target)))
+    );
+
+    if (isBackdropClick) {
+        closeInspectorModalSafely(dialog);
+    }
+});
+
+function closeInspectorModalSafely(dialog) {
+    if (!dialog) return;
+    const id = dialog.id;
+    if (id === 'sanitary-modal' && typeof closeSanitaryModal === 'function') {
+        closeSanitaryModal();
+    } else if (id === 'inspection-modal' && typeof closeInspectionModal === 'function') {
+        closeInspectionModal();
+    } else if (id === 'burial-modal' && typeof closeBurialModal === 'function') {
+        closeBurialModal();
+    } else if (id === 'accomplishment-modal' && typeof closeAccomplishmentModal === 'function') {
+        closeAccomplishmentModal();
+    } else if (id === 'delete-modal' && typeof closeDeleteModal === 'function') {
+        closeDeleteModal();
+    } else if (id === 'profile-modal' && typeof closeProfileModal === 'function') {
+        closeProfileModal();
+    } else if (id === 'settings-modal' && typeof closeSettingsModal === 'function') {
+        closeSettingsModal();
+    } else if (id === 'change-password-modal' && typeof closeChangePasswordModal === 'function') {
+        closeChangePasswordModal();
+    } else if (id === 'insp-notif-detail-modal') {
+        if (typeof dialog.close === 'function') dialog.close();
+    } else {
+        if (typeof dialog.close === 'function') dialog.close();
+        if (!id) dialog.remove();
+    }
+}
+// ==================== END MODAL BACKDROP CLICK-TO-CLOSE ====================
