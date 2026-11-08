@@ -397,6 +397,16 @@ body {
     background-color: #F9FAFB;
 }
 
+/* Row-click tables (no Actions column) — whole row opens the view modal */
+tr.row-clickable {
+    cursor: pointer;
+}
+
+tr.row-clickable:focus-visible {
+    outline: 2px solid #10b981;
+    outline-offset: -2px;
+}
+
 .data-table tbody tr:last-child td {
     border-bottom: none;
 }
@@ -3174,3 +3184,7 @@ dialog.modal::backdrop {
     color: #6b7280;
     line-height: 1.2;
 }
+
+/* Modal: single scrollbar + sticky header/X */
+.modal-box > :first-child { position: sticky; top: 0; z-index: 30; background: #fff; }
+.modal-box .overflow-y-auto { overflow-y: visible !important; max-height: none !important; }

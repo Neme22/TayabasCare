@@ -2110,7 +2110,7 @@ async function loadAccomplishmentRecords() {
     if (filterYear)  records = records.filter(r => r.year === parseInt(filterYear));
 
     if (records.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-gray-400">No accomplishment records found</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-gray-400">No accomplishment records found</td></tr>`;
         return;
     }
 
@@ -2118,16 +2118,11 @@ async function loadAccomplishmentRecords() {
     records.sort((a, b) => b.year - a.year || b.month - a.month || a.inspector.localeCompare(b.inspector));
 
     tbody.innerHTML = records.map(r => `
-        <tr>
+        <tr class="row-clickable" style="cursor:pointer;" onclick="openAccomplishmentModal('${r.id}')">
             <td class="font-semibold text-emerald-700">${esc(r.inspector)}</td>
             <td>${MONTH_NAMES[r.month]}</td>
             <td>${r.year}</td>
             <td>${r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}</td>
-            <td class="text-center">
-                <button class="btn btn-xs btn-info text-white" title="View record" onclick="openAccomplishmentModal('${r.id}')">
-                    <i class="fas fa-eye"></i>
-                </button>
-            </td>
         </tr>
     `).join('');
 }
@@ -2627,7 +2622,7 @@ async function loadSanitaryRecords() {
         const result = await response.json();
         
         if (!result.success) {
-            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-red-500">Error: ${esc(result.message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-red-500">Error: ${esc(result.message)}</td></tr>`;
             return;
         }
         
@@ -2635,7 +2630,7 @@ async function loadSanitaryRecords() {
         cachedSanitaryRecords = result.data; 
 
         if (cachedSanitaryRecords.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-gray-500">No records found.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-gray-500">No records found.</td></tr>`;
             renderNumberedPager('sanitary-pager', { page: 1, pages: 0, total: 0, size: 10 }, 'insp-sanitary');
             return;
         }
@@ -2741,7 +2736,7 @@ function filterSanitaryRecords() {
 
     if (displayed.length === 0) {
         const emptyMsg = sanScope === 'new' ? 'No new establishments found.' : 'No matching records found.';
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-gray-500">${emptyMsg}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-gray-500">${emptyMsg}</td></tr>`;
         return;
     }
     
@@ -2753,23 +2748,13 @@ function filterSanitaryRecords() {
         const riskBadge = renderRiskBadge(ai);
 
         return `
-            <tr>
+            <tr class="row-clickable" style="cursor:pointer;" onclick="viewSanitary(${record.id})">
                 <td>${formatDate(record.date) || ''}</td>
                 <td>${esc(record.permitNo) || ''}</td>
                 <td>${esc(record.businessName) || ''}</td>
                 <td>${esc(ownerName)}</td>
                 <td>${esc(record.barangay) || ''}</td>
                 <td>${riskBadge}</td>
-                <td>
-                   <div class="flex gap-2">
-                        <button class="btn btn-sm btn-info text-white" onclick="viewSanitary(${record.id})">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                        <button class="btn btn-sm btn-success text-white" onclick="printSanitary(${record.id})">
-                            <i class="fas fa-print"></i>
-                        </button>
-                    </div>
-                </td>
             </tr>
         `;
     }).join('');
@@ -2823,27 +2808,17 @@ function displaySanitaryRecords(records) {
     const tbody = document.getElementById('sanitary-table-body');
     
     if (records.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-500">No records found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">No records found.</td></tr>';
         return;
     }
     
     tbody.innerHTML = records.map((record, index) => `
-        <tr data-testid="sanitary-row-${index}">
+        <tr data-testid="sanitary-row-${index}" class="row-clickable" style="cursor:pointer;" onclick="viewSanitary(${record.id ?? index})">
             <td>${formatDate(record.date)}</td>
             <td>${esc(record.permitNo)}</td>
             <td>${esc(record.businessName)}</td>
             <td>${esc(record.owner.first)} ${esc(record.owner.middle)} ${esc(record.owner.last)}</td>
             <td>${esc(record.barangay)}</td>
-            <td>
-                <div class="flex gap-2">
-                    <button class="btn btn-sm btn-info text-white" data-testid="view-sanitary-${index}" onclick="viewSanitary(${index})">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="btn btn-sm btn-success text-white" data-testid="print-sanitary-${index}" onclick="printSanitary(${index})">
-                        <i class="fas fa-print"></i>
-                    </button>
-                </div>
-            </td>
         </tr>
     `).join('');
 }
@@ -2893,48 +2868,28 @@ function displayBurialRecords(type, records) {
     const tbody = document.getElementById(`${type}-table-body`);
     
     if (records.length === 0) {
-        const colspan = type === 'cadaver' ? 5 : 6;
+        const colspan = type === 'cadaver' ? 4 : 5;
         tbody.innerHTML = `<tr><td colspan="${colspan}" class="text-center py-8 text-gray-500">No records found.</td></tr>`;
         return;
     }
     
     if (type === 'cadaver') {
         tbody.innerHTML = records.map((record, index) => `
-            <tr data-testid="${type}-row-${index}">
+            <tr data-testid="${type}-row-${index}" class="row-clickable" style="cursor:pointer;" onclick="viewBurial('${type}', ${record.id})">
                 <td>${formatDateTime(record.datetime)}</td>
                 <td>${esc(record.deceased)}</td>
                 <td>${formatDate(record.deathDate)}</td>
                 <td>${esc(record.informant)}</td>
-                <td>
-                    <div class="flex gap-2">
-                        <button class="btn btn-sm btn-info text-white" data-testid="view-${type}-${index}" onclick="viewBurial('${type}', ${record.id})">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                        <button class="btn btn-sm btn-warning text-white" data-testid="edit-${type}-${index}" onclick="editBurial('${type}', ${record.id})">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                    </div>
-                </td>
             </tr>
         `).join('');
     } else {
         tbody.innerHTML = records.map((record, index) => `
-            <tr data-testid="${type}-row-${index}">
+            <tr data-testid="${type}-row-${index}" class="row-clickable" style="cursor:pointer;" onclick="viewBurial('${type}', ${record.id})">
                 <td>${formatDateTime(record.datetime)}</td>
                 <td>${esc(record.deceased)}</td>
                 <td>${formatDate(record.deathDate)}</td>
                 <td>${esc(record.cemeteryOrigin)}</td>
                 <td>${esc(record.cemeteryTransfer)}</td>
-                <td>
-                    <div class="flex gap-2">
-                        <button class="btn btn-sm btn-info text-white" data-testid="view-${type}-${index}" onclick="viewBurial('${type}', ${record.id})">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                        <button class="btn btn-sm btn-warning text-white" data-testid="edit-${type}-${index}" onclick="editBurial('${type}', ${record.id})">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                    </div>
-                </td>
             </tr>
         `).join('');
     }
@@ -2942,6 +2897,8 @@ function displayBurialRecords(type, records) {
 
 function openSanitaryModal(mode, index = null) {
     const modal = document.getElementById('sanitary-modal');
+    const formErr = document.getElementById('sanitary-form-error');
+    if (formErr) { formErr.textContent = ''; formErr.style.display = 'none'; }
     const form = document.getElementById('sanitary-form');
     const title = document.getElementById('sanitary-modal-title');
     const submitBtn = document.getElementById('sanitary-submit-btn');
@@ -3157,6 +3114,13 @@ function loadSanitaryData(id) {
 
 async function handleSanitarySubmit(e) {
     e.preventDefault();
+    const showSanitaryFormError = (msg) => {
+        let err = document.getElementById('sanitary-form-error');
+        if (!err) return;
+        err.textContent = msg || '';
+        err.style.display = msg ? 'block' : 'none';
+    };
+    showSanitaryFormError('');
 
     // Validate required fields
     const permit1 = document.getElementById('sanitary-permit-1').value.trim();
@@ -3263,11 +3227,14 @@ async function handleSanitarySubmit(e) {
             showNotification(mode === 'edit' ? 'Record updated successfully!' : 'Record added successfully!', 'success');
             localStorage.removeItem(FormDrafts.KEYS.sanitary);
         } else {
-            alert('Error: ' + (result.message || 'Failed to save record'));
+            const msg = result.message || 'Failed to save record';
+            showSanitaryFormError(msg);
+            showNotification(msg, 'error');
         }
     } catch (error) {
         console.error('Error saving record:', error);
-        alert('Error saving record: ' + error.message);
+        showSanitaryFormError('Error saving record: ' + error.message);
+        showNotification('Error saving record: ' + error.message, 'error');
     }
 }
 
@@ -3849,7 +3816,7 @@ function filterInspectionReports() {
         } else if (_clusterLoaded && _myBarangays.size === 0) {
             msg = 'No barangays assigned to your cluster yet. Ask the admin to assign you a cluster.';
         }
-        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-gray-500">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-gray-500">${msg}</td></tr>`;
         return;
     }
 
@@ -3857,7 +3824,7 @@ function filterInspectionReports() {
         // Never-inspected establishment from the New scope
         if (report.__new) {
             return `
-            <tr>
+            <tr class="row-clickable" style="cursor:pointer;" onclick="startNewInspection(${report._ni})">
                 <td><div class="col-permit text-xs text-gray-500">${esc(report.permitNo)}</div></td>
                 <td class="font-semibold">${esc(report.establishment) || 'N/A'}</td>
                 <td><div class="col-barangay">${esc(report.location) || 'N/A'}</div></td>
@@ -3865,14 +3832,6 @@ function filterInspectionReports() {
                 <td><div class="col-rec text-sm text-gray-400">&mdash;</div></td>
                 <td><span class="badge badge-info text-white">New</span></td>
                 <td class="text-gray-400">&mdash;</td>
-                <td>
-                    <button class="btn btn-sm btn-success text-white"
-                            onclick="startNewInspection(${report._ni})"
-                            data-testid="new-inspect-${report._ni}"
-                            title="Start Inspection Report">
-                        <i class="fas fa-file-medical"></i> Inspect
-                    </button>
-                </td>
             </tr>
             `;
         }
@@ -3895,7 +3854,7 @@ function filterInspectionReports() {
             : 'N/A';
 
         return `
-        <tr>
+        <tr class="row-clickable" style="cursor:pointer;" onclick="viewInspectionReportById(${report.id})">
             <td><div class="col-permit text-xs text-gray-500">${esc(permitNo)}</div></td>
             <td class="font-semibold">${esc(report.establishment) || 'N/A'}</td>
             <td><div class="col-barangay">${esc(report.location) || 'N/A'}</div></td>
@@ -3903,22 +3862,6 @@ function filterInspectionReports() {
             <td><div class="col-rec text-sm">${esc(report.recommendation) || 'N/A'}</div></td>
             <td>${statusBadge}</td>
             <td>${dateStr}</td>
-            <td>
-                <div class="flex gap-2">
-                    <button class="btn btn-sm btn-info text-white"
-                            onclick="viewInspectionReportById(${report.id})"
-                            data-testid="view-inspection-${report.id}"
-                            title="View Current Report">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="btn btn-sm btn-warning text-white"
-                            onclick="editInspectionReportById(${report.id})"
-                            data-testid="edit-inspection-${report.id}"
-                            title="Re-Inspect">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                </div>
-            </td>
         </tr>
         `;
     }).join('');
@@ -3940,9 +3883,12 @@ function viewInspectionReportById(id) {
     modal.className = 'modal';
     modal.innerHTML = `
         <div class="modal-box max-w-2xl">
-            <h3 class="font-bold text-2xl text-emerald-700 mb-4">
-                <i class="fas fa-file-alt mr-2"></i>Inspection Report
-            </h3>
+            <div class="sticky top-0 z-10 bg-white flex items-center justify-between pb-2">
+                <h3 class="font-bold text-2xl text-emerald-700 mb-0">
+                    <i class="fas fa-file-alt mr-2"></i>Inspection Report
+                </h3>
+                <button type="button" class="btn btn-sm btn-circle btn-ghost text-gray-500 hover:text-red-500" onclick="this.closest('dialog').remove()" data-testid="view-inspection-close">✕</button>
+            </div>
             <div class="space-y-4">
                 <div>
                     <label class="font-semibold text-gray-700">Establishment:</label>
@@ -3994,10 +3940,12 @@ function viewInspectionReportById(id) {
                 </div>
             </div>
             <div class="modal-action">
+                <button class="btn btn-warning text-white" onclick="this.closest('dialog').remove(); editInspectionReportById(${id})" data-testid="view-inspection-edit">
+                    <i class="fas fa-edit mr-2"></i>Re-Inspect
+                </button>
                 <button class="btn btn-success text-white" onclick="saveCompliedStatus(${id}, 'view-complied-check-${id}', this.closest('dialog'))">
                     <i class="fas fa-save mr-2"></i>Save
                 </button>
-                <button class="btn btn-ghost" onclick="this.closest('dialog').remove()">Close</button>
             </div>
         </div>
         <form method="dialog" class="modal-backdrop">
@@ -4331,9 +4279,12 @@ function viewInspectionReport(index) {
     modal.className = 'modal';
     modal.innerHTML = `
         <div class="modal-box max-w-2xl">
-            <h3 class="font-bold text-2xl text-emerald-700 mb-4">
-                <i class="fas fa-file-alt mr-2"></i>Inspection Report
-            </h3>
+            <div class="sticky top-0 z-10 bg-white flex items-center justify-between pb-2">
+                <h3 class="font-bold text-2xl text-emerald-700 mb-0">
+                    <i class="fas fa-file-alt mr-2"></i>Inspection Report
+                </h3>
+                <button type="button" class="btn btn-sm btn-circle btn-ghost text-gray-500 hover:text-red-500" onclick="this.closest('dialog').remove()" data-testid="view-inspection-close">✕</button>
+            </div>
             <div class="space-y-4">
                 <div>
                     <label class="font-semibold text-gray-700">Date:</label>
@@ -4380,7 +4331,6 @@ function viewInspectionReport(index) {
                 <button class="btn btn-success text-white" onclick="printInspectionReport(${index})">
                     <i class="fas fa-print mr-2"></i>Print
                 </button>
-                <button class="btn btn-ghost" onclick="this.closest('dialog').remove()">Close</button>
             </div>
         </div>
         <form method="dialog" class="modal-backdrop">
@@ -4541,7 +4491,7 @@ async function loadBurialRecords(type) {
         const result = await response.json();
 
         if (!result.success) {
-            const colspan = type === 'cadaver' ? 5 : 6;
+            const colspan = type === 'cadaver' ? 4 : 5;
             tbody.innerHTML = `<tr><td colspan="${colspan}" class="text-center py-8 text-red-500">Error: ${esc(result.message)}</td></tr>`;
             return;
         }
@@ -4596,6 +4546,8 @@ function openBurialModal(mode, type, id = null) {
         title.textContent = `Add ${type.charAt(0).toUpperCase() + type.slice(1)} Record`;
         submitBtn.style.display = 'inline-flex';
         printBtn.style.display = 'none';
+        const eb1 = document.getElementById('burial-edit-btn');
+        if (eb1) eb1.style.display = 'none';
         disableBurialInputs(false);
         setBurialRequired(true);
         startBurialRealtimeClock();
@@ -4606,6 +4558,8 @@ function openBurialModal(mode, type, id = null) {
         title.textContent = `Edit ${type.charAt(0).toUpperCase() + type.slice(1)} Record`;
         submitBtn.style.display = 'inline-flex';
         printBtn.style.display = 'none';
+        const eb2 = document.getElementById('burial-edit-btn');
+        if (eb2) eb2.style.display = 'none';
         disableBurialInputs(false);
         setBurialRequired(false); // existing file already satisfies death cert
         stopBurialRealtimeClock();
@@ -4614,6 +4568,8 @@ function openBurialModal(mode, type, id = null) {
         title.textContent = `View ${type.charAt(0).toUpperCase() + type.slice(1)} Record`;
         submitBtn.style.display = 'none';
         printBtn.style.display = 'inline-flex';
+        const editBtn = document.getElementById('burial-edit-btn');
+        if (editBtn) editBtn.style.display = 'inline-flex';
         stopBurialRealtimeClock();
         loadBurialData(type, id);
         applyBurialViewLabels(type, id);
@@ -5039,6 +4995,12 @@ function viewBurial(type, id) {
 
 function editBurial(type, id) {
     openBurialModal('edit', type, id);
+}
+
+function enableBurialEditFromView() {
+    const type = document.getElementById('burial-type').value;
+    const id = document.getElementById('burial-id').value;
+    if (type && id) openBurialModal('edit', type, id);
 }
 
 function closeBurialModal() {

@@ -268,7 +268,6 @@ const Utils = {
                 <p class="text-sm text-base-content/70 mb-5">${message}</p>
             </div>
             <div class="modal-action justify-end">
-                <button class="btn btn-secondary" onclick="Utils.closeModal()" data-testid="confirm-cancel-btn">Cancel</button>
                 <button class="btn btn-error" id="confirmActionBtn" data-testid="confirm-delete-btn">Delete</button>
             </div>
         `;
@@ -297,8 +296,7 @@ const Utils = {
                     placeholder="Reason (optional)"
                     onkeydown="if(event.key==='Enter'){document.getElementById('archiveConfirmBtn').click();}">
             </div>
-            <div class="modal-action justify-end">
-                <button class="btn btn-secondary" onclick="Utils.closeModal()" data-testid="archive-cancel-btn">Cancel</button>
+            <div class="modal-action justify-end">
                 <button class="btn btn-error" id="archiveConfirmBtn" data-testid="archive-confirm-btn">
                     <i class="bi bi-archive"></i> Archive
                 </button>
@@ -1339,7 +1337,7 @@ const InspectorManager = {
             
             if (!result.success) {
                 const tbody = document.getElementById('inspectorsTableBody');
-                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Error loading inspectors</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Error loading inspectors</td></tr>';
                 return;
             }
             
@@ -1355,26 +1353,16 @@ const InspectorManager = {
         const countEl = document.getElementById('admin-inspector-count');
         if (countEl) countEl.textContent = `Showing ${inspectors.length} of ${InspectorManager._allInspectors.length} inspectors`;
         if (inspectors.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No inspectors found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No inspectors found</td></tr>';
             return;
         }
         tbody.innerHTML = inspectors.map(inspector => `
-            <tr data-testid="inspector-row-${inspector.id}">
+            <tr data-testid="inspector-row-${inspector.id}" class="row-clickable" style="cursor:pointer;" onclick="InspectorManager.openEditModal(${inspector.id})">
                 <td>${inspector.id}</td>
                 <td>${Utils.esc(inspector.fullName)}</td>
                 <td>${Utils.esc(inspector.email)}</td>
                 <td>${Utils.esc(inspector.username)}</td>
                 <td>${Utils.esc(inspector.role)}</td>
-                <td>
-                    <div class="action-buttons">
-                        <button class="action-btn action-btn-edit" onclick="InspectorManager.openEditModal(${inspector.id})" data-testid="edit-inspector-${inspector.id}">
-                            <i class="bi bi-pencil-square"></i>
-                        </button>
-                        <button class="action-btn action-btn-delete" onclick="InspectorManager.deleteInspector(${inspector.id})" data-testid="delete-inspector-${inspector.id}" title="Archive">
-                            <i class="bi bi-archive"></i>
-                        </button>
-                    </div>
-                </td>
             </tr>
         `).join('');
     },
@@ -1424,7 +1412,6 @@ const InspectorManager = {
                 </form>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="Utils.closeModal()" data-testid="cancel-btn">Cancel</button>
                 <button class="btn btn-primary" onclick="InspectorManager.saveInspector()" data-testid="save-inspector-btn">
                     <i class="fas fa-save"></i> Save Inspector
                 </button>
@@ -1479,7 +1466,6 @@ const InspectorManager = {
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-secondary" onclick="Utils.closeModal()" data-testid="cancel-btn">Cancel</button>
                     <button class="btn btn-primary" onclick="InspectorManager.saveInspector()" data-testid="save-inspector-btn">Update</button>
                 </div>
             `;
@@ -1774,7 +1760,7 @@ const SanitaryManager = {
 
     render: async () => {
         const tbody = document.getElementById('sanitaryTableBody');
-        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Loading...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Loading...</td></tr>';
         await SanitaryManager.load();
         SanitaryManager.applyFilters();
     },
@@ -1827,7 +1813,7 @@ const SanitaryManager = {
             : `Showing ${page.total} of ${records.length} records`;
 
         if (displayed.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No sanitary records found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No sanitary records found</td></tr>';
             return;
         }
 
@@ -1835,21 +1821,11 @@ const SanitaryManager = {
             const ai = getAdminRiskForEstablishment(record.businessName);
             const riskBadge = renderAdminRiskBadge(ai);
             return `
-            <tr data-testid="sanitary-row-${index}">
+            <tr data-testid="sanitary-row-${index}" class="row-clickable" style="cursor:pointer;" onclick="SanitaryManager.openViewModal(${index})">
                 <td>${Utils.esc(record.permitNo) || 'N/A'}</td>
-                <td><span onclick="VHModal.openViolationModal('${(record.businessName || '').replace(/'/g, "\\'")}')" style="cursor:pointer; color:#10b981; font-weight:600; text-decoration:underline; text-underline-offset:3px;" title="Click to view violation history">${Utils.esc(record.businessName) || 'N/A'}</span></td>
+                <td><span onclick="event.stopPropagation();VHModal.openViolationModal('${(record.businessName || '').replace(/'/g, "\\'")}')" style="cursor:pointer; color:#10b981; font-weight:600; text-decoration:underline; text-underline-offset:3px;" title="Click to view violation history">${Utils.esc(record.businessName) || 'N/A'}</span></td>
                 <td>${Utils.formatDate(record.date)}</td>
                 <td>${riskBadge}</td>
-                <td>
-                    <div class="action-buttons">
-                        <button class="action-btn action-btn-view" onclick="SanitaryManager.openViewModal(${index})" data-testid="view-sanitary-${index}">
-                            <i class="bi bi-eye"></i>
-                        </button>
-                        <button class="action-btn action-btn-delete" onclick="SanitaryManager.deleteRecord(${record.id})" data-testid="delete-sanitary-${index}" title="Archive">
-                            <i class="bi bi-archive"></i>
-                        </button>
-                    </div>
-                </td>
             </tr>
         `}).join('');
     },
@@ -1949,7 +1925,6 @@ const SanitaryManager = {
             </div>
 
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="Utils.closeModal()" data-testid="cancel-btn">Close</button>
                 <button class="btn btn-primary" onclick="SanitaryManager.printPermit(${index})" data-testid="print-btn">
                     <i class="fas fa-print"></i> Print Permit
                 </button>
@@ -2162,14 +2137,14 @@ const BurialManager = {
     _allRecords: [],
     render: async () => {
         const tbody = document.getElementById('burialTableBody');
-        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Loading...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Loading...</td></tr>';
 
         try {
             const response = await fetch(`${API_BASE_URL}/burial.php`);
             const result = await response.json();
 
             if (!result.success) {
-                tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Error: ${Utils.esc(result.message)}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="4" class="empty-state">Error: ${Utils.esc(result.message)}</td></tr>`;
                 return;
             }
 
@@ -2191,7 +2166,7 @@ const BurialManager = {
 
         } catch (error) {
             console.error('Error loading burial records:', error);
-            tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Failed to load records. Check connection.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Failed to load records. Check connection.</td></tr>';
         }
     },
 
@@ -2236,26 +2211,16 @@ const BurialManager = {
             : `Showing ${page.total} of ${BurialManager._allRecords.length} records`;
 
         if (displayed.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No burial records found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No burial records found</td></tr>';
             return;
         }
 
         tbody.innerHTML = displayed.map((record, index) => `
-            <tr data-testid="burial-row-${index}">
+            <tr data-testid="burial-row-${index}" class="row-clickable" style="cursor:pointer;" onclick="BurialManager.openViewModal('${record.categoryType}', ${record.id})">
                 <td><span class="type-badge type-burial-${record.categoryType}">${record.category}</span></td>
                 <td>${Utils.esc(record.deceased) || 'N/A'}</td>
                 <td>${Utils.formatDate(record.datetime || record.deathDate)}</td>
                 <td>${Utils.esc(record.informant) || 'N/A'}</td>
-                <td>
-                    <div class="action-buttons">
-                        <button class="action-btn action-btn-view" onclick="BurialManager.openViewModal('${record.categoryType}', ${record.id})" data-testid="view-burial-${index}">
-                            <i class="bi bi-eye"></i>
-                        </button>
-                        <button class="action-btn action-btn-delete" onclick="BurialManager.deleteRecord('${record.categoryType}', ${record.id})" data-testid="delete-burial-${index}" title="Archive">
-                            <i class="bi bi-archive"></i>
-                        </button>
-                    </div>
-                </td>
             </tr>
         `).join('');
     },
@@ -2384,7 +2349,6 @@ const BurialManager = {
                 ` : ''}
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="Utils.closeModal()" data-testid="cancel-btn">Close</button>
                 <button class="btn btn-primary" onclick="window.print()" data-testid="print-btn">
                     <i class="fas fa-print"></i> Print
                 </button>
@@ -2430,7 +2394,7 @@ const BurialManager = {
 const ReportsManager = {
     loadAndRender: async () => {
         const tbody = document.getElementById('reportsTableBody');
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#6b7280;"><i class="fas fa-spinner fa-spin"></i> Loading reports from database...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#6b7280;"><i class="fas fa-spinner fa-spin"></i> Loading reports from database...</td></tr>';
         try {
             const resp = await fetch(`${API_BASE_URL}/inspection.php`);
             const json = await resp.json();
@@ -2452,7 +2416,7 @@ const ReportsManager = {
         const allReports = DataStore.inspectionReports;
 
         if (allReports.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No inspection reports found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No inspection reports found</td></tr>';
             return;
         }
 
@@ -2497,23 +2461,13 @@ const ReportsManager = {
             : `Showing ${page.total} of ${allReports.length} reports`;
 
         tbody.innerHTML = displayed.map(report => `
-            <tr data-testid="report-row-${report.id}">
+            <tr data-testid="report-row-${report.id}" class="row-clickable" style="cursor:pointer;" onclick="ReportsManager.openViewModal(${report.id})">
                 <td>${getSanitaryPermitNoForEstablishment(report.establishment)}</td>
                 <td>${Utils.esc(report.inspector)}</td>
                 <td>${Utils.esc(report.establishment) || 'N/A'}</td>
                 <td>${Utils.esc(report.location)}</td>
                 <td>${Utils.formatDate(report.date)}</td>
                 <td><span class="status-badge status-${Utils.esc((report.status || 'submitted').toLowerCase())}">${Utils.esc(report.status) || 'Submitted'}</span></td>
-                <td>
-                    <div class="action-buttons">
-                        <button class="action-btn action-btn-view" onclick="ReportsManager.openViewModal(${report.id})" data-testid="view-report-${report.id}">
-                            <i class="bi bi-eye"></i>
-                        </button>
-                        <button class="action-btn action-btn-delete" onclick="ReportsManager.deleteReport(${report.id})" data-testid="delete-report-${report.id}" title="Archive">
-                            <i class="bi bi-archive"></i>
-                        </button>
-                    </div>
-                </td>
             </tr>
         `).join('');
     },
@@ -2588,7 +2542,6 @@ const ReportsManager = {
                 ` : ''}
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="Utils.closeModal()" data-testid="cancel-btn">Close</button>
                 <button class="btn btn-primary" onclick="exportSingleReportPDF()" style="background:#7c3aed;border-color:#7c3aed;">
                     <i class="fas fa-file-pdf" style="margin-right:6px;"></i>Download PDF
                 </button>
@@ -5528,7 +5481,7 @@ const PredictionEngine = {
         const detailPanel = document.getElementById('predDetailModal');
         if (detailPanel) detailPanel.remove();
         statusEl.textContent = 'Running prescription...';
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:#6b7280;"><i class="fas fa-spinner fa-spin"></i> Analyzing establishments...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:#6b7280;"><i class="fas fa-spinner fa-spin"></i> Analyzing establishments...</td></tr>';
 
         try {
             const resp = await fetch(`${API_BASE_URL}/predict.php`, { method: 'GET' });
@@ -5549,7 +5502,7 @@ const PredictionEngine = {
             if (badge) { badge.textContent = highCount; badge.style.display = highCount > 0 ? 'inline-block' : 'none'; }
 
         } catch (err) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;color:#ef4444;">Error: ${Utils.esc(err.message)}. Make sure XAMPP is running and the prescription endpoint is reachable.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:#ef4444;">Error: ${Utils.esc(err.message)}. Make sure XAMPP is running and the prescription endpoint is reachable.</td></tr>`;
             statusEl.textContent = '';
         }
     },
@@ -5609,7 +5562,7 @@ const PredictionEngine = {
     renderTable: (results) => {
         const tbody = document.getElementById('predTableBody');
         if (!results.length) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:#9ca3af;">No results match your filter.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:#9ca3af;">No results match your filter.</td></tr>';
             return;
         }
 
@@ -5622,7 +5575,7 @@ const PredictionEngine = {
         tbody.innerHTML = results.map((r, i) => {
             const rs      = riskStyle[r.riskLevel] || riskStyle.LOW;
             return `
-            <tr style="border-bottom:1px solid #f3f4f6;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background=''">
+            <tr class="row-clickable" style="border-bottom:1px solid #f3f4f6;cursor:pointer;" onclick="PredictionEngine.showDetailByName('${Utils.esc(r.businessName).replace(/'/g, "\\'")}')" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background=''">
                 <td style="padding:12px 16px;color:#9ca3af;font-size:12px;">${getSanitaryPermitNoForEstablishment(r.businessName)}</td>
                 <td style="padding:12px 16px;font-weight:600;color:#111827;max-width:200px;">
                     ${Utils.esc(r.businessName)}
@@ -5634,9 +5587,6 @@ const PredictionEngine = {
                 <td style="padding:12px 16px;text-align:center;font-size:13px;font-weight:700;color:#374151;">${r.merits ?? r.totalScore ?? 0}<span style="font-weight:400;color:#9ca3af;">/100</span></td>
                 <td style="padding:12px 16px;text-align:center;font-size:12px;color:#374151;">${r.lastInspected}</td>
                 <td style="padding:12px 16px;text-align:center;font-size:12px;color:#374151;">${r.totalInspections}</td>
-                <td style="padding:12px 16px;">
-                    <button onclick="PredictionEngine.showDetailByName('${Utils.esc(r.businessName).replace(/'/g, "\\'")}')" style="font-size:11px;padding:4px 12px;border:1px solid #7c3aed;color:#7c3aed;background:#f5f3ff;border-radius:6px;cursor:pointer;">View Details</button>
-                </td>
             </tr>`;
         }).join('');
     },

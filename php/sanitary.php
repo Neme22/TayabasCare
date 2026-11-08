@@ -104,6 +104,18 @@ function createRecord() {
     if ($dateVal && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateVal)) $errors[] = 'Date must be in YYYY-MM-DD format.';
     if (!empty($errors)) { errorResponse(implode(' ', $errors), 400); return; }
 
+    // Reject duplicate establishment name (case-insensitive, trimmed)
+    try {
+        $dupe = $db->prepare("SELECT id FROM sanitary_records WHERE LOWER(TRIM(business_name)) = LOWER(?) LIMIT 1");
+        $dupe->execute([trim($input['businessName'])]);
+        if ($dupe->fetchColumn()) {
+            errorResponse('This establishment name is already used.', 409);
+            return;
+        }
+    } catch(PDOException $e) {
+        error_log('sanitary.php duplicate check error: ' . $e->getMessage());
+    }
+
     try {
         $stmt = $db->prepare("
             INSERT INTO sanitary_records 
@@ -186,6 +198,17 @@ function updateRecord() {
         $input['sex']      = $current['sex'];
         $input['remarks']  = $current['remarks'];
         $input['businessType'] = $current['business_type'];
+    }
+
+    // Reject renaming to an establishment name already used by another record
+    $newName = trim($input['businessName'] ?? '');
+    if ($newName !== '' && strtolower($newName) !== strtolower(trim($current['business_name'] ?? ''))) {
+        $dupe = $db->prepare("SELECT id FROM sanitary_records WHERE LOWER(TRIM(business_name)) = LOWER(?) AND id != ? LIMIT 1");
+        $dupe->execute([$newName, $input['id'] ?? 0]);
+        if ($dupe->fetchColumn()) {
+            errorResponse('This establishment name is already used.', 409);
+            return;
+        }
     }
 
     try {
