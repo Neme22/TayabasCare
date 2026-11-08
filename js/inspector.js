@@ -2022,6 +2022,8 @@ async function refreshAccomplishmentAutoFields() {
 }
 
 function closeAccomplishmentModal() {
+    const aErr = document.getElementById('accomplishment-form-error');
+    if (aErr) { aErr.innerHTML = ''; aErr.style.display = 'none'; }
     document.getElementById('accomplishment-modal').close();
 }
 
@@ -2037,12 +2039,26 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 async function saveAccomplishmentRecord() {
+    const showAccError = (msg) => {
+        const el = document.getElementById('accomplishment-form-error');
+        if (!el) return;
+        if (msg) {
+            el.innerHTML = `<i class="fas fa-exclamation-triangle text-red-600 text-lg mr-2"></i><span>${esc(msg)}</span>`;
+            el.style.display = 'flex';
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+            el.innerHTML = '';
+            el.style.display = 'none';
+        }
+    };
+    showAccError('');
+
     const inspector = localStorage.getItem('inspectorFullName') || localStorage.getItem('username') || document.getElementById('acc-inspector').value;
     const month     = document.getElementById('acc-month').value;
     const year      = document.getElementById('acc-year').value;
 
     if (!inspector || !month || !year) {
-        showNotification('Could not determine inspector. Please re-login.', 'error');
+        showAccError('Could not determine inspector. Please re-login.');
         return;
     }
 
@@ -2076,7 +2092,7 @@ async function saveAccomplishmentRecord() {
             showNotification(`✅ Record saved for ${inspector} — ${MONTH_NAMES[parseInt(month)]} ${year}`, 'success');
         }
     } catch (e) {
-        showNotification('Error saving record: ' + e.message, 'error');
+        showAccError('Error saving record: ' + e.message);
         return;
     }
 
@@ -2897,8 +2913,10 @@ function displayBurialRecords(type, records) {
 
 function openSanitaryModal(mode, index = null) {
     const modal = document.getElementById('sanitary-modal');
-    const formErr = document.getElementById('sanitary-form-error');
-    if (formErr) { formErr.textContent = ''; formErr.style.display = 'none'; }
+    ['sanitary-form-error', 'sanitary-form-error-bottom'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.innerHTML = ''; el.style.display = 'none'; }
+    });
     const form = document.getElementById('sanitary-form');
     const title = document.getElementById('sanitary-modal-title');
     const submitBtn = document.getElementById('sanitary-submit-btn');
@@ -3115,10 +3133,16 @@ function loadSanitaryData(id) {
 async function handleSanitarySubmit(e) {
     e.preventDefault();
     const showSanitaryFormError = (msg) => {
-        let err = document.getElementById('sanitary-form-error');
+        const err = document.getElementById('sanitary-form-error-bottom');
         if (!err) return;
-        err.textContent = msg || '';
-        err.style.display = msg ? 'block' : 'none';
+        if (msg) {
+            err.innerHTML = `<i class="fas fa-exclamation-triangle text-red-600 text-lg mr-2"></i><span>${esc(msg)}</span>`;
+            err.style.display = 'flex';
+            err.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+            err.innerHTML = '';
+            err.style.display = 'none';
+        }
     };
     showSanitaryFormError('');
 
@@ -3138,7 +3162,7 @@ async function handleSanitarySubmit(e) {
     const ownerResultStool = document.getElementById('result-stool').checked;
 
     if (!permit1 || !permit2 || !permit3 || !businessName || !barangay || !ownerFirst || !ownerLast || !ownerSex || !personnelNo || parseInt(personnelNo, 10) <= 0 || (!ownerResultXray && !ownerResultStool)) {
-        alert('Please fill in all required fields!');
+        showSanitaryFormError('Please fill in all required fields!');
         return;
     }
 
@@ -3170,7 +3194,7 @@ async function handleSanitarySubmit(e) {
     });
 
     if (!personnelValid) {
-        alert('Please fill up the details for all personnel!');
+        showSanitaryFormError('Please fill up the details for all personnel!');
         return;
     }
 
@@ -3229,12 +3253,10 @@ async function handleSanitarySubmit(e) {
         } else {
             const msg = result.message || 'Failed to save record';
             showSanitaryFormError(msg);
-            showNotification(msg, 'error');
         }
     } catch (error) {
         console.error('Error saving record:', error);
         showSanitaryFormError('Error saving record: ' + error.message);
-        showNotification('Error saving record: ' + error.message, 'error');
     }
 }
 
@@ -3247,6 +3269,10 @@ function editSanitary(index) {
 }
 
 function closeSanitaryModal() {
+    ['sanitary-form-error', 'sanitary-form-error-bottom'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.innerHTML = ''; el.style.display = 'none'; }
+    });
     document.getElementById('sanitary-modal').close();
 }
 
@@ -3450,24 +3476,38 @@ function lockSanitaryExceptResults() {
 async function handleInspectionSubmit(e) {
     e.preventDefault();
 
+    const showInspectionError = (msg) => {
+        const el = document.getElementById('inspection-form-error');
+        if (!el) return;
+        if (msg) {
+            el.innerHTML = `<i class="fas fa-exclamation-triangle text-red-600 text-lg mr-2"></i><span>${esc(msg)}</span>`;
+            el.style.display = 'flex';
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+            el.innerHTML = '';
+            el.style.display = 'none';
+        }
+    };
+    showInspectionError('');
+
     const establishment = document.getElementById('inspection-establishment').value.trim();
     const remarks = getCollectedRemarks();
     const recommendation = getCollectedRecommendations();
 
     if (!establishment) {
-        showNotification('Please enter the Establishment Name.', 'warning');
+        showInspectionError('Please enter the Establishment Name.');
         return;
     }
     if (!remarks) {
-        showNotification('Please enter the Remarks (violations found).', 'warning');
+        showInspectionError('Please enter the Remarks (violations found).');
         return;
     }
     if (!recommendation) {
-        showNotification('Please enter the Recommendation.', 'warning');
+        showInspectionError('Please enter the Recommendation.');
         return;
     }
     if (!document.getElementById('inspection-file').files[0]) {
-        showNotification('Please upload the Inspection Paper before saving.', 'warning');
+        showInspectionError('Please upload the Inspection Paper before saving.');
         return;
     }
 
@@ -3528,11 +3568,11 @@ async function handleInspectionSubmit(e) {
             });
             const dbResult = await dbResponse.json();
             if (!dbResult.success) {
-                showNotification('Error saving to database: ' + (dbResult.message || 'Unknown error'), 'error');
+                showInspectionError('Error saving to database: ' + (dbResult.message || 'Unknown error'));
                 return;
             }
         } catch (err) {
-            showNotification('Could not connect to server. Make sure XAMPP is running.', 'error');
+            showInspectionError('Could not connect to server. Make sure XAMPP is running.');
             console.error('DB save failed:', err);
             return;
         }
@@ -3561,6 +3601,8 @@ async function handleInspectionSubmit(e) {
 }
 
 function openInspectionModal() {
+    const errEl = document.getElementById('inspection-form-error');
+    if (errEl) { errEl.innerHTML = ''; errEl.style.display = 'none'; }
     document.getElementById('inspection-modal-title').innerHTML = '<i class="fas fa-file-medical mr-2"></i>Add Inspection Report';
     document.getElementById('inspection-form').reset();
     document.getElementById('inspection-preview').innerHTML = '';
@@ -3617,6 +3659,8 @@ function openInspectionModal() {
 }
 
 function closeInspectionModal() {
+    const errEl = document.getElementById('inspection-form-error');
+    if (errEl) { errEl.innerHTML = ''; errEl.style.display = 'none'; }
     document.getElementById('inspection-modal').close();
     document.getElementById('inspection-form').reset();
     // Restore establishment field if it was locked
@@ -3885,41 +3929,41 @@ function viewInspectionReportById(id) {
     const modal = document.createElement('dialog');
     modal.className = 'modal';
     modal.innerHTML = `
-        <div class="modal-box max-w-2xl">
-            <div class="sticky top-0 z-10 bg-white flex items-center justify-between pb-2">
-                <h3 class="font-bold text-2xl text-emerald-700 mb-0">
+        <div class="modal-box max-w-2xl p-0">
+            <div class="sticky top-0 z-10 bg-white flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                <h3 class="font-bold text-xl text-emerald-700 mb-0 flex items-center">
                     <i class="fas fa-file-alt mr-2"></i>Inspection Report
                 </h3>
                 <button type="button" class="btn btn-sm btn-circle btn-ghost text-gray-500 hover:text-red-500" onclick="this.closest('dialog').remove()" data-testid="view-inspection-close">✕</button>
             </div>
-            <div class="space-y-4">
+            <div class="p-6 space-y-4">
                 <div>
-                    <label class="font-semibold text-gray-700">Establishment:</label>
-                    <p class="text-gray-600">${esc(report.establishment) || 'N/A'}</p>
+                    <label class="font-semibold text-gray-700 text-sm">Establishment:</label>
+                    <p class="text-gray-900 font-medium text-base">${esc(report.establishment) || 'N/A'}</p>
                 </div>
                 <div>
-                    <label class="font-semibold text-gray-700">Location:</label>
-                    <p class="text-gray-600">${esc(report.location) || 'N/A'}</p>
+                    <label class="font-semibold text-gray-700 text-sm">Location:</label>
+                    <p class="text-gray-900 font-medium text-base">${esc(report.location) || 'N/A'}</p>
                 </div>
                 <div>
-                    <label class="font-semibold text-gray-700">Inspector:</label>
-                    <p class="text-gray-600">${esc(report.inspector) || 'N/A'}</p>
+                    <label class="font-semibold text-gray-700 text-sm">Inspector:</label>
+                    <p class="text-gray-900 font-medium text-base">${esc(report.inspector) || 'N/A'}</p>
                 </div>
                 <div>
-                    <label class="font-semibold text-gray-700">Date:</label>
-                    <p class="text-gray-600">${dateStr}</p>
+                    <label class="font-semibold text-gray-700 text-sm">Date:</label>
+                    <p class="text-gray-900 font-medium text-base">${dateStr}</p>
                 </div>
                 <div>
-                    <label class="font-semibold text-gray-700">Remarks:</label>
-                    <p class="text-gray-600 whitespace-pre-wrap">${esc(report.remarks) || 'N/A'}</p>
+                    <label class="font-semibold text-gray-700 text-sm">Remarks:</label>
+                    <p class="text-gray-800 whitespace-pre-wrap">${esc(report.remarks) || 'N/A'}</p>
                 </div>
                 <div>
-                    <label class="font-semibold text-gray-700">Recommendation:</label>
-                    <p class="text-gray-600 whitespace-pre-wrap">${esc(report.recommendation) || 'N/A'}</p>
+                    <label class="font-semibold text-gray-700 text-sm">Recommendation:</label>
+                    <p class="text-gray-800 whitespace-pre-wrap">${esc(report.recommendation) || 'N/A'}</p>
                 </div>
                 ${report.filePath ? `
                 <div>
-                    <label class="font-semibold text-gray-700">Attached File:</label>
+                    <label class="font-semibold text-gray-700 text-sm">Attached File:</label>
                     <div class="mt-1">
                         <div onclick="openFileViewer('${esc(report.filePath)}', '${esc(report.file)}')" class="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 transition-colors cursor-pointer group shadow-sm" title="Click to view file">
                             <i class="fas ${report.file && report.file.toLowerCase().includes('.pdf') ? 'fa-file-pdf text-red-500' : 'fa-file-image text-blue-500'} text-lg"></i>
@@ -3929,11 +3973,11 @@ function viewInspectionReportById(id) {
                 </div>
                 ` : report.file ? `
                 <div>
-                    <label class="font-semibold text-gray-700">Attached File:</label>
+                    <label class="font-semibold text-gray-700 text-sm">Attached File:</label>
                     <p class="text-gray-600">${esc(report.file)} <span class="text-xs text-gray-400">(file unavailable)</span></p>
                 </div>
                 ` : ''}
-                <div class="form-control border rounded-lg p-3 bg-emerald-50">
+                <div class="form-control border border-emerald-200 rounded-lg p-3 bg-emerald-50">
                     <label class="label cursor-pointer justify-start gap-3">
                         <input type="checkbox" class="checkbox checkbox-success" id="view-complied-check-${id}"
                                ${isComplied ? 'checked' : ''} />
@@ -3942,7 +3986,7 @@ function viewInspectionReportById(id) {
                     <p class="text-xs text-gray-500 mt-1 ml-1">Check or uncheck to update compliance status, then click Save.</p>
                 </div>
             </div>
-            <div class="modal-action">
+            <div class="modal-action px-6 pb-6 pt-0 mt-0">
                 <button class="btn btn-warning text-white" onclick="this.closest('dialog').remove(); editInspectionReportById(${id})" data-testid="view-inspection-edit">
                     <i class="fas fa-edit mr-2"></i>Re-Inspect
                 </button>
@@ -4096,27 +4140,41 @@ function editInspectionReportById(id) {
     form.onsubmit = async function(e) {
         e.preventDefault();
 
+        const showReInspectionError = (msg) => {
+            const el = document.getElementById('inspection-form-error');
+            if (!el) return;
+            if (msg) {
+                el.innerHTML = `<i class="fas fa-exclamation-triangle text-red-600 text-lg mr-2"></i><span>${esc(msg)}</span>`;
+                el.style.display = 'flex';
+                el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } else {
+                el.innerHTML = '';
+                el.style.display = 'none';
+            }
+        };
+        showReInspectionError('');
+
         const newRemarks = getCollectedRemarks();
         const newRecommendation = getCollectedRecommendations();
         const deadline = document.getElementById('inspection-deadline').value;
 
         if (!newRemarks) {
-            showNotification('Please select or enter Remarks for the new inspection.', 'warning');
+            showReInspectionError('Please select or enter Remarks for the new inspection.');
             return;
         }
         if (!newRecommendation) {
-            showNotification('Please select or enter a Recommendation.', 'warning');
+            showReInspectionError('Please select or enter a Recommendation.');
             return;
         }
         if (!deadline) {
-            showNotification('Please set a Compliance Deadline date.', 'warning');
+            showReInspectionError('Please set a Compliance Deadline date.');
             return;
         }
 
         const newFileInput = document.getElementById('inspection-file');
         const newFileObj = newFileInput && newFileInput.files[0];
         if (!newFileObj) {
-            showNotification('Please upload the Inspection Paper before saving.', 'warning');
+            showReInspectionError('Please upload the Inspection Paper before saving.');
             return;
         }
 
@@ -4153,11 +4211,11 @@ function editInspectionReportById(id) {
                     );
                 }
             } else {
-                showNotification('Error: ' + (result.message || 'Unknown error'), 'error');
+                showReInspectionError('Error: ' + (result.message || 'Unknown error'));
                 return;
             }
         } catch (err) {
-            showNotification('Could not connect to server. Is XAMPP running?', 'error');
+            showReInspectionError('Could not connect to server. Is XAMPP running?');
             console.error(err);
             return;
         }
@@ -4235,30 +4293,35 @@ async function viewInspectionHistory(id) {
     const modal = document.createElement('dialog');
     modal.className = 'modal';
     modal.innerHTML = `
-        <div class="modal-box max-w-4xl">
-            <h3 class="font-bold text-2xl text-emerald-700 mb-1">
-                <i class="fas fa-history mr-2"></i>Inspection History
-            </h3>
-            <p class="text-gray-500 mb-4 text-sm">Past inspections for <strong>${esc(estabName)}</strong></p>
-            <div class="overflow-x-auto">
-                <table class="table table-zebra w-full text-sm">
-                    <thead class="bg-emerald-100">
-                        <tr>
-                            <th>#</th>
-                            <th>Inspection Date</th>
-                            <th>Remarks</th>
-                            <th>Recommendation</th>
-                            <th>Status</th>
-                            <th>Inspector</th>
-                            <th>File</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${historyRows}
-                    </tbody>
-                </table>
+        <div class="modal-box max-w-4xl p-0">
+            <div class="sticky top-0 z-10 bg-white flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                <h3 class="font-bold text-xl text-emerald-700 mb-0 flex items-center">
+                    <i class="fas fa-history mr-2"></i>Inspection History
+                </h3>
+                <button type="button" class="btn btn-sm btn-circle btn-ghost text-gray-500 hover:text-red-500" onclick="this.closest('dialog').remove()">✕</button>
             </div>
-            <div class="modal-action">
+            <div class="p-6">
+                <p class="text-gray-500 mb-4 text-sm">Past inspections for <strong>${esc(estabName)}</strong></p>
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra w-full text-sm">
+                        <thead class="bg-emerald-100">
+                            <tr>
+                                <th>#</th>
+                                <th>Inspection Date</th>
+                                <th>Remarks</th>
+                                <th>Recommendation</th>
+                                <th>Status</th>
+                                <th>Inspector</th>
+                                <th>File</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${historyRows}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-action px-6 pb-6 pt-0 mt-0">
                 <button class="btn btn-ghost" onclick="this.closest('dialog').remove()">Close</button>
             </div>
         </div>
@@ -4281,17 +4344,17 @@ function viewInspectionReport(index) {
     const modal = document.createElement('dialog');
     modal.className = 'modal';
     modal.innerHTML = `
-        <div class="modal-box max-w-2xl">
-            <div class="sticky top-0 z-10 bg-white flex items-center justify-between pb-2">
-                <h3 class="font-bold text-2xl text-emerald-700 mb-0">
+        <div class="modal-box max-w-2xl p-0">
+            <div class="sticky top-0 z-10 bg-white flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                <h3 class="font-bold text-xl text-emerald-700 mb-0 flex items-center">
                     <i class="fas fa-file-alt mr-2"></i>Inspection Report
                 </h3>
                 <button type="button" class="btn btn-sm btn-circle btn-ghost text-gray-500 hover:text-red-500" onclick="this.closest('dialog').remove()" data-testid="view-inspection-close">✕</button>
             </div>
-            <div class="space-y-4">
+            <div class="p-6 space-y-4">
                 <div>
-                    <label class="font-semibold text-gray-700">Date:</label>
-                    <p class="text-gray-600">${new Date(report.date).toLocaleString('en-US', {
+                    <label class="font-semibold text-gray-700 text-sm">Date:</label>
+                    <p class="text-gray-900 font-medium text-base">${new Date(report.date).toLocaleString('en-US', {
                         year: 'numeric',
                         month: 'long',
                         day: 'numeric',
@@ -4300,12 +4363,12 @@ function viewInspectionReport(index) {
                     })}</p>
                 </div>
                 <div>
-                    <label class="font-semibold text-gray-700">Recommendation:</label>
-                    <p class="text-gray-600 whitespace-pre-wrap">${esc(report.recommendation) || 'N/A'}</p>
+                    <label class="font-semibold text-gray-700 text-sm">Recommendation:</label>
+                    <p class="text-gray-800 whitespace-pre-wrap">${esc(report.recommendation) || 'N/A'}</p>
                 </div>
                 <div>
-                    <label class="font-semibold text-gray-700">Compliance Status:</label>
-                    <p>
+                    <label class="font-semibold text-gray-700 text-sm">Compliance Status:</label>
+                    <p class="mt-1">
                         <span class="badge ${report.complied ? 'badge-success' : 'badge-warning'} badge-lg">
                             ${report.complied ? '✓ Complied' : '⚠ Not Complied'}
                         </span>
@@ -4313,7 +4376,7 @@ function viewInspectionReport(index) {
                 </div>
                 ${report.filePath ? `
                 <div>
-                    <label class="font-semibold text-gray-700">Attached File:</label>
+                    <label class="font-semibold text-gray-700 text-sm">Attached File:</label>
                     <div class="mt-1">
                         <div onclick="openFileViewer('${esc(report.filePath)}', '${esc(report.file)}')" class="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 transition-colors cursor-pointer group shadow-sm" title="Click to view file">
                             <i class="fas ${report.file && report.file.toLowerCase().includes('.pdf') ? 'fa-file-pdf text-red-500' : 'fa-file-image text-blue-500'} text-lg"></i>
@@ -4323,13 +4386,13 @@ function viewInspectionReport(index) {
                 </div>
                 ` : report.file ? `
                 <div>
-                    <label class="font-semibold text-gray-700">Attached File:</label>
+                    <label class="font-semibold text-gray-700 text-sm">Attached File:</label>
                     <p class="text-gray-600">${esc(report.file)} <span class="text-xs text-gray-400">(file unavailable)</span></p>
                 </div>
                 ` : ''}
             </div>
             
-            <div class="modal-action">
+            <div class="modal-action px-6 pb-6 pt-0 mt-0">
                 <button class="btn btn-success text-white" onclick="printInspectionReport(${index})">
                     <i class="fas fa-print mr-2"></i>Print
                 </button>
@@ -4512,6 +4575,8 @@ async function loadBurialRecords(type) {
 }
 
 function openBurialModal(mode, type, id = null) {
+    const bErr = document.getElementById('burial-form-error');
+    if (bErr) { bErr.innerHTML = ''; bErr.style.display = 'none'; }
     const modal = document.getElementById('burial-modal');
     const form = document.getElementById('burial-form');
     const title = document.getElementById('burial-modal-title');
@@ -4872,6 +4937,20 @@ function loadBurialData(type, index) {
 async function handleBurialSubmit(e) {
     e.preventDefault();
 
+    const showBurialError = (msg) => {
+        const el = document.getElementById('burial-form-error');
+        if (!el) return;
+        if (msg) {
+            el.innerHTML = `<i class="fas fa-exclamation-triangle text-red-600 text-lg mr-2"></i><span>${esc(msg)}</span>`;
+            el.style.display = 'flex';
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+            el.innerHTML = '';
+            el.style.display = 'none';
+        }
+    };
+    showBurialError('');
+
     const mode = document.getElementById('burial-mode').value;
     const type = document.getElementById('burial-type').value;
     const burialId = document.getElementById('burial-id').value;
@@ -4880,7 +4959,7 @@ async function handleBurialSubmit(e) {
     // Sex is required — it drives the M/F split in the monthly accomplishment
     const sex = (document.getElementById('burial-sex') || { value: '' }).value;
     if (!sex) {
-        showNotification('Please select the Sex of the Deceased.', 'error');
+        showBurialError('Please select the Sex of the Deceased.');
         return;
     }
 
@@ -4888,14 +4967,15 @@ async function handleBurialSubmit(e) {
     if (mode === 'add') {
         const fileInput = document.getElementById('burial-death-cert');
         if (!fileInput || !fileInput.files || !fileInput.files[0]) {
-            showNotification('Death Certificate is required.', 'error');
+            showBurialError('Death Certificate is required.');
             return;
         }
         const requiredIds = ['burial-death-place', 'burial-age', 'burial-cause-of-death', 'burial-informant'];
         for (const rid of requiredIds) {
             const el = document.getElementById(rid);
             if (!el || !(el.value || '').trim()) {
-                showNotification('Please fill in all required fields (Place of Death, Age, Cause of Death, Name of Informant).', 'error');
+                const msg = 'Please fill in all required fields (Place of Death, Age, Cause of Death, Name of Informant).';
+                showBurialError(msg);
                 el && el.focus();
                 return;
             }
@@ -4970,7 +5050,7 @@ async function handleBurialSubmit(e) {
         const result = await response.json();
 
         if (result.success) {
-            document.getElementById('burial-modal').close();
+            closeBurialModal();
 
             // CRITICAL: Refresh the specific table where the record belongs
             await loadBurialRecords(type);
@@ -4979,11 +5059,12 @@ async function handleBurialSubmit(e) {
             showNotification(`${type.charAt(0).toUpperCase() + type.slice(1)} record saved!`, 'success');
             localStorage.removeItem(FormDrafts.KEYS.burial);
         } else {
-            alert('Server Error: ' + result.message);
+            const msg = result.message || 'Failed to save burial record';
+            showBurialError('Server Error: ' + msg);
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('Failed to save. Check your connection.');
+        showBurialError('Failed to save. Check your connection: ' + error.message);
     }
 
 }
@@ -5003,6 +5084,8 @@ function enableBurialEditFromView() {
 }
 
 function closeBurialModal() {
+    const bErr = document.getElementById('burial-form-error');
+    if (bErr) { bErr.innerHTML = ''; bErr.style.display = 'none'; }
     clearBurialViewLabels();
     const certPreview = document.getElementById('burial-cert-preview');
     if (certPreview) certPreview.innerHTML = '';
@@ -5534,6 +5617,13 @@ function formatDate(dateString) {
 }
 
 function showNotification(message, type = 'success') {
+    // If a modal dialog is currently open, do not show error/warning toast outside the modal
+    // because warnings must be displayed directly inside the modal itself.
+    const openDialog = document.querySelector('dialog[open], #file-viewer-modal[open]');
+    if (openDialog && (type === 'error' || type === 'warning')) {
+        return;
+    }
+
     // Remove any existing notifications
     const existingToasts = document.querySelectorAll('.toast-notification');
     existingToasts.forEach(t => t.remove());
@@ -5828,6 +5918,8 @@ function openChangePasswordModal() {
 
 // Close Change Password Modal
 function closeChangePasswordModal() {
+    const pErr = document.getElementById('change-password-error');
+    if (pErr) { pErr.innerHTML = ''; pErr.style.display = 'none'; }
     const modal = document.getElementById('change-password-modal');
     modal.close();
     document.getElementById('change-password-form').reset();
@@ -5853,25 +5945,39 @@ function togglePasswordVisibility(inputId) {
 async function handleChangePassword(e) {
     e.preventDefault();
     
+    const showPwErr = (msg) => {
+        const el = document.getElementById('change-password-error');
+        if (!el) { showNotification(msg, 'error'); return; }
+        if (msg) {
+            el.innerHTML = `<i class="fas fa-exclamation-triangle text-red-600 text-lg mr-2"></i><span>${esc(msg)}</span>`;
+            el.style.display = 'flex';
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+            el.innerHTML = '';
+            el.style.display = 'none';
+        }
+    };
+    showPwErr('');
+
     const currentPassword = document.getElementById('current-password').value;
     const newPassword = document.getElementById('new-password').value;
     const confirmPassword = document.getElementById('confirm-password').value;
     
     // Validate passwords match
     if (newPassword !== confirmPassword) {
-        alert('New password and confirm password do not match!');
+        showPwErr('New password and confirm password do not match!');
         return;
     }
     
     // Validate password length
     if (newPassword.length < 6) {
-        alert('Password must be at least 6 characters long!');
+        showPwErr('Password must be at least 6 characters long!');
         return;
     }
     
     // Validate new password is different from current
     if (currentPassword === newPassword) {
-        alert('New password must be different from current password!');
+        showPwErr('New password must be different from current password!');
         return;
     }
     
@@ -5881,7 +5987,7 @@ async function handleChangePassword(e) {
             headers: {
                 'Content-Type': 'application/json',
             },
-            credentials: 'include', // ADD THIS LINE - Important for sending session cookies
+            credentials: 'include',
             body: JSON.stringify({
                 currentPassword: currentPassword,
                 newPassword: newPassword
@@ -5891,8 +5997,8 @@ async function handleChangePassword(e) {
         const result = await response.json();
         
         if (result.success) {
-            showNotification('Password changed successfully!', 'success');
             closeChangePasswordModal();
+            showNotification('Password changed successfully!', 'success');
             
             // Optional: Auto logout after password change
             setTimeout(() => {
@@ -5902,11 +6008,11 @@ async function handleChangePassword(e) {
                 }, 2000);
             }, 1500);
         } else {
-            alert('Error: ' + (result.message || 'Failed to change password'));
+            showPwErr(result.message || 'Failed to change password');
         }
     } catch (error) {
         console.error('Error changing password:', error);
-        alert('Error changing password. Please try again.');
+        showPwErr('Error changing password. Please try again.');
     }
 }
 

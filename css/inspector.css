@@ -840,9 +840,16 @@ body {
 }
 
 .modal-box {
-    border-radius: var(--insp-radius-lg);
+    border-radius: 14px;
     animation: modalSlideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.25);
+    max-height: 88vh;
+    padding: 1.5rem;
+    overflow-y: auto;
+}
+
+.modal-box.p-0 {
+    padding: 0 !important;
 }
 
 @keyframes modalSlideIn {
@@ -3185,6 +3192,38 @@ select:valid {
     line-height: 1.2;
 }
 
-/* Modal: sticky header/X + single scrollbar */
-.modal-box > :first-child { position: sticky; top: 0; z-index: 30; background: #fff; }
-.modal-box .overflow-y-auto { overflow-y: visible !important; max-height: none !important; }
+/* Modal: single scrollbar + sticky header/X */
+.modal-box > .modal-header,
+.modal-box > .sticky:first-child,
+.modal-box > [class*="sticky"]:first-child {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: #ffffff;
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
+}
+.modal-box > .modal-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 30;
+    background: #ffffff;
+    border-bottom-left-radius: 14px;
+    border-bottom-right-radius: 14px;
+}
+
+/* Prevent double scrollbar by locking background body scroll when any modal is open */
+body:has(dialog.modal[open]),
+body:has(#file-viewer-modal[open]) {
+    overflow: hidden !important;
+}
+
+/* Forcefully suppress any toasts outside the modal while any modal is open */
+body:has(dialog.modal[open]) #toast,
+body:has(dialog.modal[open]) .toast-notification,
+body:has(dialog.modal[open]) #notification-container,
+body:has(#file-viewer-modal[open]) #toast,
+body:has(#file-viewer-modal[open]) .toast-notification,
+body:has(#file-viewer-modal[open]) #notification-container {
+    display: none !important;
+}

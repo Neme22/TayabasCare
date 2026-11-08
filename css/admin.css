@@ -568,14 +568,21 @@ dialog.modal[open] {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 24px;
+    padding: 16px 24px;
     border-bottom: 1px solid #E5E7EB;
+    position: sticky;
+    top: 0;
+    background: #ffffff;
+    z-index: 30;
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
 }
 
 .modal-header h3 {
-    font-size: 20px;
+    font-size: 1.25rem;
     font-weight: 700;
     color: #1F2937;
+    margin: 0;
 }
 
 .modal-close {
@@ -584,30 +591,36 @@ dialog.modal[open] {
     border: none;
     background-color: #F3F4F6;
     color: #6B7280;
-    border-radius: 6px;
+    border-radius: 8px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 0.2s;
-    font-size: 18px;
+    transition: all 0.15s ease-in-out;
+    font-size: 15px;
 }
 
 .modal-close:hover {
-    background-color: #E5E7EB;
-    color: #1F2937;
+    background-color: #FEE2E2;
+    color: #EF4444;
 }
 
 .modal-body {
-    padding: 24px;
+    padding: 20px 24px;
 }
 
 .modal-footer {
     display: flex;
     justify-content: flex-end;
     gap: 12px;
-    padding: 20px 24px;
+    padding: 14px 24px;
     border-top: 1px solid #E5E7EB;
+    position: sticky;
+    bottom: 0;
+    background: #ffffff;
+    z-index: 30;
+    border-bottom-left-radius: 14px;
+    border-bottom-right-radius: 14px;
 }
 
 /* Form Styles */
@@ -1585,15 +1598,19 @@ dialog.modal::backdrop {
     position: relative;
     background-color: #ffffff !important;
     color: #111827 !important;
-    border-radius: 1rem;
-    padding: 2rem;
+    border-radius: 14px !important;
+    padding: 1.5rem;
     max-width: 48rem;
     width: 90%;
-    max-height: 90vh;
+    max-height: 88vh;
     overflow-y: auto;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.3);
     z-index: 1000000;
     margin: auto;
+}
+
+.modal-box.p-0 {
+    padding: 0 !important;
 }
 
 .modal-box.max-w-2xl {
@@ -3186,5 +3203,38 @@ dialog.modal::backdrop {
 }
 
 /* Modal: single scrollbar + sticky header/X */
-.modal-box > :first-child { position: sticky; top: 0; z-index: 30; background: #fff; }
-.modal-box .overflow-y-auto { overflow-y: visible !important; max-height: none !important; }
+.modal-box > .modal-header,
+.modal-box > .sticky:first-child,
+.modal-box > [class*="sticky"]:first-child {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: #ffffff;
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
+}
+.modal-box > .modal-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 30;
+    background: #ffffff;
+    border-bottom-left-radius: 14px;
+    border-bottom-right-radius: 14px;
+}
+
+/* Prevent double scrollbar by locking background body scroll when any modal is open */
+body:has(dialog.modal[open]),
+body:has(#predDetailModal),
+body:has(#estabTrendModal) {
+    overflow: hidden !important;
+}
+
+/* Forcefully suppress any toasts outside the modal while any modal is open */
+body:has(dialog.modal[open]) #toast,
+body:has(dialog.modal[open]) .toast-notification,
+body:has(#predDetailModal) #toast,
+body:has(#predDetailModal) .toast-notification,
+body:has(#estabTrendModal) #toast,
+body:has(#estabTrendModal) .toast-notification {
+    display: none !important;
+}

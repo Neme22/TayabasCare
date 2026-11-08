@@ -256,3 +256,52 @@ function calculateRiskScore($businessName, $inspections, $sanitaryRecord) {
         'lastInspected'    => $lastInspDate ? $lastInspDate->format('M j, Y') : 'Never',
     ];
 }
+
+/**
+ * Returns a lookup index of all establishment names and permits that are currently archived.
+ * Any establishment or permit present here is omitted from active prescription / alerts / pattern analysis.
+ */
+function getArchivedEstablishmentIndex(PDO $db): array {
+    $archived = [
+        'names'   => [],
+        'permits' => [],
+        'ids'     => []
+    ];
+    try {
+        $stmt = $db->query("SELECT data_json, archive_type FROM archive_data WHERE archive_type IN ('sanitary', 'report', 'reports')");
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $raw = $row['data_json'] ?? '';
+            if (function_exists('decryptField')) {
+                $raw = decryptField($raw, 'archive_data.data_json');
+            }
+            $data = json_decode($raw, true);
+            if (!is_array($data)) continue;
+
+            if (!empty($data['id'])) {
+                $archived['ids'][(int)$data['id']] = true;
+            }
+            if (!empty($data['business_name'])) {
+                $archived['names'][strtolower(trim($data['business_name']))] = true;
+            }
+            if (!empty($data['establishment'])) {
+                $archived['names'][strtolower(trim($data['establishment']))] = true;
+            }
+            if (!empty($data['permit_no'])) {
+                $archived['permits'][strtolower(trim($data['permit_no']))] = true;
+            }
+        }
+    } catch (PDOException $e) {
+        error_log('getArchivedEstablishmentIndex error: ' . $e->getMessage());
+    }
+    return $archived;
+}
+
+/**
+ * Check whether an establishment is currently archived in archive_data.
+ */
+function isEstablishmentArchived(?string $name, ?string $permit, array $archivedIndex, ?int $id = null): bool {
+    if ($id && isset($archivedIndex['ids'][$id])) return true;
+    if ($name && isset($archivedIndex['names'][strtolower(trim($name))])) return true;
+    if ($permit && isset($archivedIndex['permits'][strtolower(trim($permit))])) return true;
+    return false;
+}

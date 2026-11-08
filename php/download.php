@@ -40,11 +40,15 @@ $isAdmin = (($_SESSION['role'] ?? '') === 'admin');
 if (!$isAdmin) {
     $owned = false;
     foreach (['inspection_reports', 'inspection_history', 'burial_records'] as $tbl) {
-        $stmt = $db->prepare("SELECT 1 FROM `{$tbl}` WHERE file_path = ? LIMIT 1");
-        $stmt->execute([$path]);
-        if ($stmt->fetch()) {
-            $owned = true;
-            break;
+        try {
+            $stmt = $db->prepare("SELECT 1 FROM `{$tbl}` WHERE BINARY file_path = ? LIMIT 1");
+            $stmt->execute([$path]);
+            if ($stmt->fetch()) {
+                $owned = true;
+                break;
+            }
+        } catch (Throwable $e) {
+            error_log("download.php ownership check error on {$tbl}: " . $e->getMessage());
         }
     }
     if (!$owned) {
@@ -75,7 +79,7 @@ $safeName = preg_replace('/[^\w.\-]/', '_', $displayBase);
 $origName = null;
 foreach (['inspection_reports', 'inspection_history', 'burial_records'] as $tbl) {
     try {
-        $nameStmt = $db->prepare("SELECT file_name FROM `{$tbl}` WHERE file_path = ? AND file_name IS NOT NULL AND file_name <> '' LIMIT 1");
+        $nameStmt = $db->prepare("SELECT file_name FROM `{$tbl}` WHERE BINARY file_path = ? AND file_name IS NOT NULL AND file_name <> '' LIMIT 1");
         $nameStmt->execute([$path]);
         $n = $nameStmt->fetchColumn();
         if ($n) {
@@ -83,7 +87,7 @@ foreach (['inspection_reports', 'inspection_history', 'burial_records'] as $tbl)
             $origName = $dec['file_name'] ?? $n;
             break;
         }
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         // ignore and continue
     }
 }

@@ -193,6 +193,7 @@ function generateViolationThresholdAlerts($db, &$alerts) {
     $VIOLATION_THRESHOLD = 3;
 
     $records = $db->query("SELECT * FROM sanitary_records ORDER BY created_at DESC")->fetchAll();
+    $archivedIndex = getArchivedEstablishmentIndex($db);
     $liveInspections = $db->query("SELECT * FROM inspection_reports ORDER BY report_date ASC")->fetchAll();
     $historyInspections = $db->query("SELECT * FROM inspection_history ORDER BY report_date ASC")->fetchAll();
     $allInspections = array_merge($liveInspections, $historyInspections);
@@ -204,7 +205,11 @@ function generateViolationThresholdAlerts($db, &$alerts) {
 
     $seen = [];
     foreach ($records as $record) {
-        $name = $record['business_name'];
+        $record = decryptRow('sanitary_records', $record);
+        $name = trim($record['business_name'] ?? '');
+        $permit = trim($record['permit_no'] ?? '');
+        $recId = (int)($record['id'] ?? 0);
+        if (isEstablishmentArchived($name, $permit, $archivedIndex, $recId)) continue;
         if (isset($seen[$name])) continue;
         $seen[$name] = true;
 
@@ -286,13 +291,18 @@ function generateOverdueFollowupAlerts($db, &$alerts) {
 // ---- High-Risk Establishment Alerts ----
 function generateHighRiskAlerts($db, &$alerts) {
     $records = $db->query("SELECT * FROM sanitary_records ORDER BY created_at DESC")->fetchAll();
+    $archivedIndex = getArchivedEstablishmentIndex($db);
     $liveInspections = $db->query("SELECT * FROM inspection_reports ORDER BY report_date ASC")->fetchAll();
     $historyInspections = $db->query("SELECT * FROM inspection_history ORDER BY report_date ASC")->fetchAll();
     $allInspections = array_merge($liveInspections, $historyInspections);
 
     $seen = [];
     foreach ($records as $record) {
-        $name = $record['business_name'];
+        $record = decryptRow('sanitary_records', $record);
+        $name = trim($record['business_name'] ?? '');
+        $permit = trim($record['permit_no'] ?? '');
+        $recId = (int)($record['id'] ?? 0);
+        if (isEstablishmentArchived($name, $permit, $archivedIndex, $recId)) continue;
         if (isset($seen[$name])) continue;
         $seen[$name] = true;
 

@@ -239,6 +239,11 @@ const Utils = {
     },
 
     showToast: (message, type = 'success') => {
+        // If a modal dialog is currently open, do not show error/warning toast outside the modal
+        const openDialog = document.querySelector('dialog[open], #predDetailModal, #file-viewer-modal[open], #estabTrendModal');
+        if (openDialog && (type === 'error' || type === 'warning')) {
+            return;
+        }
         Utils._renderToast(message, type);
     },
 
@@ -1602,7 +1607,7 @@ const VHModal = {
                         display:flex; align-items:center; justify-content:center;
                     "><i class="fas fa-times"></i></button>
                 </div>
-                <div id="vh-modal-body" style="padding: 24px; max-height: 70vh; overflow-y: auto;">
+                <div id="vh-modal-body" style="padding: 24px;">
                     <div style="display:flex; align-items:center; justify-content:center; padding:40px;">
                         <i class="fas fa-spinner fa-spin" style="color:#10b981; font-size:24px; margin-right:10px;"></i>
                         <span style="color:#6b7280; font-size:15px;">Loading history...</span>
@@ -1858,7 +1863,7 @@ const SanitaryManager = {
                 </button>
             </div>
 
-            <div class="modal-body" style="max-height:65vh; overflow-y:auto;">
+            <div class="modal-body">
 
                 <div>
                     <div class="detail-section">
@@ -2520,9 +2525,7 @@ const ReportsManager = {
                 </div>
                 <div class="detail-section">
                     <h4>Recommendations</h4>
-                    <div style="max-height:200px;overflow-y:auto;">
-                        <p style="font-size: 14px; color: #374151;">${Utils.esc(report.recommendation) || 'N/A'}</p>
-                    </div>
+                    <p style="font-size: 14px; color: #374151;">${Utils.esc(report.recommendation) || 'N/A'}</p>
                 </div>
                 ${report.filePath ? `
                 <div class="detail-section">
@@ -4323,6 +4326,8 @@ function openChangePasswordModal() {
 }
 
 function closeChangePasswordModal() {
+    const pErr = document.getElementById('change-password-error');
+    if (pErr) { pErr.innerHTML = ''; pErr.style.display = 'none'; }
     const modal = document.getElementById('change-password-modal');
     modal.close();
     document.getElementById('change-password-form').reset();
@@ -4348,25 +4353,39 @@ function togglePasswordVisibility(inputId) {
 async function handleChangePassword(e) {
     e.preventDefault();
     
+    const showPwErr = (msg) => {
+        const el = document.getElementById('change-password-error');
+        if (!el) { Utils.showToast(msg, 'error'); return; }
+        if (msg) {
+            el.innerHTML = `<i class="fas fa-exclamation-triangle text-red-600 text-lg mr-2"></i><span>${Utils.esc(msg)}</span>`;
+            el.style.display = 'flex';
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+            el.innerHTML = '';
+            el.style.display = 'none';
+        }
+    };
+    showPwErr('');
+
     const currentPassword = document.getElementById('current-password').value;
     const newPassword = document.getElementById('new-password').value;
     const confirmPassword = document.getElementById('confirm-password').value;
     
     // Validate passwords match
     if (newPassword !== confirmPassword) {
-        Utils.showToast('New password and confirm password do not match!', 'error');
+        showPwErr('New password and confirm password do not match!');
         return;
     }
     
     // Validate password length
     if (newPassword.length < 6) {
-        Utils.showToast('Password must be at least 6 characters long!', 'error');
+        showPwErr('Password must be at least 6 characters long!');
         return;
     }
     
     // Validate new password is different from current
     if (currentPassword === newPassword) {
-        Utils.showToast('New password must be different from current password!', 'error');
+        showPwErr('New password must be different from current password!');
         return;
     }
     
@@ -4385,8 +4404,8 @@ async function handleChangePassword(e) {
         const result = await response.json();
         
         if (result.success) {
-            Utils.showToast('Password changed successfully!', 'success');
             closeChangePasswordModal();
+            Utils.showToast('Password changed successfully!', 'success');
             
             // Optional: Auto logout after password change
             setTimeout(() => {
@@ -4396,11 +4415,11 @@ async function handleChangePassword(e) {
                 }, 2000);
             }, 1500);
         } else {
-            Utils.showToast('Error: ' + (result.message || 'Failed to change password'), 'error');
+            showPwErr(result.message || 'Failed to change password');
         }
     } catch (error) {
         console.error('Error changing password:', error);
-        Utils.showToast('Error changing password. Please try again.', 'error');
+        showPwErr('Error changing password. Please try again.');
     }
 }
 
@@ -5637,75 +5656,100 @@ const PredictionEngine = {
         // Create modal overlay
         const modal = document.createElement('div');
         modal.id = 'predDetailModal';
-        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:40px 0;';
+        modal.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;background:rgba(0,0,0,0.5);backdrop-filter:blur(2px);z-index:9999;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:20px;box-sizing:border-box;';
+
+        const closeModal = () => {
+            document.body.style.overflow = '';
+            document.removeEventListener('keydown', escHandler);
+            modal.remove();
+        };
+        const escHandler = (e) => {
+            if (e.key === 'Escape') closeModal();
+        };
+        document.addEventListener('keydown', escHandler);
+
         modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.remove();
+            if (e.target === modal) closeModal();
         });
 
         modal.innerHTML = `
-            <div style="background:#fff;border-radius:16px;padding:28px;width:92%;max-width:900px;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative;margin-bottom:40px;">
-                <button onclick="document.getElementById('predDetailModal')?.remove()" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;">&times;</button>
-                <h3 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 18px;">${Utils.esc(r.businessName)} &nbsp;<span style="font-size:15px;padding:5px 14px;border-radius:999px;background:${riskBg};color:${riskColor};font-weight:700;">${r.riskLevel} RISK</span></h3>
-                <div style="margin:0 0 18px;padding:14px 16px;background:#f9fafb;border-radius:10px;">
-                    <h4 style="font-size:13px;font-weight:700;color:#6b7280;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.5px;">Merit Score</h4>
-                    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-                        <div style="font-size:28px;font-weight:800;color:${meritColor};">${merits}<span style="font-size:16px;font-weight:600;color:#9ca3af;">/100</span></div>
-                        <div style="font-size:14px;color:#374151;line-height:1.6;">
-                            <strong>${demerits}</strong> demerits · <strong>${openCount}</strong> open violation${openCount === 1 ? '' : 's'}<br>
-                            <span style="color:#6b7280;font-size:13px;">${merits === 100 ? 'LOW — perfect merits' : merits >= 65 ? 'MODERATE — 99–65 merits' : 'HIGH — 64 or below merits'}</span>
-                        </div>
-                    </div>
-                    <div style="margin-top:10px;height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden;">
-                        <div style="height:100%;width:${merits}%;background:${meritColor};border-radius:999px;"></div>
-                    </div>
+            <div style="background:#fff;border-radius:16px;width:100%;max-width:900px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 25px 60px -15px rgba(0,0,0,0.3);position:relative;overflow:hidden;">
+                <!-- Fixed Header -->
+                <div style="padding:18px 24px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:#fff;border-top-left-radius:16px;border-top-right-radius:16px;">
+                    <h3 style="font-size:18px;font-weight:700;color:#111827;margin:0;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                        <span>${Utils.esc(r.businessName)}</span>
+                        <span style="font-size:13px;padding:4px 12px;border-radius:999px;background:${riskBg};color:${riskColor};font-weight:700;letter-spacing:0.3px;">${r.riskLevel} RISK</span>
+                    </h3>
+                    <button type="button" id="closePredModalBtn" style="background:none;border:none;font-size:24px;cursor:pointer;color:#6b7280;line-height:1;padding:4px 8px;border-radius:8px;" title="Close">&times;</button>
                 </div>
-                <div style="margin:0 0 18px;padding:14px 16px;background:#f9fafb;border-radius:10px;">
-                    <h4 style="font-size:13px;font-weight:700;color:#6b7280;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.5px;">Open Violations</h4>
-                    <div>${openViolHtml}</div>
-                    ${levelReasonHtml}
-                </div>
-                <div id="predDetailBody">
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
-                        <div>
-                            <h4 style="font-size:15px;font-weight:700;color:#6b7280;margin:0 0 14px;text-transform:uppercase;letter-spacing:0.5px;">Prescription</h4>
-                            <div style="max-height:200px;overflow-y:auto;padding-right:6px;">
-                                <ul style="list-style:none;padding:0;margin:0;">${recoHtml}</ul>
+
+                <!-- Scrollable Body (Scrollbar strictly inside the modal) -->
+                <div id="predDetailScrollBody" style="padding:24px;overflow-y:auto;flex:1 1 auto;">
+                    <div style="margin:0 0 18px;padding:14px 16px;background:#f9fafb;border-radius:10px;">
+                        <h4 style="font-size:13px;font-weight:700;color:#6b7280;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.5px;">Merit Score</h4>
+                        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+                            <div style="font-size:28px;font-weight:800;color:${meritColor};">${merits}<span style="font-size:16px;font-weight:600;color:#9ca3af;">/100</span></div>
+                            <div style="font-size:14px;color:#374151;line-height:1.6;">
+                                <strong>${demerits}</strong> demerits · <strong>${openCount}</strong> open violation${openCount === 1 ? '' : 's'}<br>
+                                <span style="color:#6b7280;font-size:13px;">${merits === 100 ? 'LOW — perfect merits' : merits >= 65 ? 'MODERATE — 99–65 merits' : 'HIGH — 64 or below merits'}</span>
                             </div>
-                            <h4 style="font-size:15px;font-weight:700;color:#6b7280;margin:16px 0 10px;text-transform:uppercase;letter-spacing:0.5px;">Inspector Remarks</h4>
-                            <div style="max-height:200px;overflow-y:auto;padding-right:6px;">
-                                <ul style="list-style:none;padding:0;margin:0;">${remarksHtml}</ul>
-                            </div>
-                            <h4 style="font-size:15px;font-weight:700;color:#6b7280;margin:16px 0 8px;text-transform:uppercase;letter-spacing:0.5px;">Admin Risk Remark</h4>
-                            <p style="margin:0 0 6px;font-size:12px;color:#9ca3af;">Admin only — not shown to inspectors. e.g. "High risk but not risky"</p>
-                            <textarea id="adminRiskRemarkInput" rows="3" style="width:100%;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="Optional admin note on this risk level...">${adminRemarkVal}</textarea>
-                            <button type="button" id="saveAdminRiskRemarkBtn" onclick="PredictionEngine.saveAdminRemark('${Utils.esc(r.businessName).replace(/'/g, "\\'")}')" style="margin-top:8px;background:#111827;border:none;color:#fff;padding:7px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">
-                                <i class="fas fa-save" style="margin-right:6px;"></i>Save Remark
-                            </button>
                         </div>
-                        <div>
-                            <div style="margin-top:0;padding:16px;background:#f9fafb;border-radius:8px;font-size:15px;color:#374151;line-height:2;">
-                                <strong>Barangay:</strong> ${Utils.esc(r.barangay) || 'N/A'}<br>
-                                <strong>Merits:</strong> ${merits}/100 (${demerits} demerits)<br>
-                                <strong>Open Violations:</strong> ${openCount}<br>
-                                <strong>Total Inspections on Record:</strong> ${r.totalInspections}<br>
-                                <strong>Last Inspected:</strong> ${r.lastInspected}<br>
-                                <strong>Prescription basis:</strong> PD 856 — Sanitation Code of the Philippines
-                            </div>
-                            <button onclick="EstablishmentTrend.show('${Utils.esc(r.businessName).replace(/'/g, "\\'")}')" style="margin-top:12px;background:#7c3aed;border:none;color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">
-                                <i class="fas fa-chart-line" style="margin-right:6px;"></i>View Risk Level Trend
-                            </button>
+                        <div style="margin-top:10px;height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden;">
+                            <div style="height:100%;width:${merits}%;background:${meritColor};border-radius:999px;"></div>
                         </div>
                     </div>
-                    <div id="aiAssessmentBox" style="margin-top:24px;padding:28px;background:#f0f9ff;border:2px solid #bae6fd;border-radius:12px;">
-                        <h4 style="font-size:20px;font-weight:700;color:#0369a1;margin:0 0 16px;display:flex;align-items:center;gap:8px;">🤖 AI Assessment</h4>
-                        <p id="aiAssessmentText" style="font-size:18px;color:#1e3a5f;margin:0;line-height:2;letter-spacing:0.01em;">
-                            <i class="fas fa-spinner fa-spin"></i> Generating AI assessment, please wait...
-                        </p>
+                    <div style="margin:0 0 18px;padding:14px 16px;background:#f9fafb;border-radius:10px;">
+                        <h4 style="font-size:13px;font-weight:700;color:#6b7280;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.5px;">Open Violations</h4>
+                        <div>${openViolHtml}</div>
+                        ${levelReasonHtml}
+                    </div>
+                    <div id="predDetailBody">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                            <div>
+                                <h4 style="font-size:15px;font-weight:700;color:#6b7280;margin:0 0 14px;text-transform:uppercase;letter-spacing:0.5px;">Prescription</h4>
+                                <div style="padding-right:6px;">
+                                    <ul style="list-style:none;padding:0;margin:0;">${recoHtml}</ul>
+                                </div>
+                                <h4 style="font-size:15px;font-weight:700;color:#6b7280;margin:16px 0 10px;text-transform:uppercase;letter-spacing:0.5px;">Inspector Remarks</h4>
+                                <div style="padding-right:6px;">
+                                    <ul style="list-style:none;padding:0;margin:0;">${remarksHtml}</ul>
+                                </div>
+                                <h4 style="font-size:15px;font-weight:700;color:#6b7280;margin:16px 0 8px;text-transform:uppercase;letter-spacing:0.5px;">Admin Risk Remark</h4>
+                                <p style="margin:0 0 6px;font-size:12px;color:#9ca3af;">Admin only — not shown to inspectors. e.g. "High risk but not risky"</p>
+                                <textarea id="adminRiskRemarkInput" rows="3" style="width:100%;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="Optional admin note on this risk level...">${adminRemarkVal}</textarea>
+                                <button type="button" id="saveAdminRiskRemarkBtn" onclick="PredictionEngine.saveAdminRemark('${Utils.esc(r.businessName).replace(/'/g, "\\'")}')" style="margin-top:8px;background:#111827;border:none;color:#fff;padding:7px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">
+                                    <i class="fas fa-save" style="margin-right:6px;"></i>Save Remark
+                                </button>
+                            </div>
+                            <div>
+                                <div style="margin-top:0;padding:16px;background:#f9fafb;border-radius:8px;font-size:15px;color:#374151;line-height:2;">
+                                    <strong>Barangay:</strong> ${Utils.esc(r.barangay) || 'N/A'}<br>
+                                    <strong>Merits:</strong> ${merits}/100 (${demerits} demerits)<br>
+                                    <strong>Open Violations:</strong> ${openCount}<br>
+                                    <strong>Total Inspections on Record:</strong> ${r.totalInspections}<br>
+                                    <strong>Last Inspected:</strong> ${r.lastInspected}<br>
+                                    <strong>Prescription basis:</strong> PD 856 — Sanitation Code of the Philippines
+                                </div>
+                                <button onclick="EstablishmentTrend.show('${Utils.esc(r.businessName).replace(/'/g, "\\'")}')" style="margin-top:12px;background:#7c3aed;border:none;color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">
+                                    <i class="fas fa-chart-line" style="margin-right:6px;"></i>View Risk Level Trend
+                                </button>
+                            </div>
+                        </div>
+                        <div id="aiAssessmentBox" style="margin-top:24px;padding:28px;background:#f0f9ff;border:2px solid #bae6fd;border-radius:12px;">
+                            <h4 style="font-size:20px;font-weight:700;color:#0369a1;margin:0 0 16px;display:flex;align-items:center;gap:8px;">🤖 AI Assessment</h4>
+                            <p id="aiAssessmentText" style="font-size:18px;color:#1e3a5f;margin:0;line-height:2;letter-spacing:0.01em;">
+                                <i class="fas fa-spinner fa-spin"></i> Generating AI assessment, please wait...
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>`;
 
+        // Prevent body scrolling while modal is open
+        document.body.style.overflow = 'hidden';
         document.body.appendChild(modal);
+
+        modal.querySelector('#closePredModalBtn')?.addEventListener('click', closeModal);
 
         // Call AI
         try {
@@ -6900,22 +6944,35 @@ const EstablishmentTrend = {
             // Create modal overlay
             const modal = document.createElement('div');
             modal.id = 'estabTrendModal';
-            modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+            modal.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;background:rgba(0,0,0,0.5);backdrop-filter:blur(2px);z-index:9999;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:20px;box-sizing:border-box;';
+
+            const closeTrendModal = () => {
+                document.body.style.overflow = '';
+                document.removeEventListener('keydown', trendEscHandler);
+                modal.remove();
+                if (EstablishmentTrend._chart) { EstablishmentTrend._chart.destroy(); EstablishmentTrend._chart = null; }
+            };
+            const trendEscHandler = (e) => {
+                if (e.key === 'Escape') closeTrendModal();
+            };
+            document.addEventListener('keydown', trendEscHandler);
+
             modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    modal.remove();
-                    if (EstablishmentTrend._chart) { EstablishmentTrend._chart.destroy(); EstablishmentTrend._chart = null; }
-                }
+                if (e.target === modal) closeTrendModal();
             });
 
             modal.innerHTML = `
-                <div style="background:#fff;border-radius:16px;padding:28px;width:90%;max-width:700px;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative;">
-                    <button onclick="document.getElementById('estabTrendModal')?.remove();if(EstablishmentTrend._chart){EstablishmentTrend._chart.destroy();EstablishmentTrend._chart=null;}" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;">&times;</button>
-                    <h4 style="font-size:16px;font-weight:700;color:#374151;margin:0 0 16px;">Risk Level Trend — ${Utils.esc(establishmentName)}</h4>
+                <div style="background:#fff;border-radius:16px;padding:24px 28px;width:100%;max-width:700px;box-shadow:0 25px 60px -15px rgba(0,0,0,0.3);position:relative;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+                        <h4 style="font-size:17px;font-weight:700;color:#111827;margin:0;">Risk Level Trend — ${Utils.esc(establishmentName)}</h4>
+                        <button type="button" id="closeEstabTrendBtn" style="background:none;border:none;font-size:24px;cursor:pointer;color:#6b7280;line-height:1;padding:4px 8px;border-radius:8px;" title="Close">&times;</button>
+                    </div>
                     <div style="position:relative;height:300px;"><canvas id="estabTrendChart"></canvas></div>
                 </div>`;
 
+            document.body.style.overflow = 'hidden';
             document.body.appendChild(modal);
+            modal.querySelector('#closeEstabTrendBtn')?.addEventListener('click', closeTrendModal);
 
             const canvas = document.getElementById('estabTrendChart');
             if (EstablishmentTrend._chart) EstablishmentTrend._chart.destroy();

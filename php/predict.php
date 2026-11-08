@@ -33,6 +33,9 @@ try {
     $stmt = $db->query("SELECT * FROM sanitary_records ORDER BY created_at DESC");
     $records = $stmt->fetchAll();
 
+    // Index all establishments currently in archive_data so they never appear in Prescription
+    $archivedIndex = getArchivedEstablishmentIndex($db);
+
     // Get all inspection reports from DB
     $inspStmt = $db->query("SELECT * FROM inspection_reports ORDER BY report_date ASC");
     $liveInspections = $inspStmt->fetchAll();
@@ -49,7 +52,15 @@ try {
 
     foreach ($records as $record) {
         $record = decryptRow('sanitary_records', $record);
-        $name = $record['business_name'];
+        $name = trim($record['business_name'] ?? '');
+        $permit = trim($record['permit_no'] ?? '');
+        $recId = (int)($record['id'] ?? 0);
+
+        // Omit any establishment or permit currently archived
+        if (isEstablishmentArchived($name, $permit, $archivedIndex, $recId)) {
+            continue;
+        }
+
         if (isset($seen[$name])) continue;
         $seen[$name] = true;
 

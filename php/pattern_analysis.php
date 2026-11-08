@@ -18,6 +18,7 @@ $action = $_GET['action'] ?? 'by_category';
 try {
     // Common data loading
     $records = $db->query("SELECT * FROM sanitary_records ORDER BY created_at DESC")->fetchAll();
+    $archivedIndex = getArchivedEstablishmentIndex($db);
     $liveInspections = $db->query("SELECT * FROM inspection_reports ORDER BY report_date ASC")->fetchAll();
     $historyInspections = $db->query("SELECT * FROM inspection_history ORDER BY report_date ASC")->fetchAll();
     $allInspections = array_merge($liveInspections, $historyInspections);
@@ -53,6 +54,7 @@ try {
 
         foreach ($records as $record) {
             $name = $record['business_name'];
+            if (isEstablishmentArchived($name, $record['permit_no'] ?? null, $archivedIndex, (int)($record['id'] ?? 0))) continue;
             if (isset($seen[$name])) continue;
             $seen[$name] = true;
 
@@ -133,6 +135,7 @@ try {
 
         foreach ($records as $record) {
             $name = $record['business_name'];
+            if (isEstablishmentArchived($name, $record['permit_no'] ?? null, $archivedIndex, (int)($record['id'] ?? 0))) continue;
             if (isset($seen[$name])) continue;
             $seen[$name] = true;
 
@@ -209,6 +212,7 @@ try {
 
         foreach ($records as $record) {
             $name = $record['business_name'];
+            if (isEstablishmentArchived($name, $record['permit_no'] ?? null, $archivedIndex, (int)($record['id'] ?? 0))) continue;
             if (isset($seen[$name])) continue;
             $seen[$name] = true;
 
@@ -276,6 +280,7 @@ try {
 
         foreach ($records as $record) {
             $name = $record['business_name'];
+            if (isEstablishmentArchived($name, $record['permit_no'] ?? null, $archivedIndex, (int)($record['id'] ?? 0))) continue;
             if (isset($seen[$name])) continue;
             $seen[$name] = true;
 
