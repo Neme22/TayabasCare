@@ -183,13 +183,26 @@
                 <!-- Dashboard Header with Export Buttons -->
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
                     <div></div>
-                    <div style="display:flex;gap:10px;">
-                        <button onclick="exportAnalyticsPDF()" style="background:#dc2626;border:none;color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:12px;">
-                            <i class="fas fa-file-pdf" style="margin-right:6px;"></i>Export PDF Report
-                        </button>
-                        <button onclick="exportAnalyticsExcel()" style="background:#059669;border:none;color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:12px;">
-                            <i class="fas fa-file-excel" style="margin-right:6px;"></i>Export Excel Report
-                        </button>
+                    <div class="dropdown dropdown-end">
+                        <div tabindex="0" role="button" style="background:#059669;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:12px;display:inline-flex;align-items:center;gap:8px;" id="dashboardExportBtn">
+                            <i class="fas fa-download"></i>
+                            <span>Export Report</span>
+                            <i class="fas fa-chevron-down" style="font-size:10px;margin-left:2px;"></i>
+                        </div>
+                        <ul tabindex="0" class="dropdown-content z-[100] menu p-2 shadow-xl bg-base-100 border border-gray-100 rounded-xl w-48 mt-1 text-gray-800">
+                            <li>
+                                <a onclick="exportAnalyticsExcel(); if(document.activeElement) document.activeElement.blur();" class="flex items-center gap-2.5 py-2 px-3 hover:bg-emerald-50 text-gray-700 hover:text-emerald-700 font-medium text-xs rounded-lg">
+                                    <i class="fas fa-file-excel text-emerald-600 text-sm"></i>
+                                    <span>Export Excel</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a onclick="exportAnalyticsPDF(); if(document.activeElement) document.activeElement.blur();" class="flex items-center gap-2.5 py-2 px-3 hover:bg-red-50 text-gray-700 hover:text-red-700 font-medium text-xs rounded-lg">
+                                    <i class="fas fa-file-pdf text-red-600 text-sm"></i>
+                                    <span>Export PDF</span>
+                                </a>
+                            </li>
+                        </ul>
                     </div>
                 </div>
 
@@ -759,16 +772,34 @@
                         <span class="section-label">Reports</span>
                         <h2>Inspection Reports</h2>
                     </div>
-                    <div style="display:flex;gap:8px;">
-                        <button onclick="exportReportsCSV()" style="background:#1e40af;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
-                            <i class="fas fa-download" style="margin-right:6px;"></i>Export CSV
-                        </button>
-                        <button onclick="exportReportsExcel()" style="background:#217346;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
-                            <i class="fas fa-file-excel" style="margin-right:6px;"></i>Export Excel
-                        </button>
-                        <button onclick="exportAllReportsPDF()" style="background:#7c3aed;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
-                            <i class="fas fa-file-pdf" style="margin-right:6px;"></i>Export PDF
-                        </button>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <div class="dropdown dropdown-end">
+                            <div tabindex="0" role="button" style="background:#1e40af;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;" id="reportsExportBtn">
+                                <i class="fas fa-download"></i>
+                                <span>Export</span>
+                                <i class="fas fa-chevron-down" style="font-size:10px;margin-left:2px;"></i>
+                            </div>
+                            <ul tabindex="0" class="dropdown-content z-[100] menu p-2 shadow-xl bg-base-100 border border-gray-100 rounded-xl w-48 mt-1 text-gray-800">
+                                <li>
+                                    <a onclick="exportReportsCSV(); if(document.activeElement) document.activeElement.blur();" class="flex items-center gap-2.5 py-2 px-3 hover:bg-blue-50 text-gray-700 hover:text-blue-700 font-medium text-xs rounded-lg">
+                                        <i class="fas fa-file-csv text-blue-600 text-sm"></i>
+                                        <span>Export CSV</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a onclick="exportReportsExcel(); if(document.activeElement) document.activeElement.blur();" class="flex items-center gap-2.5 py-2 px-3 hover:bg-emerald-50 text-gray-700 hover:text-emerald-700 font-medium text-xs rounded-lg">
+                                        <i class="fas fa-file-excel text-emerald-600 text-sm"></i>
+                                        <span>Export Excel</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a onclick="exportAllReportsPDF(); if(document.activeElement) document.activeElement.blur();" class="flex items-center gap-2.5 py-2 px-3 hover:bg-purple-50 text-gray-700 hover:text-purple-700 font-medium text-xs rounded-lg">
+                                        <i class="fas fa-file-pdf text-purple-600 text-sm"></i>
+                                        <span>Export PDF</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                         <label style="background:#ea580c;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
                             <i class="fas fa-file-import"></i>Import Inspections
                             <input type="file" accept=".csv,.xlsx,.xls" onchange="InspectionImport.handleFile(this)" style="display:none;">
@@ -2063,6 +2094,39 @@
         </form>
     </dialog>
 
+    <!-- File Viewer Modal (View Only) -->
+    <dialog id="file-viewer-modal" class="modal">
+        <div class="modal-box w-11/12 max-w-5xl p-0 overflow-hidden bg-white shadow-2xl">
+            <div class="sticky top-0 z-10 bg-white flex items-center justify-between px-5 py-3 border-b border-gray-200 gap-3">
+                <div class="flex items-center gap-2 truncate pr-2">
+                    <i class="fas fa-file-alt text-emerald-600 text-lg"></i>
+                    <h3 class="font-bold text-gray-800 text-base truncate mb-0" id="file-viewer-title">Attached File</h3>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <div id="file-viewer-zoom-controls" class="inline-flex items-center gap-1 bg-gray-100 rounded-lg p-1 border border-gray-200">
+                        <button type="button" onclick="zoomFileViewer(-0.25)" class="btn btn-xs btn-ghost text-gray-700 hover:bg-white hover:text-emerald-700 px-2" title="Zoom Out" data-testid="file-viewer-zoom-out">
+                            <i class="fas fa-search-minus text-sm"></i>
+                        </button>
+                        <span id="file-viewer-zoom-level" class="text-xs font-bold text-gray-700 px-1 select-none min-w-[44px] text-center">100%</span>
+                        <button type="button" onclick="zoomFileViewer(0.25)" class="btn btn-xs btn-ghost text-gray-700 hover:bg-white hover:text-emerald-700 px-2" title="Zoom In" data-testid="file-viewer-zoom-in">
+                            <i class="fas fa-search-plus text-sm"></i>
+                        </button>
+                        <button type="button" onclick="resetFileViewerZoom()" class="btn btn-xs btn-ghost text-gray-500 hover:bg-white hover:text-emerald-700 px-1.5" title="Reset Zoom">
+                            <i class="fas fa-undo text-xs"></i>
+                        </button>
+                    </div>
+                    <button type="button" onclick="closeFileViewerModal()" class="btn btn-sm btn-circle btn-ghost text-gray-500 hover:text-red-500" data-testid="file-viewer-close">✕</button>
+                </div>
+            </div>
+            <div class="relative bg-slate-900 flex items-center justify-center min-h-[380px] h-[75vh] overflow-hidden select-none" id="file-viewer-body">
+                <!-- Image or PDF iframe injected dynamically -->
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
+
     <!-- Import preview modal UI is injected by js/import_common.js (single shared definition) -->
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -2071,7 +2135,7 @@
     <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
     <script src="js/import_common.js?v=1"></script>
 
-    <script src="js/admin.js?v=17"></script>
+    <script src="js/admin.js?v=20"></script>
 
     <script>
 document.addEventListener('click', function(e) {

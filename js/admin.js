@@ -2334,12 +2334,12 @@ const BurialManager = {
                 ${record.filePath ? `
                 <div class="detail-section">
                     <h4>Death Certificate</h4>
-                    <p style="font-size: 14px; margin-top: 6px;">
-                        <a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(record.filePath)}" target="_blank" rel="noopener noreferrer" style="color: #059669; text-decoration: underline; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; background: #ecfdf5; border: 1px solid #a7f3d0;" title="Click to view file">
-                            <i class="fas fa-eye"></i>
-                            <span>${Utils.esc(record.fileName) || 'View Death Certificate'}</span>
-                        </a>
-                    </p>
+                    <div style="margin-top: 6px;">
+                        <div onclick="openFileViewer('${Utils.esc(record.filePath)}', '${Utils.esc(record.fileName)}')" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 6px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46;" title="Click to view file">
+                            <i class="fas ${record.fileName && record.fileName.toLowerCase().includes('.pdf') ? 'fa-file-pdf' : 'fa-file-image'}" style="color: ${record.fileName && record.fileName.toLowerCase().includes('.pdf') ? '#ef4444' : '#3b82f6'}; font-size: 16px;"></i>
+                            <span style="font-weight: 600; font-size: 14px; text-decoration: underline;">${Utils.esc(record.fileName) || 'Death Certificate'}</span>
+                        </div>
+                    </div>
                 </div>
                 ` : record.fileName ? `
                 <div class="detail-section">
@@ -2527,12 +2527,12 @@ const ReportsManager = {
                 ${report.filePath ? `
                 <div class="detail-section">
                     <h4>Attached File</h4>
-                    <p style="font-size: 14px; margin-top: 6px;">
-                        <a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(report.filePath)}" target="_blank" rel="noopener noreferrer" style="color: #059669; text-decoration: underline; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; background: #ecfdf5; border: 1px solid #a7f3d0;" title="Click to view file">
-                            <i class="fas fa-eye"></i>
-                            <span>${Utils.esc(report.file) || 'View Attached File'}</span>
-                        </a>
-                    </p>
+                    <div style="margin-top: 6px;">
+                        <div onclick="openFileViewer('${Utils.esc(report.filePath)}', '${Utils.esc(report.file)}')" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 6px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46;" title="Click to view file">
+                            <i class="fas ${report.file && report.file.toLowerCase().includes('.pdf') ? 'fa-file-pdf' : 'fa-file-image'}" style="color: ${report.file && report.file.toLowerCase().includes('.pdf') ? '#ef4444' : '#3b82f6'}; font-size: 16px;"></i>
+                            <span style="font-weight: 600; font-size: 14px; text-decoration: underline;">${Utils.esc(report.file) || 'Attached File'}</span>
+                        </div>
+                    </div>
                 </div>
                 ` : report.file ? `
                 <div class="detail-section">
@@ -2540,11 +2540,6 @@ const ReportsManager = {
                     <p style="font-size: 14px; color: #374151;">${Utils.esc(report.file)} (file unavailable)</p>
                 </div>
                 ` : ''}
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-primary" onclick="exportSingleReportPDF()" style="background:#7c3aed;border-color:#7c3aed;">
-                    <i class="fas fa-file-pdf" style="margin-right:6px;"></i>Download PDF
-                </button>
             </div>
         `;
         Utils.openModal(content);
@@ -6648,7 +6643,7 @@ async function adminOpenIHDetail(establishmentName) {
         const compliedStatus = r.complied === true || r.complied === 'true' || r.complied === 1;
         const dateStr = (r.date || r.archived_at) ? new Date(r.date || r.archived_at).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' }) : 'N/A';
         const fileCell = r.filePath
-            ? `<a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(r.filePath)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="padding:4px 10px;font-size:12px;" title="Click to view file"><i class="fas fa-eye" style="margin-right:4px;"></i>${Utils.esc(r.file) || 'View File'}</a>`
+            ? `<span onclick="openFileViewer('${Utils.esc(r.filePath)}', '${Utils.esc(r.file)}')" style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #059669; font-weight: 600; text-decoration: underline;" title="Click to view file"><i class="fas ${r.file && r.file.toLowerCase().includes('.pdf') ? 'fa-file-pdf' : 'fa-file-image'}" style="color: ${r.file && r.file.toLowerCase().includes('.pdf') ? '#ef4444' : '#3b82f6'};"></i>${Utils.esc(r.file) || 'Attached File'}</span>`
             : (r.file ? `<span style="font-size:12px;color:#9ca3af;">${Utils.esc(r.file)} (unavailable)</span>` : `<span style="font-size:12px;color:#d1d5db;">None</span>`);
         return `<tr>
             <td style="font-weight:600;">${i + 1}</td>
@@ -7090,9 +7085,170 @@ function closeAdminModalSafely(dialog) {
         closeChangePasswordModal();
     } else if (id === 'notif-detail-modal') {
         if (typeof dialog.close === 'function') dialog.close();
+    } else if (id === 'file-viewer-modal') {
+        closeFileViewerModal();
     } else {
         if (typeof dialog.close === 'function') dialog.close();
         if (!id) dialog.remove();
     }
 }
 // ==================== END MODAL BACKDROP CLICK-TO-CLOSE (ADMIN) ====================
+
+// ==================== IN-APP FILE VIEWER MODAL ====================
+let fileViewerZoom = 1;
+let fileViewerPanX = 0;
+let fileViewerPanY = 0;
+let fileViewerIsDragging = false;
+let fileViewerStartX = 0;
+let fileViewerStartY = 0;
+let fileViewerHasMoved = false;
+
+function resetFileViewerZoom() {
+    fileViewerZoom = 1;
+    fileViewerPanX = 0;
+    fileViewerPanY = 0;
+    applyFileViewerTransform(true);
+}
+
+function zoomFileViewer(delta) {
+    const newZoom = Math.min(4.0, Math.max(0.5, Math.round((fileViewerZoom + delta) * 100) / 100));
+    fileViewerZoom = newZoom;
+    if (fileViewerZoom <= 1) {
+        fileViewerPanX = 0;
+        fileViewerPanY = 0;
+    }
+    applyFileViewerTransform(true);
+}
+
+function applyFileViewerTransform(animate) {
+    const img = document.getElementById('file-viewer-img');
+    const canvas = document.getElementById('file-viewer-canvas');
+    const zoomLabel = document.getElementById('file-viewer-zoom-level');
+    if (zoomLabel) {
+        zoomLabel.textContent = `${Math.round(fileViewerZoom * 100)}%`;
+    }
+    if (img) {
+        img.style.transition = animate ? 'transform 0.15s ease-out' : 'none';
+        img.style.transform = `translate(${fileViewerPanX}px, ${fileViewerPanY}px) scale(${fileViewerZoom})`;
+        const cursor = fileViewerZoom > 1 ? (fileViewerIsDragging ? 'grabbing' : 'grab') : 'zoom-in';
+        img.style.cursor = cursor;
+        if (canvas) canvas.style.cursor = cursor;
+    }
+}
+
+function initFileViewerInteractions() {
+    const canvas = document.getElementById('file-viewer-canvas');
+    const img = document.getElementById('file-viewer-img');
+    if (!canvas || !img) return;
+
+    canvas.addEventListener('mousedown', function(e) {
+        if (e.button !== 0) return;
+        fileViewerHasMoved = false;
+        if (fileViewerZoom > 1) {
+            fileViewerIsDragging = true;
+            fileViewerStartX = e.clientX - fileViewerPanX;
+            fileViewerStartY = e.clientY - fileViewerPanY;
+            img.style.transition = 'none';
+            img.style.cursor = 'grabbing';
+            canvas.style.cursor = 'grabbing';
+            e.preventDefault();
+        }
+    });
+
+    canvas.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 0.25 : -0.25;
+        zoomFileViewer(delta);
+    }, { passive: false });
+
+    img.addEventListener('click', function() {
+        if (fileViewerHasMoved) return;
+        if (fileViewerZoom === 1) {
+            zoomFileViewer(0.5);
+        }
+    });
+
+    img.addEventListener('dblclick', function(e) {
+        e.preventDefault();
+        resetFileViewerZoom();
+    });
+}
+
+// Global mouse tracking for smooth panning
+window.addEventListener('mousemove', function(e) {
+    if (!fileViewerIsDragging) return;
+    fileViewerHasMoved = true;
+    fileViewerPanX = e.clientX - fileViewerStartX;
+    fileViewerPanY = e.clientY - fileViewerStartY;
+    applyFileViewerTransform(false);
+});
+
+window.addEventListener('mouseup', function() {
+    if (fileViewerIsDragging) {
+        fileViewerIsDragging = false;
+        const img = document.getElementById('file-viewer-img');
+        const canvas = document.getElementById('file-viewer-canvas');
+        if (img) {
+            img.style.transition = 'transform 0.15s ease-out';
+            img.style.cursor = fileViewerZoom > 1 ? 'grab' : 'zoom-in';
+        }
+        if (canvas) {
+            canvas.style.cursor = fileViewerZoom > 1 ? 'grab' : 'zoom-in';
+        }
+    }
+});
+
+function openFileViewer(filePath, fileName) {
+    if (!filePath) return;
+    const modal = document.getElementById('file-viewer-modal');
+    if (!modal) return;
+
+    const titleEl = document.getElementById('file-viewer-title');
+    const bodyEl = document.getElementById('file-viewer-body');
+    const zoomControls = document.getElementById('file-viewer-zoom-controls');
+    const cleanName = fileName || 'Attached File';
+    if (titleEl) titleEl.textContent = cleanName;
+
+    // Reset zoom state
+    fileViewerZoom = 1;
+    fileViewerPanX = 0;
+    fileViewerPanY = 0;
+    fileViewerIsDragging = false;
+    fileViewerHasMoved = false;
+    const zoomLabel = document.getElementById('file-viewer-zoom-level');
+    if (zoomLabel) zoomLabel.textContent = '100%';
+
+    const url = `${API_BASE_URL}/download.php?path=${encodeURIComponent(filePath)}`;
+    const isPdf = cleanName.toLowerCase().endsWith('.pdf');
+
+    if (zoomControls) {
+        zoomControls.style.display = isPdf ? 'none' : 'inline-flex';
+    }
+
+    if (bodyEl) {
+        if (isPdf) {
+            bodyEl.innerHTML = `<iframe src="${url}" class="w-full h-full border-0 bg-white" title="${Utils.esc(cleanName)}"></iframe>`;
+        } else {
+            bodyEl.innerHTML = `
+                <div id="file-viewer-canvas" class="w-full h-full flex items-center justify-center overflow-hidden cursor-zoom-in" style="touch-action: none;">
+                    <img id="file-viewer-img" src="${url}" alt="${Utils.esc(cleanName)}" class="max-w-[95%] max-h-[95%] object-contain rounded shadow-lg transition-transform duration-150 ease-out select-none" draggable="false" style="transform: translate(0px, 0px) scale(1);" />
+                </div>
+            `;
+            initFileViewerInteractions();
+        }
+    }
+
+    if (typeof modal.showModal === 'function') modal.showModal();
+    else modal.setAttribute('open', '');
+}
+
+function closeFileViewerModal() {
+    const modal = document.getElementById('file-viewer-modal');
+    if (!modal) return;
+    if (typeof modal.close === 'function') modal.close();
+    else modal.removeAttribute('open');
+    const bodyEl = document.getElementById('file-viewer-body');
+    if (bodyEl) bodyEl.innerHTML = '';
+    resetFileViewerZoom();
+}
+// ==================== END IN-APP FILE VIEWER MODAL ====================

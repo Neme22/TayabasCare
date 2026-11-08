@@ -2271,12 +2271,45 @@
         </form>
     </dialog>
 
+    <!-- File Viewer Modal (View Only) -->
+    <dialog id="file-viewer-modal" class="modal">
+        <div class="modal-box w-11/12 max-w-5xl p-0 overflow-hidden bg-white shadow-2xl">
+            <div class="sticky top-0 z-10 bg-white flex items-center justify-between px-5 py-3 border-b border-gray-200 gap-3">
+                <div class="flex items-center gap-2 truncate pr-2">
+                    <i class="fas fa-file-alt text-emerald-600 text-lg"></i>
+                    <h3 class="font-bold text-gray-800 text-base truncate mb-0" id="file-viewer-title">Attached File</h3>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <div id="file-viewer-zoom-controls" class="inline-flex items-center gap-1 bg-gray-100 rounded-lg p-1 border border-gray-200">
+                        <button type="button" onclick="zoomFileViewer(-0.25)" class="btn btn-xs btn-ghost text-gray-700 hover:bg-white hover:text-emerald-700 px-2" title="Zoom Out" data-testid="file-viewer-zoom-out">
+                            <i class="fas fa-search-minus text-sm"></i>
+                        </button>
+                        <span id="file-viewer-zoom-level" class="text-xs font-bold text-gray-700 px-1 select-none min-w-[44px] text-center">100%</span>
+                        <button type="button" onclick="zoomFileViewer(0.25)" class="btn btn-xs btn-ghost text-gray-700 hover:bg-white hover:text-emerald-700 px-2" title="Zoom In" data-testid="file-viewer-zoom-in">
+                            <i class="fas fa-search-plus text-sm"></i>
+                        </button>
+                        <button type="button" onclick="resetFileViewerZoom()" class="btn btn-xs btn-ghost text-gray-500 hover:bg-white hover:text-emerald-700 px-1.5" title="Reset Zoom">
+                            <i class="fas fa-undo text-xs"></i>
+                        </button>
+                    </div>
+                    <button type="button" onclick="closeFileViewerModal()" class="btn btn-sm btn-circle btn-ghost text-gray-500 hover:text-red-500" data-testid="file-viewer-close">✕</button>
+                </div>
+            </div>
+            <div class="relative bg-slate-900 flex items-center justify-center min-h-[380px] h-[75vh] overflow-hidden select-none" id="file-viewer-body">
+                <!-- Image or PDF iframe injected dynamically -->
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
+
     <!-- Import preview modal UI is injected by js/import_common.js (single shared definition) -->
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
     <script src="js/import_common.js?v=2"></script>
-    <script src="js/inspector.js?v=17"></script>
+    <script src="js/inspector.js?v=19"></script>
 
     <script>
 document.addEventListener('click', function(e) {
