@@ -2334,17 +2334,17 @@ const BurialManager = {
                 ${record.filePath ? `
                 <div class="detail-section">
                     <h4>Death Certificate</h4>
-                    <p style="font-size: 14px; color: #374151;">
-                        ${Utils.esc(record.fileName) || 'Attachment'}
-                        <a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(record.filePath)}" class="btn btn-primary" style="margin-left:10px;display:inline-block;padding:4px 10px;">
-                            <i class="fas fa-download" style="margin-right:4px;"></i>Download
+                    <p style="font-size: 14px; margin-top: 6px;">
+                        <a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(record.filePath)}" target="_blank" rel="noopener noreferrer" style="color: #059669; text-decoration: underline; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; background: #ecfdf5; border: 1px solid #a7f3d0;" title="Click to view file">
+                            <i class="fas fa-eye"></i>
+                            <span>${Utils.esc(record.fileName) || 'View Death Certificate'}</span>
                         </a>
                     </p>
                 </div>
                 ` : record.fileName ? `
                 <div class="detail-section">
                     <h4>Death Certificate</h4>
-                    <p style="font-size: 14px; color: #374151;">${record.fileName} (file not available for download)</p>
+                    <p style="font-size: 14px; color: #374151;">${Utils.esc(record.fileName)} (file unavailable)</p>
                 </div>
                 ` : ''}
             </div>
@@ -2527,17 +2527,17 @@ const ReportsManager = {
                 ${report.filePath ? `
                 <div class="detail-section">
                     <h4>Attached File</h4>
-                    <p style="font-size: 14px; color: #374151;">
-                        ${Utils.esc(report.file) || 'Attachment'}
-                        <a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(report.filePath)}" class="btn btn-primary" style="margin-left:10px;display:inline-block;padding:4px 10px;">
-                            <i class="fas fa-download" style="margin-right:4px;"></i>Download
+                    <p style="font-size: 14px; margin-top: 6px;">
+                        <a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(report.filePath)}" target="_blank" rel="noopener noreferrer" style="color: #059669; text-decoration: underline; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; background: #ecfdf5; border: 1px solid #a7f3d0;" title="Click to view file">
+                            <i class="fas fa-eye"></i>
+                            <span>${Utils.esc(report.file) || 'View Attached File'}</span>
                         </a>
                     </p>
                 </div>
                 ` : report.file ? `
                 <div class="detail-section">
                     <h4>Attached File</h4>
-                    <p style="font-size: 14px; color: #374151;">${Utils.esc(report.file)} (file not available for download)</p>
+                    <p style="font-size: 14px; color: #374151;">${Utils.esc(report.file)} (file unavailable)</p>
                 </div>
                 ` : ''}
             </div>
@@ -6648,7 +6648,7 @@ async function adminOpenIHDetail(establishmentName) {
         const compliedStatus = r.complied === true || r.complied === 'true' || r.complied === 1;
         const dateStr = (r.date || r.archived_at) ? new Date(r.date || r.archived_at).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' }) : 'N/A';
         const fileCell = r.filePath
-            ? `<a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(r.filePath)}" class="btn btn-primary" style="padding:4px 10px;font-size:12px;"><i class="fas fa-download" style="margin-right:4px;"></i>${Utils.esc(r.file) || 'File'}</a>`
+            ? `<a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(r.filePath)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="padding:4px 10px;font-size:12px;" title="Click to view file"><i class="fas fa-eye" style="margin-right:4px;"></i>${Utils.esc(r.file) || 'View File'}</a>`
             : (r.file ? `<span style="font-size:12px;color:#9ca3af;">${Utils.esc(r.file)} (unavailable)</span>` : `<span style="font-size:12px;color:#d1d5db;">None</span>`);
         return `<tr>
             <td style="font-weight:600;">${i + 1}</td>

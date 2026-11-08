@@ -3921,16 +3921,17 @@ function viewInspectionReportById(id) {
                 <div>
                     <label class="font-semibold text-gray-700">Attached File:</label>
                     <div class="flex items-center gap-3 mt-1">
-                        <span class="text-gray-600">${esc(report.file) || 'Attachment'}</span>
-                        <a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(report.filePath)}" class="btn btn-sm btn-outline btn-success">
-                            <i class="fas fa-download mr-1"></i>Download
+                        <a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(report.filePath)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 transition-colors group cursor-pointer" title="Click to view file">
+                            <i class="fas ${report.file && report.file.toLowerCase().includes('.pdf') ? 'fa-file-pdf text-red-500' : 'fa-file-image text-blue-500'} text-lg"></i>
+                            <span class="font-medium group-hover:underline">${esc(report.file) || 'View Attachment'}</span>
+                            <span class="btn btn-xs btn-outline btn-success ml-1"><i class="fas fa-eye mr-1"></i>View</span>
                         </a>
                     </div>
                 </div>
                 ` : report.file ? `
                 <div>
                     <label class="font-semibold text-gray-700">Attached File:</label>
-                    <p class="text-gray-600">${esc(report.file)} <span class="text-xs text-gray-400">(file not available for download)</span></p>
+                    <p class="text-gray-600">${esc(report.file)} <span class="text-xs text-gray-400">(file unavailable)</span></p>
                 </div>
                 ` : ''}
                 <div class="form-control border rounded-lg p-3 bg-emerald-50">
@@ -4212,7 +4213,7 @@ async function viewInspectionHistory(id) {
                     <td class="text-sm text-gray-500">${esc(h.inspector) || 'N/A'}</td>
                     <td class="text-sm">
                         ${h.filePath
-                            ? `<a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(h.filePath)}" class="btn btn-xs btn-outline btn-success"><i class="fas fa-download mr-1"></i>${esc(h.file) || 'File'}</a>`
+                            ? `<a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(h.filePath)}" target="_blank" rel="noopener noreferrer" class="btn btn-xs btn-outline btn-success" title="Click to view file"><i class="fas fa-eye mr-1"></i>${esc(h.file) || 'View File'}</a>`
                             : (h.file ? `<span class="text-xs text-gray-400">${esc(h.file)} (unavailable)</span>` : '<span class="text-xs text-gray-300">None</span>')}
                     </td>
                 </tr>`;
@@ -4315,17 +4316,17 @@ function viewInspectionReport(index) {
                 <div>
                     <label class="font-semibold text-gray-700">Attached File:</label>
                     <div class="flex items-center gap-3 mt-1">
-                        <i class="fas ${report.file && report.file.toLowerCase().includes('.pdf') ? 'fa-file-pdf text-red-500' : 'fa-file-image text-blue-500'} text-2xl"></i>
-                        <span class="text-gray-600">${esc(report.file)}</span>
-                        <a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(report.filePath)}" class="btn btn-sm btn-outline btn-success">
-                            <i class="fas fa-download mr-1"></i>Download
+                        <a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(report.filePath)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 transition-colors group cursor-pointer" title="Click to view file">
+                            <i class="fas ${report.file && report.file.toLowerCase().includes('.pdf') ? 'fa-file-pdf text-red-500' : 'fa-file-image text-blue-500'} text-lg"></i>
+                            <span class="font-medium group-hover:underline">${esc(report.file) || 'View Attachment'}</span>
+                            <span class="btn btn-xs btn-outline btn-success ml-1"><i class="fas fa-eye mr-1"></i>View</span>
                         </a>
                     </div>
                 </div>
                 ` : report.file ? `
                 <div>
                     <label class="font-semibold text-gray-700">Attached File:</label>
-                    <p class="text-gray-600">${esc(report.file)} <span class="text-xs text-gray-400">(file not available for download)</span></p>
+                    <p class="text-gray-600">${esc(report.file)} <span class="text-xs text-gray-400">(file unavailable)</span></p>
                 </div>
                 ` : ''}
             </div>
@@ -4857,15 +4858,16 @@ function loadBurialData(type, index) {
     if (certPreview) {
         if (record.filePath) {
             certPreview.innerHTML = `
-            <div class="flex items-center gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+            <a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(record.filePath)}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-3 p-3 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200 text-emerald-900 transition-colors group cursor-pointer" title="Click to view file">
                 <i class="fas ${record.fileName && record.fileName.toLowerCase().includes('.pdf') ? 'fa-file-pdf text-red-500' : 'fa-file-image text-blue-500'} text-2xl"></i>
                 <div class="flex-1">
-                    <p class="font-semibold text-sm">${esc(record.fileName || 'Death Certificate')}</p>
+                    <p class="font-semibold text-sm group-hover:underline">${esc(record.fileName || 'Death Certificate')}</p>
+                    <span class="text-xs text-emerald-700">Click to view attached document</span>
                 </div>
-                <a href="${API_BASE_URL}/download.php?path=${encodeURIComponent(record.filePath)}" class="btn btn-sm btn-outline btn-success">
-                    <i class="fas fa-download mr-1"></i>Download
-                </a>
-            </div>
+                <span class="btn btn-sm btn-outline btn-success">
+                    <i class="fas fa-eye mr-1"></i>View
+                </span>
+            </a>
         `;
         } else {
             certPreview.innerHTML = '';

@@ -122,16 +122,29 @@ if ($origName) {
 $finfo = finfo_open(FILEINFO_MIME_TYPE);
 $mime = finfo_file($finfo, $servePath);
 finfo_close($finfo);
-if ($mime === false || $mime === 'application/octet-stream') {
-    // Encrypted-then-decrypted files still have their original content type
+
+$ext = strtolower(pathinfo($safeName, PATHINFO_EXTENSION));
+$knownMimes = [
+    'pdf'  => 'application/pdf',
+    'jpg'  => 'image/jpeg',
+    'jpeg' => 'image/jpeg',
+    'png'  => 'image/png',
+    'gif'  => 'image/gif',
+    'webp' => 'image/webp',
+    'svg'  => 'image/svg+xml',
+    'txt'  => 'text/plain',
+];
+if (isset($knownMimes[$ext])) {
+    $mime = $knownMimes[$ext];
+} elseif ($mime === false || $mime === 'application/octet-stream') {
     $mime = 'application/octet-stream';
 }
 
 header('Content-Type: ' . $mime);
-header('Content-Description: File Transfer');
-header('Content-Disposition: attachment; filename="' . $safeName . '"');
+header('Content-Disposition: inline; filename="' . $safeName . '"');
 header('Content-Length: ' . filesize($servePath));
 header('X-Content-Type-Options: nosniff');
+header('Cache-Control: private, max-age=3600');
 readfile($servePath);
 
 if ($tmpOut) @unlink($tmpOut);
