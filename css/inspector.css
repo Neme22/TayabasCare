@@ -28,6 +28,34 @@
 }
 
 /* ==================== BASE ==================== */
+/* System-wide Cursor Rule: Keep default arrow cursor on all elements while preserving clickability */
+*, *::before, *::after,
+a, button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"],
+select, summary, label, .btn, .sidebar-item, .stat-card, [onclick], [style*="cursor"] {
+    cursor: default !important;
+}
+
+/* Allow text selection cursor for inputs and textareas */
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+input[type="search"],
+input[type="tel"],
+input[type="url"],
+input[type="date"],
+textarea,
+[contenteditable="true"] {
+    cursor: text !important;
+}
+
+/* Maintain disabled indicator cursor where appropriate */
+:disabled,
+[disabled],
+.disabled {
+    cursor: not-allowed !important;
+}
+
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     background: var(--insp-bg);

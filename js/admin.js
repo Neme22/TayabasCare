@@ -180,6 +180,11 @@ const DataStore = {
 
 // Utility Functions
 const Utils = {
+    switchPage: (pageName) => {
+        if (typeof PageManager !== 'undefined' && PageManager.switchPage) {
+            PageManager.switchPage(pageName);
+        }
+    },
     esc: (str) => {
         if (str == null) return '';
         return String(str)
@@ -540,6 +545,12 @@ const Dashboard = {
             if (lowEl)     lowEl.textContent     = lowCount;
             if (pendingEl) pendingEl.textContent = pendingCount;
 
+            const totalHighStat = document.getElementById('totalHighRisk');
+            if (totalHighStat) {
+                totalHighStat.textContent = highCount;
+                totalHighStat.style.color = highCount > 0 ? '#dc2626' : '#10b981';
+            }
+
             // Draw risk doughnut chart
             const riskCtx = document.getElementById('riskChart');
             if (riskCtx) {
@@ -593,8 +604,11 @@ const Dashboard = {
         const reports = DataStore.inspectionReports;
         document.getElementById('totalReports').textContent = reports.length;
 
-        // Draw monthly inspection bar chart
+        // Draw monthly inspection bar chart with label & legend
         Dashboard.drawMonthlyChart(reports);
+
+        // Render High Risk Establishments dashboard section
+        Dashboard.renderHighRiskEstablishments();
     },
 
     drawMonthlyChart: (reports) => {
@@ -602,6 +616,10 @@ const Dashboard = {
         if (!monthlyCtx) return;
 
         const data = reports || DataStore.inspectionReports;
+        const currentYear = new Date().getFullYear();
+        const subtitleEl = document.getElementById('monthlyChartSubtitle');
+        if (subtitleEl) subtitleEl.textContent = `Total inspections conducted per month (${currentYear})`;
+
         const monthLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         const counts = new Array(12).fill(0);
 
@@ -609,6 +627,16 @@ const Dashboard = {
             const d = new Date(r.date);
             if (!isNaN(d)) counts[d.getMonth()]++;
         });
+
+        const totalReports = counts.reduce((a, b) => a + b, 0);
+        const activeMonths = counts.filter(c => c > 0).length || 1;
+        const avgPerMonth = (totalReports / activeMonths).toFixed(1);
+
+        const countEl = document.getElementById('monthlyLegendCount');
+        if (countEl) countEl.textContent = totalReports;
+
+        const avgEl = document.getElementById('monthlyLegendAvg');
+        if (avgEl) avgEl.textContent = `Avg: ${avgPerMonth} / active mo`;
 
         if (monthlyChartInstance) monthlyChartInstance.destroy();
         monthlyChartInstance = new Chart(monthlyCtx, {
@@ -619,6 +647,7 @@ const Dashboard = {
                     label: 'Inspection Reports',
                     data: counts,
                     backgroundColor: '#3b82f6',
+                    hoverBackgroundColor: '#1d4ed8',
                     borderRadius: 6,
                     borderSkipped: false
                 }]
@@ -626,20 +655,144 @@ const Dashboard = {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        align: 'end',
+                        labels: {
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            color: '#4b5563',
+                            font: { size: 11, weight: '600' }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y} report${ctx.parsed.y === 1 ? '' : 's'}`
+                        }
+                    }
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Reports',
+                            color: '#6b7280',
+                            font: { size: 11, weight: '600' }
+                        },
                         ticks: { stepSize: 1, font: { size: 11 } },
                         grid: { color: 'rgba(0,0,0,0.05)' }
                     },
                     x: {
+                        title: {
+                            display: true,
+                            text: 'Month',
+                            color: '#6b7280',
+                            font: { size: 11, weight: '600' }
+                        },
                         ticks: { font: { size: 11 } },
                         grid: { display: false }
                     }
                 }
             }
         });
+    },
+
+    renderHighRiskEstablishments: async () => {
+        const tbody = document.getElementById('dashboardHighRiskBody');
+        const badgeEl = document.getElementById('highRiskBadgeCount');
+        const statEl = document.getElementById('totalHighRisk');
+        if (!tbody) return;
+
+        // Ensure prediction results are loaded
+        if (!PredictionEngine.results || PredictionEngine.results.length === 0) {
+            try {
+                const rResp = await fetch(`${API_BASE_URL}/predict.php`, { method: 'GET' });
+                const rJson = await rResp.json();
+                if (rJson.success && Array.isArray(rJson.data)) {
+                    PredictionEngine.results = rJson.data;
+                }
+            } catch (e) {
+                console.warn('Could not fetch predictions for high-risk dashboard:', e);
+            }
+        }
+
+        const highRisk = (PredictionEngine.results || []).filter(r => r.riskLevel === 'HIGH');
+
+        if (statEl) {
+            statEl.textContent = highRisk.length;
+            statEl.style.color = highRisk.length > 0 ? '#dc2626' : '#10b981';
+        }
+
+        if (badgeEl) {
+            if (highRisk.length > 0) {
+                badgeEl.textContent = `${highRisk.length} Flagged`;
+                badgeEl.style.background = '#fef2f2';
+                badgeEl.style.color = '#ef4444';
+                badgeEl.style.borderColor = '#fecaca';
+            } else {
+                badgeEl.textContent = '0 Flagged';
+                badgeEl.style.background = '#f0fdf4';
+                badgeEl.style.color = '#059669';
+                badgeEl.style.borderColor = '#a7f3d0';
+            }
+        }
+
+        if (highRisk.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" style="text-align:center;padding:26px 16px;background:#f0fdf4;border-radius:8px;color:#059669;">
+                        <div style="display:flex;align-items:center;justify-content:center;gap:8px;font-weight:700;font-size:13px;">
+                            <i class="fas fa-check-circle" style="font-size:18px;color:#10b981;"></i>
+                            <span>No High-Risk Establishments Flagged</span>
+                        </div>
+                        <p style="font-size:11px;color:#047857;margin:4px 0 0;">All establishments currently maintain compliant or moderate-to-low violation merit scores (65+ merits).</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = highRisk.map((item, index) => {
+            const merits = item.merits ?? item.totalScore ?? 0;
+            const demerits = item.demerits ?? (100 - merits);
+            const openCount = item.openViolationCount ?? (item.matchedViolations || []).length;
+            return `
+                <tr style="border-bottom:1px solid #f3f4f6;transition:background 0.15s;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='transparent'">
+                    <td style="padding:10px 12px;color:#6b7280;font-weight:600;">${index + 1}</td>
+                    <td style="padding:10px 12px;font-weight:700;color:#111827;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <i class="fas fa-store" style="color:#ef4444;font-size:13px;"></i>
+                            <span onclick="event.stopPropagation();VHModal.openViolationModal('${Utils.esc(item.businessName).replace(/'/g, "\\'")}')" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px;color:#b91c1c;" title="Click to view violation history">${Utils.esc(item.businessName)}</span>
+                        </div>
+                        <span style="font-size:11px;color:#9ca3af;font-weight:400;margin-left:21px;">Permit: ${Utils.esc(item.permitNo || 'N/A')}</span>
+                    </td>
+                    <td style="padding:10px 12px;color:#4b5563;">${Utils.esc(item.barangay || 'N/A')}</td>
+                    <td style="padding:10px 12px;">
+                        <span style="background:#fef2f2;color:#ef4444;border:1px solid #fecaca;font-weight:700;padding:2px 8px;border-radius:999px;font-size:11px;display:inline-flex;align-items:center;gap:4px;">
+                            <i class="fas fa-exclamation-triangle" style="font-size:10px;"></i>HIGH RISK
+                        </span>
+                    </td>
+                    <td style="padding:10px 12px;font-weight:700;color:#ef4444;">
+                        ${merits}<span style="font-size:11px;color:#9ca3af;font-weight:400;">/100</span>
+                        <span style="font-size:11px;color:#dc2626;font-weight:600;margin-left:4px;">(-${demerits})</span>
+                    </td>
+                    <td style="padding:10px 12px;">
+                        <span style="background:#fff7ed;color:#c2410c;border:1px solid #ffedd5;font-weight:700;padding:2px 8px;border-radius:6px;font-size:11px;">
+                            ${openCount} open
+                        </span>
+                    </td>
+                    <td style="padding:10px 12px;color:#4b5563;font-size:11px;">${item.lastInspected || 'Never'}</td>
+                    <td style="padding:10px 12px;text-align:center;">
+                        <button type="button" onclick="PredictionEngine.showDetailByName('${Utils.esc(item.businessName).replace(/'/g, "\\'")}')" class="btn btn-xs" style="background:#dc2626;border-color:#dc2626;color:#fff;border-radius:6px;font-weight:600;display:inline-flex;align-items:center;gap:4px;" title="View Prescription & Recommendations">
+                            <i class="fas fa-file-medical"></i>View Details
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
     },
 
     drawRecordsChart: () => {
@@ -5514,6 +5667,11 @@ const PredictionEngine = {
             const highCount = results.filter(r => r.riskLevel === 'HIGH').length;
             const badge = document.getElementById('predHighBadge');
             if (badge) { badge.textContent = highCount; badge.style.display = highCount > 0 ? 'inline-block' : 'none'; }
+
+            // Keep Dashboard high risk widget in sync
+            if (typeof Dashboard !== 'undefined' && Dashboard.renderHighRiskEstablishments) {
+                Dashboard.renderHighRiskEstablishments();
+            }
 
         } catch (err) {
             tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:#ef4444;">Error: ${Utils.esc(err.message)}. Make sure XAMPP is running and the prescription endpoint is reachable.</td></tr>`;

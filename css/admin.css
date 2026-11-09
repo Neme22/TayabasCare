@@ -38,6 +38,34 @@
     box-sizing: border-box;
 }
 
+/* System-wide Cursor Rule: Keep default arrow cursor on all elements while preserving clickability */
+*, *::before, *::after,
+a, button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"],
+select, summary, label, .btn, .sidebar-item, .stat-card, [onclick], [style*="cursor"] {
+    cursor: default !important;
+}
+
+/* Allow text selection cursor for inputs and textareas */
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+input[type="search"],
+input[type="tel"],
+input[type="url"],
+input[type="date"],
+textarea,
+[contenteditable="true"] {
+    cursor: text !important;
+}
+
+/* Maintain disabled indicator cursor where appropriate */
+:disabled,
+[disabled],
+.disabled {
+    cursor: not-allowed !important;
+}
+
 body {
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
@@ -173,9 +201,9 @@ body {
 /* Dashboard Stats Grid */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 24px;
-    margin-bottom: 32px;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 24px;
 }
 
 .stat-card {
