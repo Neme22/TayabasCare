@@ -3601,7 +3601,7 @@ const ArchiveManager = {
         const tbody = document.getElementById('archiveTableBody');
         if (!tbody) return;
 
-        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Loading...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Loading...</td></tr>`;
 
         try {
             const response = await fetch(`${API_BASE_URL}/archive.php`);
@@ -3619,7 +3619,7 @@ const ArchiveManager = {
 
         } catch (error) {
             console.error('Error loading archive:', error);
-            tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Failed to load archive</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Failed to load archive</td></tr>`;
         }
     },
 
@@ -3628,13 +3628,22 @@ const ArchiveManager = {
         const tbody = document.getElementById('archiveTableBody');
         if (!tbody) return;
 
+        // Reset previous selections on fresh filter/render
+        const selectAllCheckbox = document.getElementById('selectAllArchive');
+        if (selectAllCheckbox) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+        }
+        const bulkActions = document.getElementById('bulkActions');
+        if (bulkActions) bulkActions.style.display = 'none';
+
         const allArchived = ArchiveManager._cache || [];
         const filtered = ArchiveManager.applyFilters(allArchived);
 
         if (filtered.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="6" class="empty-state">
+                    <td colspan="5" class="empty-state">
                         <div class="empty-archive-state">
                             <i class="bi bi-archive" style="font-size: 48px; color: #9CA3AF;"></i>
                             <p>${allArchived.length === 0 ? 'No archived items' : 'No items match your filters'}</p>
@@ -3688,16 +3697,6 @@ const ArchiveManager = {
                     <td>${Utils.esc(name)}</td>
                     <td>${Utils.esc(item.reason) || 'No reason provided'}</td>
                     <td>${archivedDate}</td>
-                    <td>
-                        <div class="action-buttons">
-                            <button class="action-btn action-btn-view" onclick="ArchiveManager.restoreItem(${item.id})" title="Restore">
-                                <i class="bi bi-arrow-counterclockwise"></i>
-                            </button>
-                            <button class="action-btn action-btn-delete" onclick="ArchiveManager.permanentDelete(${item.id})" title="Delete Permanently">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </div>
-                    </td>
                 </tr>`;
         }).join('');
     },
@@ -3809,7 +3808,7 @@ updateBadgeCount: (count) => {
     // Toggle select all checkboxes
     toggleSelectAll: () => {
         const selectAllCheckbox = document.getElementById('selectAllArchive');
-        const checked = selectAllCheckbox.checked;
+        const checked = selectAllCheckbox ? selectAllCheckbox.checked : false;
         document.querySelectorAll('.archive-checkbox').forEach(cb => {
             cb.checked = checked;
         });
@@ -3818,12 +3817,25 @@ updateBadgeCount: (count) => {
 
     // Update bulk actions bar visibility
     updateBulkActions: () => {
+        const checkboxes = document.querySelectorAll('.archive-checkbox');
         const checked = document.querySelectorAll('.archive-checkbox:checked');
         const bulkActions = document.getElementById('bulkActions');
         const selectedCountEl = document.getElementById('selectedCount');
+        const selectAll = document.getElementById('selectAllArchive');
+
+        if (selectAll) {
+            if (checkboxes.length > 0) {
+                selectAll.checked = (checked.length === checkboxes.length);
+                selectAll.indeterminate = (checked.length > 0 && checked.length < checkboxes.length);
+            } else {
+                selectAll.checked = false;
+                selectAll.indeterminate = false;
+            }
+        }
+
         if (bulkActions && selectedCountEl) {
             if (checked.length > 0) {
-                bulkActions.style.display = 'flex';
+                bulkActions.style.display = 'inline-flex';
                 selectedCountEl.textContent = `${checked.length} selected`;
             } else {
                 bulkActions.style.display = 'none';
@@ -3835,7 +3847,10 @@ updateBadgeCount: (count) => {
     clearSelection: () => {
         document.querySelectorAll('.archive-checkbox').forEach(cb => cb.checked = false);
         const selectAll = document.getElementById('selectAllArchive');
-        if (selectAll) selectAll.checked = false;
+        if (selectAll) {
+            selectAll.checked = false;
+            selectAll.indeterminate = false;
+        }
         ArchiveManager.updateBulkActions();
     },
 
