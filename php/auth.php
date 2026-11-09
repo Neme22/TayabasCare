@@ -111,10 +111,44 @@ function login() {
         if ($passwordMatched && $user) {
             // Prevent session fixation
             session_regenerate_id(true);
+
+            // Check if user already had an active session on another device/browser
+            $existingToken = null;
+            try {
+                $stmtCheck = $db->prepare("SELECT current_session_token FROM users WHERE id = ?");
+                $stmtCheck->execute([$user['id']]);
+                $existingToken = $stmtCheck->fetchColumn();
+            } catch (PDOException $e) {
+                $col = $db->query("SHOW COLUMNS FROM users LIKE 'current_session_token'");
+                if (!$col->fetch()) {
+                    $db->exec("ALTER TABLE users ADD COLUMN current_session_token VARCHAR(128) NULL DEFAULT NULL AFTER role");
+                }
+            }
+
+            if (!empty($existingToken)) {
+                // Record in activity log that the previous session was terminated due to concurrent login
+                logActivity($db, 'LOGOUT', 'auth', $user['id'], $user['username'], 'Logged out: account signed in on another device');
+            }
+
+            // Generate unique session token for single active device enforcement
+            $sessionToken = bin2hex(random_bytes(32));
+
+            // Store new token in users
+            try {
+                $db->prepare("UPDATE users SET current_session_token = ? WHERE id = ?")->execute([$sessionToken, $user['id']]);
+            } catch (PDOException $e) {
+                $col = $db->query("SHOW COLUMNS FROM users LIKE 'current_session_token'");
+                if (!$col->fetch()) {
+                    $db->exec("ALTER TABLE users ADD COLUMN current_session_token VARCHAR(128) NULL DEFAULT NULL AFTER role");
+                    $db->prepare("UPDATE users SET current_session_token = ? WHERE id = ?")->execute([$sessionToken, $user['id']]);
+                }
+            }
+
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['username'] = $user['username'];
             $_SESSION['role'] = $user['role'];
             $_SESSION['email'] = $user['email'] ?? '';
+            $_SESSION['session_token'] = $sessionToken;
 
             $fullName = $user['username'];
             if ($user['role'] === 'inspector') {
@@ -151,23 +185,66 @@ function login() {
 }
 
 function checkSession() {
+    global $db;
     require_once __DIR__ . '/csrf.php';
-    if (isset($_SESSION['user_id'])) {
-        jsonResponse(true, [
-            'user_id'  => $_SESSION['user_id'],
-            'username' => $_SESSION['username'],
-            'email'    => $_SESSION['email'] ?? '',
-            'role'     => $_SESSION['role'],
-            'csrf_token' => csrfToken()
-        ], 'Session active');
-    } else {
+    if (!isset($_SESSION['user_id'])) {
         errorResponse('No active session', 401);
     }
+
+    $userId = $_SESSION['user_id'] ?? null;
+    $sessToken = $_SESSION['session_token'] ?? null;
+
+    if ($userId && $userId > 0) {
+        try {
+            $stmt = $db->prepare("SELECT current_session_token FROM users WHERE id = ?");
+            $stmt->execute([$userId]);
+            $dbToken = $stmt->fetchColumn();
+
+            // Check if token in DB does not match this session's token (logged in on another device)
+            if (empty($sessToken) || $dbToken !== $sessToken) {
+                session_unset();
+                session_destroy();
+                http_response_code(401);
+                echo json_encode([
+                    'success' => false,
+                    'code'    => 'CONCURRENT_LOGIN',
+                    'message' => 'Your account has been logged in on another device. You have been logged out.'
+                ]);
+                exit();
+            }
+        } catch (PDOException $e) {
+            error_log('checkSession token verification error: ' . $e->getMessage());
+        }
+    }
+
+    $respData = [
+        'user_id'    => $_SESSION['user_id'],
+        'username'   => $_SESSION['username'],
+        'email'      => $_SESSION['email'] ?? '',
+        'role'       => $_SESSION['role'],
+        'csrf_token' => csrfToken()
+    ];
+    // Release PHP session lock immediately so frequent heartbeat polling never blocks UI or other requests
+    session_write_close();
+
+    jsonResponse(true, $respData, 'Session active');
 }
 
 function logout() {
     global $db;
-    logActivity($db, 'LOGOUT', 'auth', $_SESSION['user_id'] ?? null, $_SESSION['username'] ?? '');
+    $userId = $_SESSION['user_id'] ?? null;
+    $sessToken = $_SESSION['session_token'] ?? null;
+    if ($userId && $sessToken) {
+        try {
+            // Only clear token if this session is the active one
+            $db->prepare("UPDATE users SET current_session_token = NULL WHERE id = ? AND current_session_token = ?")
+               ->execute([$userId, $sessToken]);
+        } catch (PDOException $e) {
+            error_log('logout clear token error: ' . $e->getMessage());
+        }
+    }
+    logActivity($db, 'LOGOUT', 'auth', $userId, $_SESSION['username'] ?? '');
+    session_unset();
     session_destroy();
     jsonResponse(true, null, 'Logged out successfully');
 }

@@ -183,25 +183,81 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    function removeSessionWarning() {
+        const alertBox = document.getElementById("loginReasonAlert");
+        if (alertBox) alertBox.remove();
+        if (window.location.search && window.location.search.includes('reason=')) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('reason');
+            const cleanUrl = url.pathname + (url.search ? url.search : '') + url.hash;
+            window.history.replaceState({}, document.title, cleanUrl);
+        }
+    }
+
+    function closeModalHandler() {
+        if (modal) modal.classList.remove("active");
+        removeSessionWarning();
+    }
+
     // Close modal
     if (closeLogin) {
-        closeLogin.addEventListener("click", () => {
-            modal.classList.remove("active");
-        });
+        closeLogin.addEventListener("click", closeModalHandler);
     }
 
     window.addEventListener("click", (e) => {
         if (e.target === modal) {
-            modal.classList.remove("active");
+            closeModalHandler();
         }
     });
 
     // Close modal on Escape key
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && modal.classList.contains("active")) {
-            modal.classList.remove("active");
+            closeModalHandler();
         }
     });
+
+    // Check URL parameters for logout reasons (concurrent_login, idle, etc.)
+    const urlParams = new URLSearchParams(window.location.search);
+    const reason = urlParams.get('reason');
+    if (reason && modal) {
+        modal.classList.add("active");
+        const loginHeader = document.querySelector(".login-header");
+        if (loginHeader && !document.getElementById("loginReasonAlert")) {
+            const alertBox = document.createElement("div");
+            alertBox.id = "loginReasonAlert";
+            if (reason === 'concurrent_login') {
+                alertBox.style.cssText = "background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin:12px 0 16px;color:#334155;font-size:12px;line-height:1.45;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;text-align:left;";
+                alertBox.innerHTML = `
+                    <div style="display:flex;align-items:flex-start;gap:10px;">
+                        <i class="bi bi-info-circle" style="color:#64748b;font-size:18px;line-height:1;margin-top:1px;flex-shrink:0;"></i>
+                        <div>
+                            <strong style="display:block;font-weight:600;color:#0f172a;margin-bottom:2px;font-size:13px;">Session Ended</strong>
+                            Your account was signed in on another device.
+                        </div>
+                    </div>
+                    <button type="button" id="closeReasonAlert" aria-label="Dismiss" style="background:none;border:none;color:#94a3b8;font-size:18px;line-height:1;cursor:default !important;padding:0;margin-left:8px;" title="Dismiss">&times;</button>
+                `;
+            } else if (reason === 'idle') {
+                alertBox.style.cssText = "background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 14px;margin:12px 0 16px;color:#1e40af;font-size:12px;line-height:1.45;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;text-align:left;";
+                alertBox.innerHTML = `
+                    <div style="display:flex;align-items:flex-start;gap:10px;">
+                        <i class="bi bi-clock-history" style="color:#2563eb;font-size:18px;line-height:1;margin-top:1px;flex-shrink:0;"></i>
+                        <div>
+                            <strong style="display:block;font-weight:700;color:#1d4ed8;margin-bottom:2px;font-size:13px;">Session Expired</strong>
+                            You have been logged out due to inactivity.
+                        </div>
+                    </div>
+                    <button type="button" id="closeReasonAlert" aria-label="Dismiss" style="background:none;border:none;color:#93c5fd;font-size:18px;line-height:1;cursor:default !important;padding:0;margin-left:8px;" title="Dismiss">&times;</button>
+                `;
+            }
+            loginHeader.parentNode.insertBefore(alertBox, loginHeader.nextSibling);
+            const closeReasonBtn = alertBox.querySelector("#closeReasonAlert");
+            if (closeReasonBtn) {
+                closeReasonBtn.addEventListener("click", removeSessionWarning);
+            }
+        }
+    }
 
     // Show/hide password
     if (toggleEye && passwordInput) {
@@ -279,6 +335,20 @@ async function login() {
             if (result.data.csrf_token) {
                 _csrfToken = result.data.csrf_token;
             }
+
+            // Broadcast concurrent login event to immediately notify any other active tabs/windows with zero delay
+            try {
+                if (window.BroadcastChannel) {
+                    const bc = new BroadcastChannel('tayabascare_session_channel');
+                    bc.postMessage({ type: 'CONCURRENT_LOGIN', username: result.data.username });
+                }
+            } catch (_) {}
+            try {
+                localStorage.setItem('tc_login_event', JSON.stringify({
+                    username: result.data.username,
+                    timestamp: Date.now()
+                }));
+            } catch (_) {}
 
             if (result.data.role === 'admin') {
                 localStorage.setItem("adminLoggedIn", "true");

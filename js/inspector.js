@@ -27,14 +27,127 @@ async function _fetchCsrfToken() {
 // Initialize token on load
 _fetchCsrfToken();
 
-// Monkey-patch fetch to auto-attach CSRF header (all methods — a few GET
-// endpoints such as notification_runner's send actions require the token)
+// Monkey-patch fetch to auto-attach CSRF header and catch concurrent login invalidation
 window.fetch = async function(url, opts = {}) {
     const token = _csrfToken || await _fetchCsrfToken();
     if (token) {
         opts.headers = { ...opts.headers, 'X-CSRF-Token': token };
     }
-    return _origFetch(url, opts);
+    const response = await _origFetch(url, opts);
+    if (response.status === 401) {
+        try {
+            const clone = response.clone();
+            const data = await clone.json();
+            if (data && (data.code === 'CONCURRENT_LOGIN' || (data.message && data.message.includes('another device')))) {
+                if (typeof SessionGuard !== 'undefined') {
+                    SessionGuard.trigger();
+                }
+            }
+        } catch (_) {}
+    }
+    return response;
+};
+
+// ============================================================
+// Single Session Guard (Concurrent Login Prevention)
+// Detects if the account has been logged in on another device
+// and terminates this session immediately with an alert modal.
+// ============================================================
+const SessionGuard = {
+    _interval: null,
+    _active: false,
+    _checking: false,
+
+    init() {
+        if (this._interval) clearInterval(this._interval);
+        // Fast periodic heartbeat (every 1.5s) to detect cross-device logins with minimal delay
+        this._interval = setInterval(() => this.heartbeat(), 1500);
+
+        // Immediate check on tab focus or visibility change
+        window.addEventListener('focus', () => this.heartbeat());
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') this.heartbeat();
+        });
+
+        // Instant cross-tab/window notification (0ms delay) via BroadcastChannel
+        try {
+            if (window.BroadcastChannel) {
+                const bc = new BroadcastChannel('tayabascare_session_channel');
+                bc.onmessage = (e) => {
+                    if (e.data && e.data.type === 'CONCURRENT_LOGIN') {
+                        this.heartbeat();
+                    }
+                };
+            }
+        } catch (_) {}
+
+        // Fallback cross-window notification via storage event
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'tc_login_event' && e.newValue) {
+                this.heartbeat();
+            }
+        });
+    },
+
+    async heartbeat() {
+        if (this._active || this._checking) return;
+        this._checking = true;
+        try {
+            const res = await _origFetch(`${API_BASE_URL}/auth.php`, { credentials: 'include' });
+            if (res.status === 401) {
+                const data = await res.json();
+                if (data && (data.code === 'CONCURRENT_LOGIN' || (data.message && data.message.includes('another device')))) {
+                    this.trigger();
+                }
+            }
+        } catch (_) {
+        } finally {
+            this._checking = false;
+        }
+    },
+
+    trigger() {
+        if (this._active) return;
+        this._active = true;
+        if (this._interval) clearInterval(this._interval);
+
+        // Remove idle timeout modal if open
+        const idleModal = document.getElementById('idle-timeout-modal');
+        if (idleModal) idleModal.remove();
+
+        let modal = document.getElementById('concurrent-login-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'concurrent-login-modal';
+            modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.6);z-index:99999;backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;';
+            modal.innerHTML = `
+                <div style="background:#ffffff;border-radius:14px;padding:28px 24px;max-width:380px;width:90%;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);text-align:center;border:1px solid #e5e7eb;">
+                    <div style="width:48px;height:48px;background:#f3f4f6;border-radius:50%;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;">
+                        <i class="bi bi-box-arrow-right" style="font-size:22px;color:#4b5563;"></i>
+                    </div>
+                    <h3 style="margin:0 0 8px 0;font-size:18px;font-weight:700;color:#111827;">Session Ended</h3>
+                    <p style="margin:0 0 20px 0;font-size:13px;color:#6b7280;line-height:1.5;">
+                        Your account was signed in on another device.
+                    </p>
+                    <button id="concurrent-login-redirect-btn" style="width:100%;padding:10px 16px;background:#059669;color:#ffffff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:default !important;transition:background 0.15s;">
+                        Log In Again
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            document.getElementById('concurrent-login-redirect-btn').addEventListener('click', () => {
+                if (typeof FormDrafts !== 'undefined' && FormDrafts.saveAll) {
+                    FormDrafts.saveAll();
+                }
+                const draftKeys = typeof FormDrafts !== 'undefined' ? Object.values(FormDrafts.KEYS || {}) : [];
+                const savedDrafts = {};
+                draftKeys.forEach(k => { const v = localStorage.getItem(k); if (v) savedDrafts[k] = v; });
+                localStorage.clear();
+                Object.entries(savedDrafts).forEach(([k, v]) => localStorage.setItem(k, v));
+                window.location.href = 'index?reason=concurrent_login';
+            });
+        }
+    }
 };
 
 // Shared table "Load more" paging (mirrors admin.js)
@@ -136,8 +249,15 @@ function renderNumberedPager(elId, info, key) {
         const resp = await fetch(`${API_BASE_URL}/auth.php`);
         const data = await resp.json();
         if (!data.success || (data.data && data.data.role !== 'inspector')) {
+            if (data && data.code === 'CONCURRENT_LOGIN') {
+                SessionGuard.trigger();
+                return;
+            }
             window.location.href = 'index';
+            return;
         }
+        // Initialize concurrent login session guard
+        SessionGuard.init();
     } catch (e) {
         window.location.href = 'index';
     }

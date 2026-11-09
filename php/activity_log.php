@@ -10,8 +10,8 @@
 // ---- Helper: Log an activity ----
 function logActivity($db, $action, $module, $recordId = null, $recordLabel = '', $details = '') {
     try {
-        $userId   = $_SESSION['user_id'] ?? null;
-        $username = $_SESSION['username'] ?? 'system';
+        $userId   = $_SESSION['user_id'] ?? ($module === 'auth' ? $recordId : null);
+        $username = !empty($_SESSION['username']) ? $_SESSION['username'] : (($module === 'auth' && !empty($recordLabel)) ? $recordLabel : 'system');
         $ip       = $_SERVER['REMOTE_ADDR'] ?? '';
 
         $stmt = $db->prepare("
@@ -78,7 +78,7 @@ if ($isDirectAccess) {
 
             $sql = "SELECT * FROM activity_log";
             if ($where) $sql .= " WHERE " . implode(" AND ", $where);
-            $sql .= " ORDER BY created_at DESC LIMIT 500";
+            $sql .= " ORDER BY created_at DESC, id DESC LIMIT 500";
 
             $stmt = $db->prepare($sql);
             $stmt->execute($params);
