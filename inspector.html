@@ -40,7 +40,7 @@
                 <div id="inspNotifPanel" class="notif-panel" style="display:none;">
                     <div class="notif-panel-header">
                         <span class="notif-panel-title">My Schedule Alerts</span>
-                        <button onclick="InspNotifManager.markAllRead()" class="notif-mark-read-btn">Mark all read</button>
+                        <button type="button" onclick="InspNotifManager.markAllRead()" class="notif-mark-read-btn">Mark all read</button>
                     </div>
                     <div class="insp-notif-tabs" role="tablist">
                         <button type="button" id="inspNotifTabAll" class="insp-notif-tab active" role="tab" aria-selected="true" onclick="InspNotifManager.setTab('all')">All</button>
@@ -1381,6 +1381,12 @@
                         <span id="inspCalMonthLabel" class="schedule-month-label"></span>
                         <button onclick="InspSchedule.nextMonth()" class="schedule-nav-btn">&#8250;</button>
                     </div>
+                    <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:14px;margin:0 0 12px;font-size:12px;color:#4b5563;">
+                        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:#2563eb;display:inline-block;"></span>Inspections Duty</span>
+                        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:#059669;display:inline-block;"></span>Sanitary Duty</span>
+                        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:#7c3aed;display:inline-block;"></span>Burial Duty</span>
+                        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:#f59e0b;display:inline-block;"></span>Event</span>
+                    </div>
 
                     <!-- Day Headers -->
                     <div class="schedule-day-headers">
@@ -2316,7 +2322,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
     <script src="js/import_common.js?v=2"></script>
-    <script src="js/inspector.js?v=25"></script>
+    <script src="js/inspector.js?v=30"></script>
 
     <script>
 document.addEventListener('click', function(e) {

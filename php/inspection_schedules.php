@@ -3,6 +3,7 @@ require_once 'auth_check.php';
 require_once 'activity_log.php';
 require_once 'csrf.php';
 require_once 'cluster_lib.php';
+require_once 'inspector_notif_lib.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 
@@ -12,21 +13,56 @@ if (csrfNeeded()) {
     requireCsrf();
 }
 
+ensureScheduleDutyColumn($db);
+
 // ---- POST: Create/update schedule ----
-// Admin can schedule for anyone; inspectors may only schedule for themselves
-// (auto-schedule from compliance deadlines).
+// Admin can schedule single or multiple dates for duty (Inspections, Sanitary, Burial);
+// inspectors may only schedule for themselves (auto-schedule from compliance deadlines).
 if ($method === 'POST') {
     try {
-        $input = json_decode(file_get_contents('php://input'), true);
+        $input = json_decode(file_get_contents('php://input'), true) ?: [];
 
-        $inspector    = trim($input['inspector'] ?? '');
-        $schedDate    = trim($input['schedDate'] ?? '');
-        $notes        = trim($input['notes'] ?? '');
+        $inspector     = trim($input['inspector'] ?? '');
+        $schedDate     = trim($input['schedDate'] ?? '');
+        $schedDatesRaw = $input['schedDates'] ?? null;
+        $rawDutyType   = trim($input['dutyType'] ?? ($input['duty_type'] ?? ''));
+        $notes         = trim($input['notes'] ?? '');
         $establishment = trim($input['establishment'] ?? '');
-        $riskLevel    = trim($input['riskLevel'] ?? '');
+        $riskLevel     = trim($input['riskLevel'] ?? '');
 
-        if (!$inspector || !$schedDate) {
-            errorResponse('Missing data', 400);
+        // Normalize & validate dates (supports single schedDate or array schedDates)
+        $dates = [];
+        if (is_array($schedDatesRaw) && count($schedDatesRaw) > 0) {
+            foreach ($schedDatesRaw as $d) {
+                $d = trim((string)$d);
+                if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) {
+                    $dates[] = $d;
+                }
+            }
+        } elseif ($schedDate !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $schedDate)) {
+            $dates[] = $schedDate;
+        }
+        $dates = array_values(array_unique($dates));
+        sort($dates);
+
+        // Normalize dutyType
+        $dutyType = '';
+        if ($rawDutyType !== '') {
+            $dutyMap = [
+                'inspections' => 'Inspections',
+                'inspection'  => 'Inspections',
+                'sanitary'    => 'Sanitary',
+                'burial'      => 'Burial'
+            ];
+            $key = strtolower($rawDutyType);
+            if (!isset($dutyMap[$key])) {
+                errorResponse('Invalid duty type. Allowed values: Inspections, Sanitary, Burial.', 400);
+            }
+            $dutyType = $dutyMap[$key];
+        }
+
+        if (!$inspector || empty($dates)) {
+            errorResponse('Missing inspector or valid schedule date(s).', 400);
         }
 
         $sessionRole = $_SESSION['role'] ?? '';
@@ -46,6 +82,9 @@ if ($method === 'POST') {
 
         if ($sessionRole !== 'admin') {
             requireRole('inspector');
+            if ($dutyType !== '') {
+                errorResponse('Only administrators can assign duty schedules.', 403);
+            }
             $sessionUser = trim($_SESSION['username'] ?? '');
             $fullName = trim($_SESSION['full_name'] ?? (($_SESSION['username'] ?? '')));
             // Resolve the inspector's full name from inspector_accounts
@@ -87,27 +126,96 @@ if ($method === 'POST') {
             if ($clusterN && !empty($ownersMap[$clusterN])) {
                 $inspector = $ownersMap[$clusterN];
             }
+        } else {
+            // Canonicalize inspector full_name when possible
+            $ident = resolveInspectorIdentity($db, $inspector);
+            if ($ident['full_name'] !== '') {
+                $inspector = $ident['full_name'];
+            }
         }
 
-        // Try with new columns first, fall back to old schema
-        try {
+        $db->beginTransaction();
+        foreach ($dates as $d) {
+            if ($dutyType !== '' && $establishment === '') {
+                // Prevent duplicate active duty entry for the exact same inspector, date, and duty_type
+                $dupStmt = $db->prepare(
+                    "SELECT id FROM inspection_schedules
+                     WHERE LOWER(inspector_name) = LOWER(?) AND schedDate = ? AND duty_type = ? AND done = 0
+                     LIMIT 1"
+                );
+                $dupStmt->execute([$inspector, $d, $dutyType]);
+                $existingId = $dupStmt->fetchColumn();
+                if ($existingId) {
+                    if ($notes !== '') {
+                        $db->prepare("UPDATE inspection_schedules SET notes = ? WHERE id = ?")->execute([$notes, $existingId]);
+                    }
+                    continue;
+                }
+            }
+
             $stmt = $db->prepare("
-                INSERT INTO inspection_schedules (inspector_name, establishment, risk_level, schedDate, notes)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO inspection_schedules (inspector_name, establishment, duty_type, risk_level, schedDate, notes)
+                VALUES (?, ?, ?, ?, ?, ?)
             ");
-            $stmt->execute([$inspector, $establishment ?: null, $riskLevel ?: null, $schedDate, $notes]);
-        } catch (PDOException $e) {
-            // Fallback: old schema without establishment/risk_level columns
-            $stmt = $db->prepare("
-                INSERT INTO inspection_schedules (inspector_name, schedDate, notes)
-                VALUES (?, ?, ?)
-            ");
-            $stmt->execute([$inspector, $schedDate, $notes]);
+            $stmt->execute([
+                $inspector,
+                $establishment !== '' ? $establishment : null,
+                $dutyType !== '' ? $dutyType : null,
+                $riskLevel !== '' ? $riskLevel : null,
+                $d,
+                $notes
+            ]);
+        }
+        $db->commit();
+
+        if ($dutyType !== '') {
+            $dateSummary = count($dates) > 1
+                ? count($dates) . ' day(s): ' . implode(', ', $dates)
+                : $dates[0];
+            logActivity($db, 'CREATE', 'schedule', null, $inspector, "Scheduled $dutyType duty ($dateSummary)");
+        } else {
+            logActivity($db, 'CREATE', 'schedule', null, $inspector, "Scheduled: " . implode(', ', $dates) . " for " . ($establishment ?: 'general'));
         }
 
-        logActivity($db, 'CREATE', 'schedule', null, $inspector, "Scheduled: $schedDate for " . ($establishment ?: 'general'));
-        jsonResponse(true, null, 'Schedule saved.');
+        // Create persistent in-app bell notification for the inspector when admin schedules
+        if ($sessionRole === 'admin') {
+            $dateLabels = array_map(fn($dt) => date('M j, Y', strtotime($dt)), $dates);
+            if ($dutyType !== '') {
+                $notifTitle = "New {$dutyType} Duty Schedule";
+                if (count($dates) === 1) {
+                    $notifMsg = "You are scheduled for {$dutyType} duty on {$dateLabels[0]}.";
+                } else {
+                    $shortLabels = array_map(fn($dt) => date('M j', strtotime($dt)), $dates);
+                    $notifMsg = "You are scheduled for {$dutyType} duty for " . count($dates) . " days (" . implode(', ', $shortLabels) . ").";
+                }
+            } else {
+                $notifTitle = 'New Inspection Schedule';
+                $notifMsg = "You are scheduled for inspection"
+                    . ($establishment !== '' ? " at {$establishment}" : '')
+                    . " on {$dateLabels[0]}.";
+            }
+            if ($notes !== '') {
+                $notifMsg .= " Note: {$notes}";
+            }
+            createInspectorNotification(
+                $db,
+                $inspector,
+                'assigned',
+                $dutyType,
+                $notifTitle,
+                $notifMsg,
+                $dates[0],
+                $dates
+            );
+        }
+
+        jsonResponse(true, [
+            'inspector' => $inspector,
+            'dutyType'  => $dutyType,
+            'dates'     => $dates
+        ], 'Schedule saved.');
     } catch (PDOException $e) {
+        if ($db->inTransaction()) $db->rollBack();
         error_log('inspection_schedules.php error: ' . $e->getMessage());
         errorResponse('Database error. Please try again.', 500);
     }
@@ -117,6 +225,23 @@ if ($method === 'POST') {
 if ($method === 'GET') {
     requireRole(['admin', 'inspector']);
     try {
+        // Automatically sync duty shift completion status with calendar date (past = Done, today/future = Pending)
+        try {
+            $todayPh = (new DateTimeImmutable('now', new DateTimeZone('Asia/Manila')))->format('Y-m-d');
+            $db->prepare(
+                "UPDATE inspection_schedules
+                 SET done = 1
+                 WHERE done = 0 AND duty_type IS NOT NULL AND duty_type <> '' AND schedDate < ?"
+            )->execute([$todayPh]);
+            $db->prepare(
+                "UPDATE inspection_schedules
+                 SET done = 0
+                 WHERE done = 1 AND duty_type IS NOT NULL AND duty_type <> '' AND schedDate >= ?"
+            )->execute([$todayPh]);
+        } catch (PDOException $e) {
+            error_log('inspection_schedules auto-done error: ' . $e->getMessage());
+        }
+
         $where = [];
         $params = [];
 
@@ -137,7 +262,7 @@ if ($method === 'GET') {
         // cluster's barangays (each inspector sees only their own cluster;
         // admin keeps the full list). Rows whose establishment can't be
         // resolved to a sanitary record fall back to own-name matching so
-        // legacy/unknown rows still reach their own inspector.
+        // duty schedules and legacy/unknown rows still reach their own inspector.
         if (($_SESSION['role'] ?? '') === 'inspector') {
             $myBarangays = clusterBarangaysForSession($db);
             $fullName = sessionInspectorFullName($db);
@@ -164,12 +289,12 @@ if ($method === 'GET') {
                     array_push($params, ...$myBarangays);
                 }
             } elseif ($variants) {
-                // No cluster assigned → only rows named for this inspector
+                // No cluster assigned -> only rows named for this inspector
                 $namePh = implode(',', array_fill(0, count($variants), '?'));
                 $where[] = "LOWER(inspector_name) IN ($namePh)";
                 array_push($params, ...$variants);
             } else {
-                $where[] = "1 = 0";   // no cluster and no identity → see nothing
+                $where[] = "1 = 0";   // no cluster and no identity -> see nothing
             }
         }
 

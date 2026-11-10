@@ -47,7 +47,8 @@ if ($method === 'GET') {
         // GET-triggered write — require CSRF token
         requireCsrf();
         try {
-            generateAlerts($db);
+            $force = isset($_GET['force']) && $_GET['force'] === '1';
+            generateAlerts($db, $force);
             jsonResponse(true, null, 'Alerts generated successfully.');
         } catch (PDOException $e) {
             error_log('alerts.php error: ' . $e->getMessage());
@@ -61,9 +62,14 @@ if ($method === 'GET') {
 // ---- PUT: Mark as read or dismissed ----
 if ($method === 'PUT') {
     try {
-        $input = json_decode(file_get_contents('php://input'), true);
+        $input = json_decode(file_get_contents('php://input'), true) ?: [];
         $id = intval($input['id'] ?? 0);
         $action = $input['action'] ?? '';
+
+        if ($action === 'read_all') {
+            $db->exec("UPDATE alerts SET is_read = 1 WHERE dismissed = 0");
+            jsonResponse(true, null, 'All alerts marked as read.');
+        }
 
         if (!$id) errorResponse('Alert ID required');
 
@@ -75,11 +81,6 @@ if ($method === 'PUT') {
         if ($action === 'dismiss') {
             $db->prepare("UPDATE alerts SET dismissed = 1 WHERE id = ?")->execute([$id]);
             jsonResponse(true, null, 'Alert dismissed.');
-        }
-
-        if ($action === 'read_all') {
-            $db->exec("UPDATE alerts SET is_read = 1 WHERE dismissed = 0");
-            jsonResponse(true, null, 'All alerts marked as read.');
         }
 
         errorResponse('Unknown action: ' . $action);
@@ -105,13 +106,15 @@ errorResponse('Method not allowed', 405);
 // ============================================================
 // ALERT GENERATION ENGINE
 // ============================================================
-function generateAlerts($db) {
-    // Only regenerate if last generation was > 2 minutes ago
-    $stmt = $db->query("SELECT MAX(created_at) as last_gen FROM alerts");
-    $lastGen = $stmt->fetch()['last_gen'];
-    if ($lastGen) {
-        $minutesSince = (time() - strtotime($lastGen)) / 60;
-        if ($minutesSince < 2) return;
+function generateAlerts($db, $force = false) {
+    // Only regenerate if last generation was > 15 seconds ago (unless forced)
+    if (!$force) {
+        $stmt = $db->query("SELECT MAX(created_at) as last_gen FROM alerts");
+        $lastGen = $stmt->fetch()['last_gen'];
+        if ($lastGen) {
+            $secondsSince = time() - strtotime($lastGen);
+            if ($secondsSince >= 0 && $secondsSince < 15) return;
+        }
     }
 
     // Ensure fingerprint column exists (migration for existing DBs)
@@ -146,9 +149,11 @@ function generateAlerts($db) {
     generateHighRiskAlerts($db, $tempAlerts);
     generateScheduleReminderAlerts($db, $tempAlerts);
 
-    // Build a fingerprint for each new alert
+    // Build a fingerprint for each new alert (preserve pre-assigned per-record fingerprints)
     foreach ($tempAlerts as &$alert) {
-        $alert['fingerprint'] = $alert['alert_type'] . ':' . ($alert['establishment'] ?? '');
+        if (empty($alert['fingerprint'])) {
+            $alert['fingerprint'] = $alert['alert_type'] . ':' . ($alert['establishment'] ?? '');
+        }
     }
     unset($alert);
 
@@ -157,34 +162,45 @@ function generateAlerts($db) {
         return !isset($dismissedFingerprints[$a['fingerprint']]);
     });
 
-    // Get fingerprints of currently active (non-dismissed) alerts
-    $activeStmt = $db->query("SELECT fingerprint FROM alerts WHERE dismissed = 0 AND fingerprint IS NOT NULL");
-    $activeFingerprints = [];
+    // Get active (non-dismissed) alerts keyed by fingerprint so we can insert new or update changed messages
+    $activeStmt = $db->query("SELECT fingerprint, message, severity FROM alerts WHERE dismissed = 0 AND fingerprint IS NOT NULL");
+    $activeMap = [];
     foreach ($activeStmt->fetchAll() as $row) {
-        $activeFingerprints[$row['fingerprint']] = true;
+        $activeMap[$row['fingerprint']] = $row;
     }
 
-    // Insert only NEW alerts (not already active, not dismissed)
-    $stmt = $db->prepare("INSERT IGNORE INTO alerts (alert_type, establishment, barangay, message, severity, risk_score, fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    // Insert NEW alerts or update existing active alerts whose day-label/message changed
+    $insStmt = $db->prepare("INSERT IGNORE INTO alerts (alert_type, establishment, barangay, message, severity, risk_score, fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $updStmt = $db->prepare("UPDATE alerts SET message = ?, severity = ?, risk_score = ? WHERE fingerprint = ? AND dismissed = 0");
     foreach ($tempAlerts as $alert) {
-        if (isset($activeFingerprints[$alert['fingerprint']])) continue;
-        $stmt->execute([
+        $fp = $alert['fingerprint'];
+        if (isset($activeMap[$fp])) {
+            $existing = $activeMap[$fp];
+            $newSev = $alert['severity'] ?? 'warning';
+            if ($existing['message'] !== $alert['message'] || $existing['severity'] !== $newSev) {
+                $updStmt->execute([$alert['message'], $newSev, $alert['risk_score'] ?? 0, $fp]);
+            }
+            continue;
+        }
+        $insStmt->execute([
             $alert['alert_type'],
             $alert['establishment'] ?? '',
             $alert['barangay'] ?? '',
             $alert['message'],
             $alert['severity'] ?? 'warning',
             $alert['risk_score'] ?? 0,
-            $alert['fingerprint']
+            $fp
         ]);
     }
 
-    // Remove active alerts that are no longer relevant (e.g., establishment was fixed)
-    $currentFingerprints = array_column($tempAlerts, 'fingerprint');
+    // Remove active alerts that are no longer relevant (e.g., schedule marked done, past date, or establishment fixed)
+    $currentFingerprints = array_values(array_column($tempAlerts, 'fingerprint'));
     if (!empty($currentFingerprints)) {
         $placeholders = implode(',', array_fill(0, count($currentFingerprints), '?'));
         $db->prepare("DELETE FROM alerts WHERE dismissed = 0 AND fingerprint IS NOT NULL AND fingerprint NOT IN ($placeholders)")
            ->execute($currentFingerprints);
+    } else {
+        $db->exec("DELETE FROM alerts WHERE dismissed = 0 AND fingerprint IS NOT NULL");
     }
 }
 
@@ -343,28 +359,54 @@ function generateHighRiskAlerts($db, &$alerts) {
 // ---- Schedule Reminder Alerts ----
 function generateScheduleReminderAlerts($db, &$alerts) {
     try {
-        $today = date('Y-m-d');
-        $threeDays = date('Y-m-d', strtotime('+3 days'));
+        $tz        = new DateTimeZone('Asia/Manila');
+        $todayDt   = new DateTimeImmutable('today', $tz);
+        $today     = $todayDt->format('Y-m-d');
+        $threeDays = $todayDt->modify('+3 days')->format('Y-m-d');
+
+        // Ensure past duty shifts are Done and upcoming/today duties remain active
+        try {
+            $db->prepare(
+                "UPDATE inspection_schedules
+                 SET done = 1
+                 WHERE done = 0 AND duty_type IS NOT NULL AND duty_type <> '' AND schedDate < ?"
+            )->execute([$today]);
+            $db->prepare(
+                "UPDATE inspection_schedules
+                 SET done = 0
+                 WHERE done = 1 AND duty_type IS NOT NULL AND duty_type <> '' AND schedDate >= ?"
+            )->execute([$today]);
+        } catch (PDOException $e) {}
 
         $stmt = $db->prepare("
             SELECT * FROM inspection_schedules
             WHERE schedDate BETWEEN ? AND ? AND done = 0
-            ORDER BY schedDate ASC
+            ORDER BY schedDate ASC, id ASC
         ");
         $stmt->execute([$today, $threeDays]);
         $upcoming = $stmt->fetchAll();
 
         foreach ($upcoming as $sched) {
-            $daysUntil = (int)(new DateTime($sched['schedDate']))->diff(new DateTime())->days;
-            $label = $daysUntil === 0 ? 'TODAY' : ($daysUntil === 1 ? 'tomorrow' : "in {$daysUntil} days");
-            $severity = $daysUntil === 0 ? 'critical' : ($daysUntil === 1 ? 'warning' : 'info');
+            $dateStr   = substr((string)$sched['schedDate'], 0, 10);
+            $schedDt   = new DateTimeImmutable($dateStr . ' 00:00:00', $tz);
+            $daysUntil = (int)$todayDt->diff($schedDt)->format('%r%a');
+            if ($daysUntil < 0) continue;
+
+            $label     = $daysUntil === 0 ? 'today' : ($daysUntil === 1 ? 'tomorrow' : "in {$daysUntil} days");
+            $severity  = $daysUntil === 0 ? 'critical' : ($daysUntil === 1 ? 'warning' : 'info');
+            $dutyLabel = !empty($sched['duty_type']) ? $sched['duty_type'] . ' duty' : 'Inspection duty';
+            $dateHint  = $schedDt->format('M j');
+
             $alerts[] = [
-                'alert_type' => 'schedule_reminder',
+                'alert_type'    => 'schedule_reminder',
                 'establishment' => $sched['inspector_name'],
-                'barangay' => '',
-                'message' => "Inspection duty scheduled {$label} — Inspector: {$sched['inspector_name']}" . ($sched['establishment'] ? " for {$sched['establishment']}" : '') . ($sched['notes'] ? ". Notes: {$sched['notes']}" : ''),
-                'severity' => $severity,
-                'risk_score' => 0
+                'barangay'      => '',
+                'fingerprint'   => 'schedule_reminder:' . $sched['id'] . ':' . $dateStr,
+                'message'       => "{$dutyLabel} scheduled {$label} ({$dateHint}) — Inspector: {$sched['inspector_name']}"
+                    . ($sched['establishment'] ? " for {$sched['establishment']}" : '')
+                    . ($sched['notes'] ? ". Notes: {$sched['notes']}" : ''),
+                'severity'      => $severity,
+                'risk_score'    => 0
             ];
         }
     } catch (PDOException $e) {

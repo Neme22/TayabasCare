@@ -4,6 +4,9 @@ error_reporting(E_ALL);
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 
+// Ensure PHP date/time functions always operate in Philippine Time (Tayabas City)
+date_default_timezone_set('Asia/Manila');
+
 // Session configuration: 35-minute server-side lifetime (frontend auto-logout at 30 min)
 ini_set('session.gc_maxlifetime', 2100);
 ini_set('session.use_strict_mode', 1);
@@ -52,6 +55,7 @@ class Database {
                 PDO::ATTR_STRINGIFY_FETCHES => false,
             ];
             $this->conn = new PDO($dsn, $this->user, $this->pass, $options);
+            $this->conn->exec("SET time_zone = '+08:00'");
             return $this->conn;
         } catch(PDOException $e) {
             error_log('DB connection failed: ' . $e->getMessage());

@@ -1168,24 +1168,29 @@ const InspSchedule = {
                     `</div>`;
             }
             if (hasScheds) {
+                const dutyColors = { 'Inspections': '#2563eb', 'Sanitary': '#059669', 'Burial': '#7c3aed' };
                 const shown = scheds.slice(0, 3);
                 const overflow = scheds.length - shown.length;
                 dotsHtml += `<div style="margin-top:4px;">` +
                     shown.map(s => {
-                        const badgeClass = s.done ? 'done' : 'scheduled';
-                        const raw = String(s.establishment || '').trim() || 'General inspection';
-                        const label = raw.length > 16 ? raw.slice(0, 16) + '…' : raw;
-                        const tip = `${esc(raw)}${s.riskLevel ? '\\n⚠️ Risk: ' + s.riskLevel : ''}${s.notes ? '\\n📝 ' + esc(s.notes) : ''}`;
-                        return `<span class="cal-tooltip schedule-status-badge cal-estab-chip ${badgeClass}" style="cursor:pointer;">${esc(label)}<span class="cal-tooltip-text">${tip.replace(/\\n/g, '<br>')}</span></span>`;
+                        const duty = s.duty_type || s.dutyType || '';
+                        const isDone = duty ? (cellDate < today) : !!(s.done);
+                        const badgeClass = isDone ? 'done' : 'scheduled';
+                        const raw = String(s.establishment || '').trim() || (duty ? `${duty} Duty` : 'General inspection');
+                        const label = raw.length > 18 ? raw.slice(0, 18) + '…' : raw;
+                        const chipBg = (duty && dutyColors[duty]) ? dutyColors[duty] : '';
+                        const inlineBg = chipBg ? `background:${chipBg};color:#fff;` : '';
+                        const tip = `${esc(raw)}${duty && s.establishment ? '\\n📋 Duty: ' + esc(duty) : ''}${s.riskLevel ? '\\n⚠️ Risk: ' + s.riskLevel : ''}${s.notes ? '\\n📝 ' + esc(s.notes) : ''}${isDone ? '\\n✓ Done' : ''}`;
+                        return `<span class="cal-tooltip schedule-status-badge cal-estab-chip ${badgeClass}" style="${inlineBg}">${esc(label)}<span class="cal-tooltip-text">${tip.replace(/\\n/g, '<br>')}</span></span>`;
                     }).join('') +
                     (overflow > 0
-                        ? `<span class="cal-tooltip schedule-status-badge cal-estab-chip" style="background:#6b7280;color:#fff;cursor:pointer;">+${overflow}<span class="cal-tooltip-text">${scheds.slice(3).map(s => esc(String(s.establishment || '').trim() || 'General inspection')).join('<br>')}</span></span>`
+                        ? `<span class="cal-tooltip schedule-status-badge cal-estab-chip" style="background:#6b7280;color:#fff;">+${overflow}<span class="cal-tooltip-text">${scheds.slice(3).map(s => esc(String(s.establishment || '').trim() || ((s.duty_type || s.dutyType) ? `${s.duty_type || s.dutyType} Duty` : 'General inspection'))).join('<br>')}</span></span>`
                         : '') +
                     `</div>`;
             }
 
             html += `
-            <div onclick="InspSchedule.showDay('${dateKey}')" data-date="${dateKey}" class="${cellClasses.join(' ')}" style="cursor:${hasItems ? 'pointer' : 'default'}">
+            <div onclick="InspSchedule.showDay('${dateKey}')" data-date="${dateKey}" class="${cellClasses.join(' ')}">
                 <div class="day-number">${d}</div>
                 ${dotsHtml}
             </div>`;
@@ -1217,41 +1222,56 @@ const InspSchedule = {
         const dateFmt = new Date(dateKey + 'T00:00:00').toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         title.textContent = dateFmt;
 
+        const today = new Date(); today.setHours(0,0,0,0);
         let html = '';
 
         // Show events first
         if (dayEvents.length > 0) {
             html += `<div style="margin-bottom:12px;"><div class="text-xs font-bold text-amber-700 uppercase tracking-wide mb-2">Events</div>`;
-            html += dayEvents.map(ev => `
+            html += dayEvents.map(ev => {
+                const evDate = ev.event_date ? new Date(String(ev.event_date).slice(0, 10) + 'T00:00:00') : null;
+                const evDone = !!(evDate && evDate < today);
+                return `
                 <div class="schedule-task-item" style="border-color:#fde68a;background:#fffbeb;">
-                    <div class="schedule-task-dot scheduled" style="background:#f59e0b;"></div>
+                    <div class="schedule-task-dot ${evDone ? 'done' : 'scheduled'}" style="${evDone ? '' : 'background:#f59e0b;'}"></div>
                     <div style="flex:1;min-width:0;">
                         <div class="font-semibold text-sm text-amber-900">${esc(ev.title)}</div>
                         ${ev.start_time || ev.end_time ? `<div class="text-xs text-amber-700 mt-1">🕐 ${formatTime(ev.start_time)}${ev.end_time ? ' - ' + formatTime(ev.end_time) : ''}</div>` : ''}
                         ${ev.place ? `<div class="text-xs text-amber-700 mt-1">📍 ${esc(ev.place)}</div>` : ''}
                         ${ev.notes ? `<div class="text-xs text-gray-600 mt-1">${esc(ev.notes)}</div>` : ''}
                     </div>
-                </div>
-            `).join('') + `</div>`;
+                    ${evDone ? '<span class="risk-badge risk-done">Done</span>' : '<span class="risk-badge risk-pending">Pending</span>'}
+                </div>`;
+            }).join('') + `</div>`;
         }
 
         // Show schedules
         if (scheds.length === 0 && dayEvents.length === 0) {
-            html += '<p class="text-center text-sm text-gray-400 py-3">You have no scheduled inspection or events on this day.</p>';
+            html += '<p class="text-center text-sm text-gray-400 py-3">You have no scheduled duty, inspection, or events on this day.</p>';
         } else if (scheds.length > 0) {
-            html += `<div class="text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Inspections</div>`;
+            const dutyBadgeColors = {
+                'Inspections': 'background:#dbeafe;color:#1d4ed8;',
+                'Sanitary':    'background:#d1fae5;color:#047857;',
+                'Burial':      'background:#ede9fe;color:#6d28d9;'
+            };
+            html += `<div class="text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Scheduled Duties &amp; Inspections</div>`;
             html += scheds.map(s => {
-                const today = new Date(); today.setHours(0,0,0,0);
-                const due   = new Date(s.schedDate); due.setHours(0,0,0,0);
-                const status = s.done ? 'Done' : (due < today ? 'Overdue' : 'Pending');
+                const due   = new Date(String(s.schedDate).slice(0, 10) + 'T00:00:00'); due.setHours(0,0,0,0);
+                const duty = s.duty_type || s.dutyType || '';
+                const status = duty ? (due < today ? 'Done' : 'Pending') : (s.done ? 'Done' : (due < today ? 'Overdue' : 'Pending'));
                 const statusClass = status.toLowerCase();
                 const riskBadgeClass = s.riskLevel === 'HIGH' ? 'risk-high' : s.riskLevel === 'MODERATE' ? 'risk-moderate' : 'risk-low';
+                const heading = String(s.establishment || '').trim() || (duty ? `${duty} Duty` : 'General Inspection Duty');
+                const dutyStyle = dutyBadgeColors[duty] || '';
 
                 return `
                 <div class="schedule-task-item">
                     <div class="schedule-task-dot ${statusClass}"></div>
                     <div style="flex:1;min-width:0;">
-                        <div class="font-semibold text-sm text-gray-900">${esc(s.establishment) || 'No establishment set'}</div>
+                        <div class="font-semibold text-sm text-gray-900" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                            <span>${esc(heading)}</span>
+                            ${duty ? `<span style="${dutyStyle}font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;">${esc(duty)}</span>` : ''}
+                        </div>
                         <div class="text-xs text-gray-500 mt-1">
                             ${s.riskLevel ? `<span class="risk-badge ${riskBadgeClass}">${esc(s.riskLevel)}</span>` : ''}
                             ${s.rank ? `<span class="ml-1">${esc(s.rank)}</span>` : ''}
@@ -6548,29 +6568,37 @@ const InspNotifManager = {
         // (payload is already cluster-scoped by the server)
         const schedules = cachedSchedules.length > 0 ? cachedSchedules : InspSchedule.getAll();
         schedules.forEach(s => {
-            if (s.done) return;
-            const schedDate = new Date(s.schedDate);
+            if (!s.schedDate || s.done) return;
+            const schedDate = new Date(String(s.schedDate).slice(0, 10) + 'T00:00:00');
             schedDate.setHours(0, 0, 0, 0);
             const diffDays = Math.round((schedDate - today) / (1000 * 60 * 60 * 24));
             if (diffDays === 0) {
+                const duty = s.duty_type || s.dutyType || '';
+                const msgPrefix = s.establishment
+                    ? `You have an inspection scheduled for today at ${esc(s.establishment)}`
+                    : (duty ? `You are scheduled for ${esc(duty)} duty today` : `You have an inspection scheduled for today`);
                 alerts.push({
                     id: 'sched-today-' + s.id,
                     type: 'today',
                     icon: 'bi-alarm-fill',
                     iconClr: '#ef4444',
                     bg: '#fef2f2',
-                    message: `You have an inspection scheduled for today${s.establishment ? ' at ' + esc(s.establishment) : ''}. ${s.notes ? 'Note: ' + esc(s.notes) : 'Please prepare accordingly.'}`,
+                    message: `${msgPrefix}. ${s.notes ? 'Note: ' + esc(s.notes) : 'Please prepare accordingly.'}`,
                     date: new Date().toISOString(),
                     schedDate: s.schedDate
                 });
             } else if (diffDays === 1) {
+                const duty = s.duty_type || s.dutyType || '';
+                const msgPrefix = s.establishment
+                    ? `Reminder: You have an inspection scheduled for tomorrow at ${esc(s.establishment)}`
+                    : (duty ? `Reminder: You are scheduled for ${esc(duty)} duty tomorrow` : `Reminder: You have an inspection scheduled for tomorrow`);
                 alerts.push({
                     id: 'sched-tomorrow-' + s.id,
                     type: 'tomorrow',
                     icon: 'bi-calendar-event-fill',
                     iconClr: '#f59e0b',
                     bg: '#fffbeb',
-                    message: `Reminder: You have an inspection scheduled for tomorrow${s.establishment ? ' at ' + esc(s.establishment) : ''}. ${s.notes ? 'Note: ' + esc(s.notes) : 'Please prepare accordingly.'}`,
+                    message: `${msgPrefix}. ${s.notes ? 'Note: ' + esc(s.notes) : 'Please prepare accordingly.'}`,
                     date: new Date().toISOString(),
                     schedDate: s.schedDate
                 });
@@ -6636,16 +6664,38 @@ const InspNotifManager = {
     // Which tab is active in the panel: 'all' | 'unread'
     activeTab: 'all',
 
-    // Server-hydrated read/dismiss state (source of truth across logins)
+    // Server-hydrated read/dismiss state & server-pushed notifications (source of truth across devices/logins)
     _serverReadIds: [],
     _serverDismissedIds: [],
+    _serverNotifs: [],
     _serverLoaded: false,
 
-    // Load persisted state from php/notif_state.php and merge into localStorage
+    // Fetch persistent notifications created by Admin (e.g. duty assignments)
+    fetchServerNotifs: async () => {
+        try {
+            const prevCount = InspNotifManager._serverNotifs.length;
+            const r = await fetch(`${API_BASE_URL}/inspector_notifications.php`, { credentials: 'include' });
+            const j = await r.json();
+            if (j.success && Array.isArray(j.data)) {
+                InspNotifManager._serverNotifs = j.data;
+                // If new notifications arrived while inspector is logged in, refresh schedule calendar too
+                if (prevCount > 0 && j.data.length > prevCount && typeof InspSchedule !== 'undefined') {
+                    InspSchedule.fetchAll().then(() => InspSchedule.renderCalendar()).catch(() => {});
+                }
+            }
+        } catch (e) {
+            console.warn('inspector_notifications fetch failed', e);
+        }
+    },
+
+    // Load persisted state from php/notif_state.php + server notifs and merge into localStorage
     loadServerState: async () => {
         try {
-            const r = await fetch(`${API_BASE_URL}/notif_state.php`, { credentials: 'include' });
-            const j = await r.json();
+            const [stateRes] = await Promise.all([
+                fetch(`${API_BASE_URL}/notif_state.php`, { credentials: 'include' }),
+                InspNotifManager.fetchServerNotifs()
+            ]);
+            const j = await stateRes.json();
             if (j.success && j.data) {
                 InspNotifManager._serverReadIds      = (j.data.read_ids || []).map(sanitizeNotifId);
                 InspNotifManager._serverDismissedIds = (j.data.dismissed_ids || []).map(sanitizeNotifId);
@@ -6662,17 +6712,25 @@ const InspNotifManager = {
         }
     },
 
-    // Fire-and-forget persist of read/dismiss flags to the server
-    _postState: (action, ids) => {
+    // Persist read/dismiss flags to the server (deduplicated & chunked under 200-id cap)
+    _postState: async (action, ids) => {
         if (!ids || !ids.length) return;
-        fetch(`${API_BASE_URL}/notif_state.php`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action, notif_ids: ids.map(sanitizeNotifId) })
-        }).then(r => r.json()).then(j => {
-            if (!j.success) console.warn('notif_state POST failed', j.message);
-        }).catch(e => console.warn('notif_state POST error', e));
+        const clean = [...new Set(ids.map(sanitizeNotifId).filter(Boolean))];
+        for (let i = 0; i < clean.length; i += 150) {
+            const chunk = clean.slice(i, i + 150);
+            try {
+                const r = await fetch(`${API_BASE_URL}/notif_state.php`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action, notif_ids: chunk })
+                });
+                const j = await r.json();
+                if (!j.success) console.warn('notif_state POST failed', j.message);
+            } catch (e) {
+                console.warn('notif_state POST error', e);
+            }
+        }
     },
 
     // In-memory lookup of the notifs currently on screen, keyed by id,
@@ -6692,57 +6750,94 @@ const InspNotifManager = {
 
     getReadIds: () => {
         try {
-            return JSON.parse(localStorage.getItem('inspNotifReadIds') || '[]').map(sanitizeNotifId);
+            const local = JSON.parse(localStorage.getItem('inspNotifReadIds') || '[]');
+            return [...new Set([...local, ...(InspNotifManager._serverReadIds || [])].map(sanitizeNotifId).filter(Boolean))];
         } catch (e) {
-            return [];
+            return [...new Set((InspNotifManager._serverReadIds || []).map(sanitizeNotifId).filter(Boolean))];
         }
     },
 
     getDismissedIds: () => {
         try {
-            return JSON.parse(localStorage.getItem('inspNotifDismissedIds') || '[]').map(sanitizeNotifId);
+            const local = JSON.parse(localStorage.getItem('inspNotifDismissedIds') || '[]');
+            return [...new Set([...local, ...(InspNotifManager._serverDismissedIds || [])].map(sanitizeNotifId).filter(Boolean))];
         } catch (e) {
-            return [];
+            return [...new Set((InspNotifManager._serverDismissedIds || []).map(sanitizeNotifId).filter(Boolean))];
         }
     },
 
     dismiss: (id) => {
-        const ids = InspNotifManager.getDismissedIds();
         const strId = sanitizeNotifId(id);
-        if (!ids.includes(strId)) {
-            ids.push(strId);
-            localStorage.setItem('inspNotifDismissedIds', JSON.stringify(ids));
-        }
-        InspNotifManager._postState('dismiss', [strId]);
+        if (!strId) return;
+        const ids = InspNotifManager.getDismissedIds();
+        if (!ids.includes(strId)) ids.push(strId);
+        InspNotifManager._serverDismissedIds = [...new Set([...(InspNotifManager._serverDismissedIds || []), strId])];
+        localStorage.setItem('inspNotifDismissedIds', JSON.stringify(ids));
         InspNotifManager.render();
+        InspNotifManager._postState('dismiss', [strId]);
     },
 
     markRead: (id) => {
-        const ids = InspNotifManager.getReadIds();
         const strId = sanitizeNotifId(id);
-        if (!ids.includes(strId)) {
-            ids.push(strId);
-            localStorage.setItem('inspNotifReadIds', JSON.stringify(ids));
-        }
-        InspNotifManager._postState('read', [strId]);
+        if (!strId) return;
+        const ids = InspNotifManager.getReadIds();
+        if (!ids.includes(strId)) ids.push(strId);
+        InspNotifManager._serverReadIds = [...new Set([...(InspNotifManager._serverReadIds || []), strId])];
+        localStorage.setItem('inspNotifReadIds', JSON.stringify(ids));
         InspNotifManager.render();
+        InspNotifManager._postState('read', [strId]);
     },
 
-    markAllRead: () => {
-        const schedNotifs = InspNotifManager.getScheduleNotifs();
-        const sysAlerts   = InspNotifManager.generateSystemAlerts();
-        const allIds = [
-            ...schedNotifs.map(n => sanitizeNotifId(n.id)),
-            ...sysAlerts.map(a => sanitizeNotifId(a.id))
-        ];
-        localStorage.setItem('inspNotifReadIds', JSON.stringify(allIds));
-        InspNotifManager._postState('read', allIds);
+    markAllRead: async () => {
+        const schedNotifs  = InspNotifManager.getScheduleNotifs();
+        const serverNotifs = InspNotifManager._serverNotifs || [];
+        const sysAlerts    = InspNotifManager.generateSystemAlerts();
+        const currentIds = [...new Set([
+            ...Object.keys(InspNotifManager._cache || {}),
+            ...serverNotifs.map(n => n.id),
+            ...schedNotifs.map(n => n.id),
+            ...sysAlerts.map(a => a.id)
+        ].map(sanitizeNotifId).filter(Boolean))];
+
+        if (currentIds.length === 0) return;
+
+        const mergedRead = [...new Set([...InspNotifManager.getReadIds(), ...currentIds])];
+        InspNotifManager._serverReadIds = mergedRead;
+        localStorage.setItem('inspNotifReadIds', JSON.stringify(mergedRead));
         InspNotifManager.render();
+        await InspNotifManager._postState('read', currentIds);
     },
 
     render: () => {
         const readIds      = InspNotifManager.getReadIds();
         const dismissedIds = InspNotifManager.getDismissedIds();
+        const dutyStyles = {
+            'Sanitary':    { icon: 'bi-shield-check',         iconClr: '#059669', bg: '#ecfdf5' },
+            'Burial':      { icon: 'bi-file-earmark-medical', iconClr: '#7c3aed', bg: '#f5f3ff' },
+            'Inspections': { icon: 'bi-clipboard-check',      iconClr: '#2563eb', bg: '#eff6ff' }
+        };
+        const serverNotifs = (InspNotifManager._serverNotifs || []).map(n => {
+            const st = (n.dutyType && dutyStyles[n.dutyType])
+                ? dutyStyles[n.dutyType]
+                : (n.type === 'reschedule'
+                    ? { icon: 'bi-arrow-repeat', iconClr: '#f59e0b', bg: '#fffbeb' }
+                    : { icon: 'bi-calendar-check', iconClr: '#2563eb', bg: '#eff6ff' });
+            const nid = sanitizeNotifId(n.id);
+            return {
+                id:         nid,
+                type:       n.type || 'assigned',
+                dutyType:   n.dutyType || '',
+                title:      n.title || '',
+                icon:       st.icon,
+                iconClr:    st.iconClr,
+                bg:         st.bg,
+                message:    n.message,
+                date:       n.date,
+                schedDate:  n.schedDate,
+                schedDates: n.schedDates || [],
+                read:       readIds.includes(nid)
+            };
+        });
         const schedNotifs = InspNotifManager.getScheduleNotifs().map(n => ({
             id:      sanitizeNotifId(n.id),
             type:    n.type,
@@ -6761,7 +6856,7 @@ const InspNotifManager = {
         }));
 
         // Filter out dismissed notifications
-        const allNotifs = [...sysAlerts, ...schedNotifs]
+        const allNotifs = [...serverNotifs, ...sysAlerts, ...schedNotifs]
             .filter(n => !dismissedIds.includes(sanitizeNotifId(n.id)))
             .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
         const unread    = allNotifs.filter(n => !n.read).length;
@@ -6794,13 +6889,14 @@ const InspNotifManager = {
         }
 
         listEl.innerHTML = visible.map(n => `
-            <div class="insp-notif-row" onclick="InspNotifManager.openDetail('${n.id}')" style="display:flex;align-items:flex-start;gap:10px;padding:10px 16px;border-bottom:1px solid #f3f4f6;background:${n.read ? '#fff' : n.bg};cursor:pointer;">
+            <div class="insp-notif-row" onclick="InspNotifManager.openDetail('${n.id}')" style="display:flex;align-items:flex-start;gap:10px;padding:10px 16px;border-bottom:1px solid #f3f4f6;background:${n.read ? '#fff' : n.bg};">
                 <i class="bi ${n.icon}" style="color:${n.iconClr};font-size:18px;flex-shrink:0;margin-top:2px;opacity:${n.read ? '0.55' : '1'};"></i>
                 <div style="flex:1;min-width:0;opacity:${n.read ? '0.65' : '1'};">
+                    ${n.title ? `<div style="font-size:11px;font-weight:700;color:${n.iconClr};margin-bottom:2px;">${esc(n.title)}</div>` : ''}
                     <p style="font-size:12px;color:#374151;margin:0 0 4px;line-height:1.5;">${esc(n.message)}</p>
                     <p style="font-size:11px;color:#9ca3af;margin:0;">${new Date(n.date).toLocaleDateString('en-PH', {year:'numeric',month:'short',day:'numeric'})}${n.schedDate ? ' &middot; tap to view' : ''}</p>
                 </div>
-                ${!n.read ? `<button onclick="event.stopPropagation();InspNotifManager.dismiss('${n.id}')" style="flex-shrink:0;font-size:11px;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:6px;padding:2px 8px;cursor:pointer;">Dismiss</button>` : ''}
+                ${!n.read ? `<button onclick="event.stopPropagation();InspNotifManager.dismiss('${n.id}')" style="flex-shrink:0;font-size:11px;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:6px;padding:2px 8px;">Dismiss</button>` : ''}
             </div>`
         ).join('');
     },
@@ -6821,7 +6917,7 @@ const InspNotifManager = {
 
         const meta = InspNotifManager.TYPE_META[n.type] || { title: 'Notification' };
 
-        document.getElementById('notifDetailTitle').textContent = meta.title;
+        document.getElementById('notifDetailTitle').textContent = n.title || meta.title;
         document.getElementById('notifDetailDate').textContent  = new Date(n.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         document.getElementById('notifDetailMessage').textContent = n.message;
 
@@ -6850,7 +6946,7 @@ const InspNotifManager = {
     // Switches to the Schedule module, opens the right month, opens the
     // day panel for that date, and scrolls it into view. Safe to call
     // outside of a click event (doesn't depend on the global `event`).
-    jumpToDate: (dateKey) => {
+    jumpToDate: async (dateKey) => {
         document.querySelectorAll('.module-content').forEach(m => m.classList.add('hidden'));
         const scheduleModule = document.getElementById('schedule-module');
         if (scheduleModule) scheduleModule.classList.remove('hidden');
@@ -6859,6 +6955,7 @@ const InspNotifManager = {
         const scheduleTab = document.querySelector('.sidebar-item[data-testid="nav-schedule"]');
         if (scheduleTab) scheduleTab.classList.add('active');
 
+        await InspSchedule.fetchAll().catch(() => {});
         const [y, m] = dateKey.split('-').map(Number);
         InspSchedule.calYear  = y;
         InspSchedule.calMonth = m - 1;
@@ -6886,17 +6983,21 @@ const InspNotifManager = {
         if (!panel) return;
         const isOpen = panel.style.display === 'block';
         panel.style.display = isOpen ? 'none' : 'block';
-        if (!isOpen) InspNotifManager.render();
+        if (!isOpen) {
+            InspNotifManager.fetchServerNotifs().finally(() => InspNotifManager.render());
+        }
     }
 };
 
-// Auto-run on page load and refresh every 30 seconds
+// Auto-run on page load and refresh every 15 seconds for near real-time duty notifications
 document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('inspNotifBadge')) {
         setTimeout(() => {
             InspNotifManager.loadServerState().finally(() => InspNotifManager.render());
         }, 600);
-        setInterval(() => InspNotifManager.render(), 30000);
+        setInterval(() => {
+            InspNotifManager.fetchServerNotifs().finally(() => InspNotifManager.render());
+        }, 15000);
     }
 
     // Click outside to close notification panel

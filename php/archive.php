@@ -3,6 +3,7 @@ require_once 'auth_check.php';
 requireRole('admin');
 require_once 'activity_log.php';
 require_once 'csrf.php';
+require_once 'inspector_notif_lib.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 
@@ -146,20 +147,22 @@ function restoreItem() {
                 $data['username'] ?? '', $password, $data['email'] ?? ''
             ]);
         } elseif ($type === 'schedule') {
+            ensureScheduleDutyColumn($db);
             try {
                 $stmt = $db->prepare("INSERT INTO inspection_schedules
-                    (inspector_name, establishment, risk_level, schedDate, notes, done)
-                    VALUES (?, ?, ?, ?, ?, ?)");
+                    (inspector_name, establishment, duty_type, risk_level, schedDate, notes, done)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)");
                 $stmt->execute([
                     $data['inspector_name'] ?? '',
                     $data['establishment'] ?? null,
+                    $data['duty_type'] ?? null,
                     $data['risk_level'] ?? null,
                     $data['schedDate'] ?? null,
                     $data['notes'] ?? '',
                     isset($data['done']) ? (int)$data['done'] : 0
                 ]);
             } catch (PDOException $e) {
-                // Fallback: old schema without establishment/risk_level/done columns
+                // Fallback: old schema without establishment/duty_type/risk_level/done columns
                 $stmt = $db->prepare("INSERT INTO inspection_schedules
                     (inspector_name, schedDate, notes)
                     VALUES (?, ?, ?)");

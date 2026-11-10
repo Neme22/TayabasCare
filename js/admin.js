@@ -3619,7 +3619,7 @@ async function initApp() {
     await ScheduleManager.fetchAll().catch(() => {});
     const schedBadge = document.getElementById('scheduleBadge');
     if (schedBadge) {
-        const pending = ScheduleManager._cache.filter(s => !s.done).length;
+        const pending = ScheduleManager._cache.filter(s => ScheduleManager.getStatus(s.schedDate, s.done, s.dutyType) !== 'Done').length;
         schedBadge.textContent = pending;
         schedBadge.style.display = pending > 0 ? 'inline-block' : 'none';
     }
@@ -4718,13 +4718,13 @@ const NotifManager = {
     _cache: {},
 
     // Fetch alerts from the server-side alerts.php
-    fetchAlerts: async () => {
+    fetchAlerts: async (force = false) => {
         if (NotifManager.loading) return;
         NotifManager.loading = true;
         try {
             // Rehydrate durable per-user dismiss/read state first (survives logout)
             await NotifManager.loadServerState().catch(() => {});
-            await fetch(`${API_BASE_URL}/alerts.php?action=generate`).catch(() => {});
+            await fetch(`${API_BASE_URL}/alerts.php?action=generate${force ? '&force=1' : ''}`).catch(() => {});
             const resp = await fetch(`${API_BASE_URL}/alerts.php?action=list`);
             const text = await resp.text();
             let json;
@@ -4761,17 +4761,25 @@ const NotifManager = {
         }
     },
 
-    // Fire-and-forget persist of read/dismiss flags to the durable per-user store
-    _postState: (action, ids) => {
+    // Persist read/dismiss flags to the durable per-user store (chunked safely under server cap)
+    _postState: async (action, ids) => {
         if (!ids || !ids.length) return;
-        fetch(`${API_BASE_URL}/notif_state.php`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action, notif_ids: ids.map(id => sanitizeNotifId(id)) })
-        }).then(r => r.json()).then(j => {
-            if (!j.success) console.warn('notif_state POST failed', j.message);
-        }).catch(e => console.warn('notif_state POST error', e));
+        const clean = [...new Set(ids.map(id => sanitizeNotifId(id)).filter(Boolean))];
+        for (let i = 0; i < clean.length; i += 150) {
+            const chunk = clean.slice(i, i + 150);
+            try {
+                const r = await fetch(`${API_BASE_URL}/notif_state.php`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action, notif_ids: chunk })
+                });
+                const j = await r.json();
+                if (!j.success) console.warn('notif_state POST failed', j.message);
+            } catch (e) {
+                console.warn('notif_state POST error', e);
+            }
+        }
     },
 
     // Local fallback: generates alerts from in-memory data
@@ -4824,7 +4832,7 @@ const NotifManager = {
     },
 
     // Map server alert types to UI display properties
-    mapAlert: (serverAlert) => {
+    mapAlert: (serverAlert, readIds = null) => {
         const typeMap = {
             'violation_threshold': { type: 'danger',  icon: 'bi-exclamation-octagon-fill' },
             'overdue_followup':    { type: 'warning', icon: 'bi-clock-history' },
@@ -4836,8 +4844,10 @@ const NotifManager = {
             'violation_threshold': 'Repeated Violations Detected',
             'overdue_followup':    'Follow-up Inspection Overdue',
             'high_risk':           'High Risk Establishment',
-            'schedule_reminder':   'Upcoming Inspection Schedule'
+            'schedule_reminder':   'Upcoming Schedule'
         };
+        const rIds = readIds || NotifManager.getReadIds();
+        const isRead = Boolean(Number(serverAlert.is_read)) || Boolean(serverAlert.read) || rIds.includes(sanitizeNotifId(serverAlert.id));
         return {
             id:      serverAlert.id,
             type:    mapped.type,
@@ -4845,7 +4855,7 @@ const NotifManager = {
             title:   titleMap[serverAlert.alert_type] || 'Alert',
             message: serverAlert.message,
             time:    serverAlert.created_at,
-            read:    !!serverAlert.is_read,
+            read:    isRead,
             serverId: serverAlert.id
         };
     },
@@ -4873,6 +4883,16 @@ const NotifManager = {
     markRead: async (id) => {
         const strId = sanitizeNotifId(id);
         const alert = NotifManager.alerts.find(a => sanitizeNotifId(a.id) === strId);
+        if (alert) {
+            alert.read = true;
+            alert.is_read = 1;
+        }
+        const ids = NotifManager.getReadIds();
+        if (!ids.includes(strId)) {
+            ids.push(strId);
+            localStorage.setItem('notifReadIds', JSON.stringify(ids));
+        }
+        NotifManager.render();
         if (alert && alert.serverId) {
             try {
                 await fetch(`${API_BASE_URL}/alerts.php`, {
@@ -4882,16 +4902,23 @@ const NotifManager = {
                 });
             } catch (e) { /* ignore */ }
         }
-        const ids = NotifManager.getReadIds();
-        if (!ids.includes(strId)) {
-            ids.push(strId);
-            localStorage.setItem('notifReadIds', JSON.stringify(ids));
-        }
-        NotifManager._postState('read', [strId]);
-        NotifManager.render();
+        await NotifManager._postState('read', [strId]);
     },
 
     markAllRead: async () => {
+        const currentIds = [
+            ...NotifManager.alerts.map(a => sanitizeNotifId(a.id)),
+            ...Object.keys(NotifManager._cache || {}).map(sanitizeNotifId)
+        ].filter(Boolean);
+        const mergedIds = [...new Set([...NotifManager.getReadIds(), ...currentIds])];
+        localStorage.setItem('notifReadIds', JSON.stringify(mergedIds));
+
+        NotifManager.alerts.forEach(a => {
+            a.read = true;
+            a.is_read = 1;
+        });
+        NotifManager.render();
+
         try {
             await fetch(`${API_BASE_URL}/alerts.php`, {
                 method: 'PUT',
@@ -4899,12 +4926,7 @@ const NotifManager = {
                 body: JSON.stringify({ action: 'read_all' })
             });
         } catch (e) { /* ignore */ }
-        const alerts = NotifManager.alerts;
-        const ids    = alerts.map(a => sanitizeNotifId(a.id));
-        localStorage.setItem('notifReadIds', JSON.stringify(ids));
-        NotifManager._postState('read', ids);
-        NotifManager.alerts.forEach(a => a.read = true);
-        NotifManager.render();
+        await NotifManager._postState('read', currentIds);
     },
 
     dismissAll: async () => {
@@ -4989,9 +5011,13 @@ const NotifManager = {
     },
 
     render: () => {
+        const readIds      = NotifManager.getReadIds();
         const dismissedIds = NotifManager.getDismissedIds();
         let displayAlerts = NotifManager.alerts
-            .map(a => a.serverId ? NotifManager.mapAlert(a) : a)
+            .map(a => a.serverId
+                ? NotifManager.mapAlert(a, readIds)
+                : { ...a, read: Boolean(a.read) || readIds.includes(sanitizeNotifId(a.id)) }
+            )
             .filter(a => !dismissedIds.includes(sanitizeNotifId(a.id)));
         displayAlerts.sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0));
         const unread = displayAlerts.filter(a => !a.read);
@@ -5052,7 +5078,10 @@ const NotifManager = {
         if (!panel) return;
         const isOpen = panel.style.display === 'block';
         panel.style.display = isOpen ? 'none' : 'block';
-        if (!isOpen) NotifManager.render();
+        if (!isOpen) {
+            NotifManager.render();
+            NotifManager.fetchAlerts();
+        }
     }
 };
 
@@ -5251,12 +5280,38 @@ const ScheduleManager = {
     _cache: [],
     _loading: false,
 
+    DUTY_COLORS: {
+        'Inspections': '#2563eb',
+        'Sanitary':    '#059669',
+        'Burial':      '#7c3aed'
+    },
+
+    _getCalName: (name) => {
+        const lower = String(name || '').trim().toLowerCase();
+        if (!lower) return '';
+        if (lower.includes('rommel') || lower === 'mel') return 'Mel';
+        if (lower.includes('michael')) return 'Michael';
+        if (lower.includes('april') || lower.includes('wendy')) return 'April';
+        if (lower.includes('olive')) return 'Olive';
+        if (lower.includes('rizaldy') || lower.includes('zaldy')) return 'Zaldy';
+        const list = (typeof DataStore !== 'undefined' && Array.isArray(DataStore.inspectors) && DataStore.inspectors.length > 0)
+            ? DataStore.inspectors
+            : (typeof DutyScheduler !== 'undefined' ? DutyScheduler._inspectors : []);
+        const found = list.find(i =>
+            String(i.fullName || i.full_name || '').trim().toLowerCase() === lower ||
+            String(i.username || '').trim().toLowerCase() === lower
+        );
+        if (found && found.username) return found.username;
+        return String(name).trim().split(/\s+/)[0];
+    },
+
     // Normalize API row to a consistent format used by the calendar
     _normalize: (row) => ({
         id:            row.id,
         inspector:     row.inspector_name || row.inspector || '',
         rank:          row.role_title || '',
         establishment: row.establishment || '',
+        dutyType:      row.duty_type || row.dutyType || '',
         riskLevel:     row.risk_level || row.riskLevel || '',
         schedDate:     row.schedDate || '',
         notes:         row.notes || '',
@@ -5283,10 +5338,13 @@ const ScheduleManager = {
 
     getAll: () => ScheduleManager._cache,
 
-    getStatus: (dueDateStr, markedDone) => {
-        if (markedDone) return 'Done';
+    getStatus: (dueDateStr, markedDone, dutyType = '') => {
         const today = new Date(); today.setHours(0,0,0,0);
-        const due   = new Date(dueDateStr); due.setHours(0,0,0,0);
+        const due   = new Date(String(dueDateStr).slice(0, 10) + 'T00:00:00'); due.setHours(0,0,0,0);
+        if (dutyType) {
+            return due < today ? 'Done' : 'Pending';
+        }
+        if (markedDone) return 'Done';
         return due < today ? 'Overdue' : 'Pending';
     },
 
@@ -5301,6 +5359,9 @@ const ScheduleManager = {
             const item = ScheduleManager._cache.find(s => s.id === id);
             if (item) item.done = true;
             await ScheduleManager.render();
+            if (typeof NotifManager !== 'undefined') NotifManager.fetchAlerts(true);
+            const panel = document.getElementById('calDayPanel');
+            if (panel && panel.style.display !== 'none' && item) ScheduleManager.showDay(item.schedDate);
             adminShowNotification('Marked as done!', 'success');
         } catch (e) {
             adminShowNotification('Failed to mark as done.', 'error');
@@ -5321,6 +5382,7 @@ const ScheduleManager = {
                     const rec = ScheduleManager._cache.find(s => s.id === id);
                     ScheduleManager._cache = ScheduleManager._cache.filter(s => s.id !== id);
                     await ScheduleManager.render();
+                    if (typeof NotifManager !== 'undefined') NotifManager.fetchAlerts(true);
                     const panel = document.getElementById('calDayPanel');
                     if (panel && panel.style.display !== 'none' && rec) ScheduleManager.showDay(rec.schedDate);
                     adminShowNotification('Schedule archived.', 'success');
@@ -5331,113 +5393,7 @@ const ScheduleManager = {
         });
     },
 
-    showAddForm: async () => {
-        const form = document.getElementById('addScheduleForm');
-        if (!form) return;
-        form.style.display = 'block';
-
-        // Populate inspector dropdown
-        const select = document.getElementById('addSchedInspector');
-        if (select && select.options.length <= 1) {
-            try {
-                const resp = await fetch(`${API_BASE_URL}/inspector.php`);
-                const json = await resp.json();
-                const inspectors = json.data || [];
-                select.innerHTML = '<option value="">— Select Inspector —</option>' +
-                    inspectors.map(i => `<option value="${i.fullName || i.full_name}">${i.fullName || i.full_name}</option>`).join('');
-            } catch (e) {
-                select.innerHTML = '<option value="">Could not load inspectors</option>';
-            }
-        }
-
-        // Default date to today
-        document.getElementById('addSchedDate').value = new Date().toISOString().split('T')[0];
-        document.getElementById('addSchedEstablishment').value = '';
-        document.getElementById('addSchedRisk').value = '';
-        document.getElementById('addSchedNotes').value = '';
-        document.getElementById('addSchedStatus').innerHTML = '';
-    },
-
-    submitAdd: async () => {
-        const inspector    = document.getElementById('addSchedInspector')?.value;
-        const schedDate    = document.getElementById('addSchedDate')?.value;
-        const establishment = document.getElementById('addSchedEstablishment')?.value || '';
-        const riskLevel    = document.getElementById('addSchedRisk')?.value || '';
-        const notes        = document.getElementById('addSchedNotes')?.value || '';
-        const status       = document.getElementById('addSchedStatus');
-
-        if (!inspector || !schedDate) {
-            status.innerHTML = '<span style="color:#ef4444;">Inspector and date are required.</span>';
-            return;
-        }
-
-        const cleanName = inspector.includes(',')
-            ? inspector.split(',')[0].trim()
-            : inspector.trim();
-
-        // 1. Save schedule to database via API
-        try {
-            await fetch(`${API_BASE_URL}/inspection_schedules.php`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    inspector:     cleanName,
-                    establishment: establishment,
-                    riskLevel:     riskLevel,
-                    schedDate:     schedDate,
-                    notes:         notes
-                })
-            });
-        } catch (e) {
-            console.warn('Schedule save error:', e);
-        }
-
-        // 2. Send real email to the inspector via PHP
-        fetch(`${API_BASE_URL}/PHPMailer/send_notification.php`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                inspector: cleanName,
-                schedDate: schedDate,
-                notes:     notes,
-                type:      'assigned'
-            })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (!data.success) console.warn('Email notification failed:', data.message);
-        })
-        .catch(err => console.warn('Email send error:', err));
-
-        // 3. In-app notification for inspector bell
-        const key  = 'inspectorNotifs_' + cleanName;
-        let list = [];
-        try {
-            list = JSON.parse(localStorage.getItem(key) || '[]');
-        } catch (e) {
-            list = [];
-        }
-        const dateFormatted = new Date(schedDate).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
-        list.push({
-            id:      Date.now(),
-            read:    false,
-            type:    'assigned',
-            message: `You are scheduled for inspection duty on ${dateFormatted}.${notes ? ' Note: ' + notes : ''}`,
-            date:    new Date().toISOString(),
-            schedDate: schedDate
-        });
-        localStorage.setItem(key, JSON.stringify(list));
-
-        // 4. Refresh from DB and re-render
-        status.innerHTML = '<span style="color:#059669;"><i class="fas fa-check"></i> Schedule saved and notification sent.</span>';
-        await ScheduleManager.fetchAll();
-        ScheduleManager.render();
-
-        // Clear form after a short delay
-        setTimeout(() => {
-            document.getElementById('addScheduleForm').style.display = 'none';
-        }, 1500);
-    },
+    showAddForm: (preselectedDate = null) => DutyScheduler.showModal(preselectedDate),
 
     calYear:  new Date().getFullYear(),
     calMonth: new Date().getMonth(),
@@ -5449,7 +5405,7 @@ const ScheduleManager = {
 
         // Update sidebar badge
         const all         = ScheduleManager.getAll();
-        const urgentCount = all.filter(s => !s.done).length;
+        const urgentCount = all.filter(s => ScheduleManager.getStatus(s.schedDate, s.done, s.dutyType) !== 'Done').length;
         const badge       = document.getElementById('scheduleBadge');
         if (badge) {
             badge.textContent   = urgentCount;
@@ -5509,14 +5465,13 @@ const ScheduleManager = {
             const bgColor   = isToday ? '#ecfdf5' : '#fff';
             const border    = isToday ? '2px solid #10b981' : '1px solid #e5e7eb';
             const dayColor  = isToday ? '#059669' : '#374151';
-            const cursor    = hasItems ? 'pointer' : 'default';
 
             let dotsHtml = '';
             if (dayEvents.length > 0) {
                 dotsHtml += `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;">` +
                     dayEvents.slice(0, 2).map(ev => {
                         const tip = `${Utils.esc(ev.title)}${ev.start_time ? '\\n🕐 ' + CalendarEvents.formatTime(ev.start_time) + (ev.end_time ? ' - ' + CalendarEvents.formatTime(ev.end_time) : '') : ''}${ev.place ? '\\n📍 ' + Utils.esc(ev.place) : ''}${ev.notes ? '\\n📝 ' + Utils.esc(ev.notes) : ''}`;
-                        return `<span class="cal-tooltip" style="font-size:10px;background:#f59e0b;color:#fff;border-radius:4px;padding:1px 5px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;">${Utils.esc(ev.title)}<span class="cal-tooltip-text">${tip.replace(/\\n/g, '<br>')}</span></span>`;
+                        return `<span class="cal-tooltip" style="font-size:10px;background:#f59e0b;color:#fff;border-radius:4px;padding:1px 5px;max-width:95px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${Utils.esc(ev.title)}<span class="cal-tooltip-text">${tip.replace(/\\n/g, '<br>')}</span></span>`;
                     }).join('') +
                     (dayEvents.length > 2 ? `<span style="font-size:10px;color:#6b7280;">+${dayEvents.length - 2}</span>` : '') +
                     `</div>`;
@@ -5526,10 +5481,12 @@ const ScheduleManager = {
                 const colors = ['#2563eb','#059669','#f59e0b','#ef4444','#8b5cf6'];
                 dotsHtml += `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;">` +
                     scheds.slice(0, 3).map((s, i) => {
-                        const shortName = s.inspector.split(' ')[0] + ' ' + (s.inspector.split(' ')[1] || '');
-                        const dotColor = s.riskLevel ? (riskColors[s.riskLevel] || colors[i % colors.length]) : colors[i % colors.length];
-                        const tip = `${Utils.esc(s.inspector)}${s.rank ? ' (' + Utils.esc(s.rank) + ')' : ''}${s.establishment ? '\\n🏢 ' + Utils.esc(s.establishment) : ''}${s.riskLevel ? '\\n⚠️ Risk: ' + s.riskLevel : ''}${s.notes ? '\\n📝 ' + Utils.esc(s.notes) : ''}`;
-                        return `<span class="cal-tooltip" style="font-size:10px;background:${dotColor};color:#fff;border-radius:4px;padding:1px 5px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;">${shortName}<span class="cal-tooltip-text">${tip.replace(/\\n/g, '<br>')}</span></span>`;
+                        const chipLabel = ScheduleManager._getCalName(s.inspector);
+                        const dotColor = s.dutyType && ScheduleManager.DUTY_COLORS[s.dutyType]
+                            ? ScheduleManager.DUTY_COLORS[s.dutyType]
+                            : (s.riskLevel ? (riskColors[s.riskLevel] || colors[i % colors.length]) : colors[i % colors.length]);
+                        const tip = `${Utils.esc(s.inspector)}${s.dutyType ? '\\n📋 Duty: ' + Utils.esc(s.dutyType) : ''}${s.establishment ? '\\n🏢 ' + Utils.esc(s.establishment) : ''}${s.riskLevel ? '\\n⚠️ Risk: ' + s.riskLevel : ''}${s.notes ? '\\n📝 ' + Utils.esc(s.notes) : ''}`;
+                        return `<span class="cal-tooltip" style="font-size:10px;background:${dotColor};color:#fff;border-radius:4px;padding:1px 6px;max-width:105px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${Utils.esc(chipLabel)}<span class="cal-tooltip-text">${tip.replace(/\\n/g, '<br>')}</span></span>`;
                     }).join('') +
                     (scheds.length > 3 ? `<span style="font-size:10px;color:#6b7280;">+${scheds.length - 3}</span>` : '') +
                     `</div>`;
@@ -5537,8 +5494,8 @@ const ScheduleManager = {
 
             html += `
             <div onclick="ScheduleManager.showDay('${dateKey}')"
-                style="min-height:80px;border-radius:8px;background:${bgColor};border:${border};padding:6px 8px;cursor:${cursor};transition:box-shadow 0.15s;"
-                onmouseover="if(${hasItems}) this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'"
+                style="min-height:80px;border-radius:8px;background:${bgColor};border:${border};padding:6px 8px;transition:box-shadow 0.15s;"
+                onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'"
                 onmouseout="this.style.boxShadow='none'">
                 <div style="font-size:13px;font-weight:${isToday ? '700' : '500'};color:${dayColor};">${d}</div>
                 ${dotsHtml}
@@ -5560,12 +5517,16 @@ const ScheduleManager = {
         const dateFmt = new Date(dateKey + 'T00:00:00').toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         title.textContent = dateFmt;
 
+        const today = new Date(); today.setHours(0,0,0,0);
         let html = '';
 
         // Show events first
         if (dayEvents.length > 0) {
             html += `<div style="margin-bottom:12px;"><div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Events</div>`;
-            html += dayEvents.map(ev => `
+            html += dayEvents.map(ev => {
+                const evDate = ev.event_date ? new Date(String(ev.event_date).slice(0, 10) + 'T00:00:00') : null;
+                const evDone = !!(evDate && evDate < today);
+                return `
                 <div style="display:flex;align-items:flex-start;justify-content:space-between;padding:12px 14px;border:1px solid #fde68a;border-radius:10px;margin-bottom:8px;background:#fffbeb;">
                     <div>
                         <div style="font-weight:600;font-size:14px;color:#92400e;">${Utils.esc(ev.title)}</div>
@@ -5573,35 +5534,48 @@ const ScheduleManager = {
                         ${ev.place ? `<div style="font-size:12px;color:#b45309;margin-top:2px;">📍 ${Utils.esc(ev.place)}</div>` : ''}
                         ${ev.notes ? `<div style="font-size:12px;color:#374151;margin-top:4px;">${Utils.esc(ev.notes)}</div>` : ''}
                     </div>
-                    <button onclick="CalendarEvents.deleteEvent(${ev.id})" title="Archive" style="font-size:11px;padding:4px 10px;border:1px solid #dc2626;color:#dc2626;background:#fee2e2;border-radius:6px;cursor:pointer;flex-shrink:0;">Archive</button>
-                </div>
-            `).join('') + `</div>`;
+                    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+                        <span style="background:${evDone ? '#d1fae5' : '#eff6ff'};color:${evDone ? '#059669' : '#2563eb'};font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;">${evDone ? 'Done' : 'Pending'}</span>
+                    </div>
+                </div>`;
+            }).join('') + `</div>`;
         }
 
         // Show schedules
         if (scheds.length === 0 && dayEvents.length === 0) {
-            html += '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:12px;">No events or inspections scheduled on this day.</p>';
+            html += '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:12px;">No events or duties scheduled on this day.</p>';
         } else if (scheds.length > 0) {
             const statusStyle = {
                 Pending: { bg: '#eff6ff', color: '#2563eb' },
                 Done:    { bg: '#d1fae5', color: '#059669' },
                 Overdue: { bg: '#fee2e2', color: '#dc2626' }
             };
-            html += `<div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Inspections</div>`;
+            const dutyBadgeStyle = {
+                'Inspections': { bg: '#dbeafe', color: '#1d4ed8' },
+                'Sanitary':    { bg: '#d1fae5', color: '#047857' },
+                'Burial':      { bg: '#ede9fe', color: '#6d28d9' }
+            };
+            html += `<div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Scheduled Duties & Inspections</div>`;
             html += scheds.map(s => {
-                const status = ScheduleManager.getStatus(s.schedDate, s.done);
+                const status = ScheduleManager.getStatus(s.schedDate, s.done, s.dutyType);
                 const ss     = statusStyle[status] || { bg: '#f3f4f6', color: '#6b7280' };
+                const ds     = dutyBadgeStyle[s.dutyType] || null;
+                const heading = s.establishment
+                    ? Utils.esc(s.establishment)
+                    : (s.dutyType ? `${Utils.esc(s.dutyType)} Duty` : 'General Inspection Duty');
                 return `
                 <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:8px;background:#fafafa;">
                     <div style="min-width:0;">
-                        <div style="font-weight:600;font-size:14px;color:#111827;">${Utils.esc(s.establishment) || 'No establishment set'}${s.riskLevel ? ` <span style="background:${s.riskLevel === 'HIGH' ? '#fef2f2;color:#dc2626' : s.riskLevel === 'MODERATE' ? '#fffbeb;color:#d97706' : '#ecfdf5;color:#059669'};font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;">${s.riskLevel}</span>` : ''}</div>
-                        <div style="font-size:12px;color:#6b7280;margin-top:2px;">${Utils.esc(s.inspector)}${s.rank ? ` · ${Utils.esc(s.rank)}` : ''}</div>
+                        <div style="font-weight:600;font-size:14px;color:#111827;display:flex;align-items:center;flex-wrap:wrap;gap:6px;">
+                            <span>${heading}</span>
+                            ${ds ? `<span style="background:${ds.bg};color:${ds.color};font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">${Utils.esc(s.dutyType)}</span>` : ''}
+                            ${s.riskLevel ? `<span style="background:${s.riskLevel === 'HIGH' ? '#fef2f2;color:#dc2626' : s.riskLevel === 'MODERATE' ? '#fffbeb;color:#d97706' : '#ecfdf5;color:#059669'};font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;">${s.riskLevel}</span>` : ''}
+                        </div>
+                        <div style="font-size:12px;color:#6b7280;margin-top:2px;"><i class="fas fa-user" style="margin-right:4px;font-size:11px;"></i>${Utils.esc(s.inspector)}${s.rank ? ` · ${Utils.esc(s.rank)}` : ''}</div>
                         ${s.notes ? `<div style="font-size:12px;color:#374151;margin-top:4px;">📝 ${Utils.esc(s.notes)}</div>` : ''}
                     </div>
-                    <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
                         <span style="background:${ss.bg};color:${ss.color};font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;">${status}</span>
-                        ${!s.done ? `<button onclick="ScheduleManager.markDone(${s.id})" style="font-size:11px;padding:4px 10px;border:1px solid #059669;color:#059669;background:#d1fae5;border-radius:6px;cursor:pointer;">Done</button>` : ''}
-                        <button onclick="ScheduleManager.deleteRecord(${s.id})" title="Archive" style="font-size:11px;padding:4px 10px;border:1px solid #dc2626;color:#dc2626;background:#fee2e2;border-radius:6px;cursor:pointer;">Archive</button>
                     </div>
                 </div>`;
             }).join('');
@@ -5622,6 +5596,371 @@ const ScheduleManager = {
         if (ScheduleManager.calMonth > 11) { ScheduleManager.calMonth = 0; ScheduleManager.calYear++; }
         ScheduleManager.renderCalendar();
     },
+};
+
+// ==================== DUTY SCHEDULER (MULTI-DATE) ====================
+
+const DutyScheduler = {
+    _selectedDates: new Set(),
+    _dutyType: 'Inspections',
+    _pickerYear: new Date().getFullYear(),
+    _pickerMonth: new Date().getMonth(),
+    _inspectors: [],
+    _saving: false,
+
+    DUTY_META: {
+        'Inspections': { color: '#2563eb', bg: '#eff6ff', border: '#93c5fd', icon: 'fas fa-clipboard-check', label: 'Inspections' },
+        'Sanitary':    { color: '#059669', bg: '#ecfdf5', border: '#6ee7b7', icon: 'fas fa-shield-virus',    label: 'Sanitary' },
+        'Burial':      { color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd', icon: 'fas fa-file-medical',    label: 'Burial' }
+    },
+
+    showModal: async (preselectedDate = null) => {
+        document.getElementById('dutyScheduleModal')?.remove();
+        DutyScheduler._selectedDates = new Set();
+        DutyScheduler._dutyType = 'Inspections';
+        DutyScheduler._saving = false;
+
+        if (preselectedDate && /^\d{4}-\d{2}-\d{2}$/.test(preselectedDate)) {
+            DutyScheduler._selectedDates.add(preselectedDate);
+            const [y, m] = preselectedDate.split('-').map(Number);
+            DutyScheduler._pickerYear = y;
+            DutyScheduler._pickerMonth = m - 1;
+        } else {
+            DutyScheduler._pickerYear = ScheduleManager.calYear;
+            DutyScheduler._pickerMonth = ScheduleManager.calMonth;
+        }
+
+        // Load inspectors list
+        if (DataStore && Array.isArray(DataStore.inspectors) && DataStore.inspectors.length > 0) {
+            DutyScheduler._inspectors = DataStore.inspectors;
+        } else {
+            try {
+                const resp = await fetch(`${API_BASE_URL}/inspector.php`);
+                const json = await resp.json();
+                DutyScheduler._inspectors = json.data || [];
+            } catch (e) {
+                DutyScheduler._inspectors = [];
+            }
+        }
+
+        const priorityOrder = ['rommel', 'michael', 'april', 'olive', 'rizaldy'];
+        const sortedInspectors = [...DutyScheduler._inspectors].sort((a, b) => {
+            const na = String(a.fullName || a.full_name || a.username || '').toLowerCase();
+            const nb = String(b.fullName || b.full_name || b.username || '').toLowerCase();
+            const ia = priorityOrder.findIndex(p => na.includes(p));
+            const ib = priorityOrder.findIndex(p => nb.includes(p));
+            const ra = ia === -1 ? 999 : ia;
+            const rb = ib === -1 ? 999 : ib;
+            if (ra !== rb) return ra - rb;
+            return na.localeCompare(nb);
+        });
+
+        const inspectorOptions = '<option value="">— Select Inspector —</option>' +
+            sortedInspectors.map(i => {
+                const name = i.fullName || i.full_name || i.username || '';
+                return `<option value="${Utils.esc(name)}">${Utils.esc(name)}</option>`;
+            }).join('');
+
+        const modal = document.createElement('div');
+        modal.id = 'dutyScheduleModal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(2px);';
+        modal.addEventListener('click', (e) => { if (e.target === modal && !DutyScheduler._saving) modal.remove(); });
+
+        modal.innerHTML = `
+            <div style="background:#ffffff;border-radius:16px;padding:24px;width:100%;max-width:600px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.28);position:relative;border:1px solid #e5e7eb;">
+                <button onclick="document.getElementById('dutyScheduleModal')?.remove()" aria-label="Close" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:22px;color:#6b7280;line-height:1;">&times;</button>
+                <h3 style="font-size:17px;font-weight:700;color:#111827;margin:0 0 4px;">
+                    <i class="fas fa-calendar-plus" style="color:#1e40af;margin-right:8px;"></i>Schedule Inspector Duty
+                </h3>
+                <p style="font-size:12px;color:#6b7280;margin:0 0 18px;">Assign an inspector to Inspections, Sanitary, or Burial duty across one or multiple dates.</p>
+
+                <!-- Inspector Selector -->
+                <div style="margin-bottom:16px;">
+                    <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:6px;">1. Select Inspector *</label>
+                    <select id="dutySchedInspector" onchange="DutyScheduler.renderPicker()" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:9px 12px;font-size:13px;background:#fff;color:#111827;">
+                        ${inspectorOptions}
+                    </select>
+                </div>
+
+                <!-- Duty Type Selector -->
+                <div style="margin-bottom:16px;">
+                    <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:6px;">2. Select Duty Assignment *</label>
+                    <div id="dutyTypeButtons" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;"></div>
+                </div>
+
+                <!-- Multi-Date Picker Calendar -->
+                <div style="margin-bottom:16px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <label style="font-size:12px;font-weight:700;color:#374151;margin:0;">3. Click Date(s) for Duty *</label>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <button type="button" onclick="DutyScheduler.prevMonth()" style="background:#f9fafb;border:1px solid #d1d5db;border-radius:6px;padding:3px 10px;font-size:15px;color:#374151;">&#8249;</button>
+                            <span id="dutyPickerMonthLabel" style="font-size:13px;font-weight:700;color:#111827;min-width:125px;text-align:center;"></span>
+                            <button type="button" onclick="DutyScheduler.nextMonth()" style="background:#f9fafb;border:1px solid #d1d5db;border-radius:6px;padding:3px 10px;font-size:15px;color:#374151;">&#8250;</button>
+                        </div>
+                    </div>
+                    <div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;background:#fafafa;">
+                        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px;">
+                            <div style="text-align:center;font-size:10px;font-weight:700;color:#6b7280;padding:4px 0;">SUN</div>
+                            <div style="text-align:center;font-size:10px;font-weight:700;color:#6b7280;padding:4px 0;">MON</div>
+                            <div style="text-align:center;font-size:10px;font-weight:700;color:#6b7280;padding:4px 0;">TUE</div>
+                            <div style="text-align:center;font-size:10px;font-weight:700;color:#6b7280;padding:4px 0;">WED</div>
+                            <div style="text-align:center;font-size:10px;font-weight:700;color:#6b7280;padding:4px 0;">THU</div>
+                            <div style="text-align:center;font-size:10px;font-weight:700;color:#6b7280;padding:4px 0;">FRI</div>
+                            <div style="text-align:center;font-size:10px;font-weight:700;color:#6b7280;padding:4px 0;">SAT</div>
+                        </div>
+                        <div id="dutyPickerGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;"></div>
+                    </div>
+                    <div id="dutySelectedSummary" style="margin-top:8px;"></div>
+                </div>
+
+                <!-- Optional Notes -->
+                <div style="margin-bottom:16px;">
+                    <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:4px;">Notes / Instructions (Optional)</label>
+                    <input type="text" id="dutySchedNotes" placeholder="e.g. Morning shift, Poblacion area, bring forms..." style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 12px;font-size:13px;" />
+                </div>
+
+                <div id="dutySchedStatus" style="margin-bottom:12px;font-size:12px;"></div>
+
+                <!-- Actions -->
+                <div style="display:flex;justify-content:flex-end;gap:8px;border-top:1px solid #f3f4f6;padding-top:14px;">
+                    <button type="button" onclick="document.getElementById('dutyScheduleModal')?.remove()" style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;padding:8px 18px;border-radius:8px;font-size:13px;font-weight:500;">Cancel</button>
+                    <button type="button" id="dutySubmitBtn" onclick="DutyScheduler.submit()" style="background:#1e40af;color:#fff;border:none;padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;">
+                        <i class="fas fa-save" style="margin-right:5px;"></i>Save Schedule
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        DutyScheduler.renderDutyButtons();
+        DutyScheduler.renderPicker();
+        DutyScheduler.renderSelectedSummary();
+    },
+
+    setDutyType: (type) => {
+        if (DutyScheduler.DUTY_META[type]) {
+            DutyScheduler._dutyType = type;
+            DutyScheduler.renderDutyButtons();
+            DutyScheduler.renderPicker();
+            DutyScheduler.renderSelectedSummary();
+        }
+    },
+
+    renderDutyButtons: () => {
+        const container = document.getElementById('dutyTypeButtons');
+        if (!container) return;
+        container.innerHTML = Object.entries(DutyScheduler.DUTY_META).map(([key, meta]) => {
+            const active = DutyScheduler._dutyType === key;
+            return `
+                <button type="button" onclick="DutyScheduler.setDutyType('${key}')"
+                    style="padding:10px 8px;border-radius:10px;border:2px solid ${active ? meta.color : '#e5e7eb'};background:${active ? meta.bg : '#fff'};color:${active ? meta.color : '#4b5563'};font-size:13px;font-weight:${active ? '700' : '600'};display:flex;align-items:center;justify-content:center;gap:6px;transition:all 0.12s;">
+                    <i class="${meta.icon}"></i> ${meta.label}
+                </button>
+            `;
+        }).join('');
+    },
+
+    toggleDate: (dateKey) => {
+        if (DutyScheduler._selectedDates.has(dateKey)) {
+            DutyScheduler._selectedDates.delete(dateKey);
+        } else {
+            DutyScheduler._selectedDates.add(dateKey);
+        }
+        DutyScheduler.renderPicker();
+        DutyScheduler.renderSelectedSummary();
+    },
+
+    clearDates: () => {
+        DutyScheduler._selectedDates.clear();
+        DutyScheduler.renderPicker();
+        DutyScheduler.renderSelectedSummary();
+    },
+
+    prevMonth: () => {
+        DutyScheduler._pickerMonth--;
+        if (DutyScheduler._pickerMonth < 0) { DutyScheduler._pickerMonth = 11; DutyScheduler._pickerYear--; }
+        DutyScheduler.renderPicker();
+    },
+
+    nextMonth: () => {
+        DutyScheduler._pickerMonth++;
+        if (DutyScheduler._pickerMonth > 11) { DutyScheduler._pickerMonth = 0; DutyScheduler._pickerYear++; }
+        DutyScheduler.renderPicker();
+    },
+
+    renderPicker: () => {
+        const grid  = document.getElementById('dutyPickerGrid');
+        const label = document.getElementById('dutyPickerMonthLabel');
+        if (!grid || !label) return;
+
+        const y = DutyScheduler._pickerYear;
+        const m = DutyScheduler._pickerMonth;
+        label.textContent = new Date(y, m, 1).toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
+
+        const firstDay    = new Date(y, m, 1).getDay();
+        const daysInMonth = new Date(y, m + 1, 0).getDate();
+        const today       = new Date(); today.setHours(0,0,0,0);
+        const activeMeta  = DutyScheduler.DUTY_META[DutyScheduler._dutyType] || DutyScheduler.DUTY_META.Inspections;
+
+        const chosenInsp = (document.getElementById('dutySchedInspector')?.value || '').trim().toLowerCase();
+        const existingMap = {};
+        ScheduleManager.getAll().forEach(s => {
+            if (!s.schedDate) return;
+            if (chosenInsp && s.inspector.trim().toLowerCase() !== chosenInsp) return;
+            if (!existingMap[s.schedDate]) existingMap[s.schedDate] = [];
+            existingMap[s.schedDate].push(s);
+        });
+
+        let html = '';
+        for (let i = 0; i < firstDay; i++) {
+            html += `<div style="height:40px;"></div>`;
+        }
+        for (let d = 1; d <= daysInMonth; d++) {
+            const mm = String(m + 1).padStart(2, '0');
+            const dd = String(d).padStart(2, '0');
+            const dateKey = `${y}-${mm}-${dd}`;
+            const cellDate = new Date(y, m, d); cellDate.setHours(0,0,0,0);
+            const isToday  = cellDate.getTime() === today.getTime();
+            const isPast   = cellDate < today;
+            const isSel    = DutyScheduler._selectedDates.has(dateKey);
+            const existing = existingMap[dateKey] || [];
+
+            const bg = isSel ? activeMeta.color : (isToday ? '#f0fdf4' : '#ffffff');
+            const border = isSel ? `2px solid ${activeMeta.color}` : (isToday ? '1.5px solid #10b981' : '1px solid #e5e7eb');
+            const color = isSel ? '#ffffff' : (isPast ? '#9ca3af' : '#111827');
+
+            const dots = existing.slice(0, 3).map(s => {
+                const c = isSel ? '#ffffff' : (ScheduleManager.DUTY_COLORS[s.dutyType] || '#6b7280');
+                return `<span style="width:5px;height:5px;border-radius:50%;background:${c};display:inline-block;"></span>`;
+            }).join('');
+
+            const titleAttr = existing.length > 0
+                ? existing.map(s => `${s.inspector}: ${s.dutyType || s.establishment || 'Inspection'}`).join(' | ')
+                : '';
+
+            html += `
+                <button type="button" onclick="DutyScheduler.toggleDate('${dateKey}')" title="${Utils.esc(titleAttr)}"
+                    style="height:40px;border-radius:8px;background:${bg};border:${border};color:${color};font-size:13px;font-weight:${isSel || isToday ? '700' : '500'};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:2px;">
+                    <span style="line-height:1;">${d}</span>
+                    ${dots ? `<span style="display:flex;gap:2px;line-height:1;">${dots}</span>` : ''}
+                </button>
+            `;
+        }
+        grid.innerHTML = html;
+    },
+
+    renderSelectedSummary: () => {
+        const box = document.getElementById('dutySelectedSummary');
+        const submitBtn = document.getElementById('dutySubmitBtn');
+        const dates = [...DutyScheduler._selectedDates].sort();
+        const activeMeta = DutyScheduler.DUTY_META[DutyScheduler._dutyType] || DutyScheduler.DUTY_META.Inspections;
+
+        if (submitBtn && !DutyScheduler._saving) {
+            submitBtn.innerHTML = `<i class="fas fa-save" style="margin-right:5px;"></i>Save Schedule`;
+        }
+
+        if (!box) return;
+        if (dates.length === 0) {
+            box.innerHTML = '<span style="font-size:12px;color:#9ca3af;">No dates selected yet. Click dates on the calendar above.</span>';
+            return;
+        }
+
+        const chips = dates.map(dt => {
+            const lbl = new Date(dt + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+            return `<span style="display:inline-flex;align-items:center;gap:5px;background:${activeMeta.bg};color:${activeMeta.color};border:1px solid ${activeMeta.border};border-radius:999px;padding:2px 9px;font-size:11px;font-weight:600;">
+                ${lbl}
+                <button type="button" onclick="DutyScheduler.toggleDate('${dt}')" style="background:none;border:none;color:${activeMeta.color};font-size:13px;line-height:1;padding:0;font-weight:700;">&times;</button>
+            </span>`;
+        }).join('');
+
+        box.innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <span style="font-size:12px;font-weight:700;color:#374151;">Selected: ${dates.length} day${dates.length > 1 ? 's' : ''} (${activeMeta.label})</span>
+                <button type="button" onclick="DutyScheduler.clearDates()" style="background:none;border:none;color:#dc2626;font-size:11px;font-weight:600;padding:0;">Clear all</button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;">${chips}</div>
+        `;
+    },
+
+    submit: async () => {
+        if (DutyScheduler._saving) return;
+
+        const inspectorEl = document.getElementById('dutySchedInspector');
+        const notesEl     = document.getElementById('dutySchedNotes');
+        const statusEl    = document.getElementById('dutySchedStatus');
+        const submitBtn   = document.getElementById('dutySubmitBtn');
+
+        const inspector = (inspectorEl?.value || '').trim();
+        const notes     = (notesEl?.value || '').trim();
+        const dates     = [...DutyScheduler._selectedDates].sort();
+        const dutyType  = DutyScheduler._dutyType;
+
+        if (!inspector) {
+            statusEl.innerHTML = '<div style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;padding:8px 12px;border-radius:8px;">Please select an inspector.</div>';
+            return;
+        }
+        if (dates.length === 0) {
+            statusEl.innerHTML = '<div style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;padding:8px 12px;border-radius:8px;">Please click at least one date on the calendar.</div>';
+            return;
+        }
+
+        DutyScheduler._saving = true;
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:5px;"></i>Saving...'; }
+        statusEl.innerHTML = '<div style="color:#1e40af;font-size:12px;"><i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i>Saving duty schedule...</div>';
+
+        try {
+            // 1. Save duty schedule(s) + automatic bell notification in DB
+            const saveResp = await fetch(`${API_BASE_URL}/inspection_schedules.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    inspector:  inspector,
+                    dutyType:   dutyType,
+                    schedDates: dates,
+                    notes:      notes
+                })
+            });
+            const saveJson = await saveResp.json();
+            if (!saveJson.success) {
+                throw new Error(saveJson.message || 'Failed to save duty schedule.');
+            }
+
+            // 2. Automatically send email notification to the inspector
+            try {
+                const emailResp = await fetch(`${API_BASE_URL}/PHPMailer/send_notification.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        inspector:  inspector,
+                        dutyType:   dutyType,
+                        schedDates: dates,
+                        notes:      notes,
+                        type:       'assigned'
+                    })
+                });
+                const emailJson = await emailResp.json();
+                if (!emailJson || !emailJson.success) {
+                    console.warn('Automatic email dispatch note:', emailJson?.message || 'Delivery failed');
+                }
+            } catch (err) {
+                console.warn('Automatic email dispatch error:', err);
+            }
+
+            // 3. Refresh admin calendar & alerts immediately
+            await ScheduleManager.fetchAll();
+            ScheduleManager.render();
+            if (typeof NotifManager !== 'undefined') NotifManager.fetchAlerts(true);
+
+            document.getElementById('dutyScheduleModal')?.remove();
+            adminShowNotification('Schedule saved!', 'success');
+        } catch (e) {
+            statusEl.innerHTML = `<div style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;padding:8px 12px;border-radius:8px;"><i class="fas fa-times-circle" style="margin-right:6px;"></i>${Utils.esc(e.message || 'Error saving schedule.')}</div>`;
+        } finally {
+            DutyScheduler._saving = false;
+            if (submitBtn) submitBtn.disabled = false;
+            DutyScheduler.renderSelectedSummary();
+        }
+    }
 };
 
 // ==================== END SCHEDULE MANAGER ====================
