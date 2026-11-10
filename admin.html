@@ -9,7 +9,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="css/admin.css?v=18">
+    <link rel="stylesheet" href="css/admin.css?v=21">
 
 </head>
 <body class="bg-gray-50">
@@ -177,7 +177,7 @@
         </div>
 
         <!-- Main Content -->
-        <div class="flex-1 p-6" id="contentArea" style="min-width:0;max-width:100%;overflow-x:hidden;">
+        <div class="flex-1 p-6" id="contentArea" style="min-width:0;max-width:100%;overflow-x:clip;overflow-y:visible;min-height:calc(100vh - 64px);">
             <!-- Dashboard View (Default) -->
             <div class="view" id="dashboardView">
                 <!-- Dashboard Header with Export Buttons -->
@@ -957,7 +957,7 @@
                 </div>
 
                 <!-- Monthly Controls -->
-                <div id="admin-monthly-controls" class="no-print card bg-white shadow-md mb-4 p-4">
+                <div id="admin-monthly-controls" class="no-print card bg-white shadow-md mb-4 p-4 overflow-visible">
                     <div class="flex gap-3 items-center flex-wrap">
                         <label class="font-semibold text-emerald-700">Month:</label>
                         <select id="admin-report-month" class="select select-bordered select-success select-sm" style="background-color: white; color: #111;">
@@ -979,70 +979,64 @@
                         <button class="btn btn-info btn-sm text-white" onclick="adminLoadMonthlyReport()">
                             <i class="fas fa-search mr-1"></i>View Report
                         </button>
+                        <div class="inspector-ms-wrap" data-ms-host></div>
                     </div>
                     <p class="text-xs text-gray-500 mt-2">
                         <i class="fas fa-info-circle mr-1"></i>
-                        Select a Month and Year then click <strong>View Report</strong>.
+                        Select a Month and Year then click <strong>View Report</strong>. Optionally filter by one or more inspectors.
                     </p>
                 </div>
 
                 <!-- Quarterly Controls -->
-                <div id="admin-quarterly-controls" class="no-print card bg-white shadow-md mb-4 p-4 hidden">
+                <div id="admin-quarterly-controls" class="no-print card bg-white shadow-md mb-4 p-4 hidden overflow-visible">
                     <div class="flex gap-3 items-center flex-wrap">
-                        <label class="font-semibold text-emerald-700">Quarter:</label>
-                        <select id="admin-report-quarter" class="select select-bordered select-success select-sm" style="background-color: white; color: #111;">
+                        <label class="font-semibold text-emerald-700">Period:</label>
+                        <select id="admin-report-quarter" class="select select-bordered select-success select-sm" style="background-color: white; color: #111;" onchange="adminOnQuarterOptionChange()">
                             <option value="1">1st Quarter — January to March</option>
                             <option value="2">2nd Quarter — April to June</option>
                             <option value="3">3rd Quarter — July to September</option>
                             <option value="4">4th Quarter — October to December</option>
+                            <option value="custom">Custom Range (From – To Months)</option>
                         </select>
+                        <span id="admin-quarter-custom-range" style="display:none;align-items:center;gap:0.5rem;">
+                            <label class="font-semibold text-emerald-700">From:</label>
+                            <select id="admin-report-quarter-from" class="select select-bordered select-success select-sm" style="background-color: white; color: #111;">
+                                <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+                                <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+                                <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+                                <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+                            </select>
+                            <label class="font-semibold text-emerald-700">To:</label>
+                            <select id="admin-report-quarter-to" class="select select-bordered select-success select-sm" style="background-color: white; color: #111;">
+                                <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+                                <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+                                <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+                                <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+                            </select>
+                        </span>
                         <input type="number" id="admin-report-quarter-year" class="input input-sm" placeholder="Year" min="2000" max="2099" style="width:6rem; border:2px solid #059669; border-radius:0.5rem; background:#fff; color:#111;">
-                        <button class="btn btn-info btn-sm text-white" onclick="adminLoadQuarterlyReport()">
-                            <i class="fas fa-chart-bar mr-1"></i>View Quarter
+                        <button class="btn btn-info btn-sm text-white" onclick="adminLoadQuarterlyOrRangeReport()">
+                            <i class="fas fa-chart-bar mr-1"></i>View Report
                         </button>
+                        <div class="inspector-ms-wrap" data-ms-host></div>
                     </div>
                     <p class="text-xs text-gray-500 mt-2">
                         <i class="fas fa-info-circle mr-1"></i>
-                        Combines the 3 saved monthly accomplishments of the selected quarter.
-                    </p>
-                    <!-- Custom Range -->
-                    <div class="divider text-xs text-gray-400 my-2">OR VIEW A CUSTOM RANGE</div>
-                    <div class="flex gap-3 items-center flex-wrap">
-                        <label class="font-semibold text-emerald-700">From:</label>
-                        <select id="admin-report-quarter-from" class="select select-bordered select-success select-sm" style="background-color: white; color: #111;">
-                            <option value="1">January</option><option value="2">February</option><option value="3">March</option>
-                            <option value="4">April</option><option value="5">May</option><option value="6">June</option>
-                            <option value="7">July</option><option value="8">August</option><option value="9">September</option>
-                            <option value="10">October</option><option value="11">November</option><option value="12">December</option>
-                        </select>
-                        <label class="font-semibold text-emerald-700">To:</label>
-                        <select id="admin-report-quarter-to" class="select select-bordered select-success select-sm" style="background-color: white; color: #111;">
-                            <option value="1">January</option><option value="2">February</option><option value="3">March</option>
-                            <option value="4">April</option><option value="5">May</option><option value="6">June</option>
-                            <option value="7">July</option><option value="8">August</option><option value="9">September</option>
-                            <option value="10">October</option><option value="11">November</option><option value="12">December</option>
-                        </select>
-                        <input type="number" id="admin-report-quarter-custom-year" class="input input-sm" placeholder="Year" min="2000" max="2099" style="width:6rem; border:2px solid #059669; border-radius:0.5rem; background:#fff; color:#111;">
-                        <button class="btn btn-warning btn-sm text-white" onclick="adminLoadCustomRangeReport()">
-                            <i class="fas fa-search mr-1"></i>View Range
-                        </button>
-                    </div>
-                    <p class="text-xs text-gray-500 mt-1">
-                        <i class="fas fa-info-circle mr-1"></i>
-                        Pick any two months to combine into one report.
+                        Pick a Quarter or <strong>Custom Range</strong>, enter the Year, and click <strong>View Report</strong>.
                     </p>
                 </div>
 
                 <!-- Annual Controls -->
-                <div id="admin-annual-controls" class="no-print card bg-white shadow-md mb-4 p-4 hidden">
+                <div id="admin-annual-controls" class="no-print card bg-white shadow-md mb-4 p-4 hidden overflow-visible">
                     <div class="flex gap-3 items-center flex-wrap mb-3">
                         <label class="font-semibold text-emerald-700">Year:</label>
                         <input type="number" id="admin-report-annual-year" class="input input-sm" placeholder="Year" min="2000" max="2099" style="width:7rem; border:2px solid #059669; border-radius:0.5rem; background:#fff; color:#111;">
-                        <button class="btn btn-xs btn-success text-white" onclick="adminSelectAllMonths()"><i class="fas fa-check-double mr-1"></i>Select All</button>
-                        <button class="btn btn-xs btn-outline btn-error" onclick="adminClearAllMonths()"><i class="fas fa-times mr-1"></i>Clear All</button>
-                        <button class="btn btn-info btn-sm text-white ml-2" onclick="adminLoadAnnualReport()">
+                        <button type="button" class="btn btn-success btn-sm text-white" onclick="adminSelectAllMonths()"><i class="fas fa-check-double mr-1"></i>Select All</button>
+                        <button type="button" class="btn btn-danger btn-sm text-white annual-clear-btn" onclick="adminClearAllMonths()"><i class="fas fa-times mr-1"></i>Clear All</button>
+                        <button type="button" class="btn btn-info btn-sm text-white" onclick="adminLoadAnnualReport()">
                             <i class="fas fa-chart-line mr-1"></i>View Annual
                         </button>
+                        <div class="inspector-ms-wrap" data-ms-host></div>
                     </div>
                     <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
                         <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="checkbox checkbox-sm checkbox-success admin-annual-month-check" value="1" checked><span class="text-sm">January</span></label>
@@ -2211,7 +2205,7 @@
     <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
     <script src="js/import_common.js?v=1"></script>
 
-    <script src="js/admin.js?v=38"></script>
+    <script src="js/admin.js?v=41"></script>
 
     <script>
 document.addEventListener('click', function(e) {

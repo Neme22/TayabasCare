@@ -3028,6 +3028,12 @@ const ADMIN_QUARTER_MONTHS = { 1: [1,2,3], 2: [4,5,6], 3: [7,8,9], 4: [10,11,12]
 let ADMIN_INSPECTOR_COL_MAP = {};
 let _adminInspectorNames = [];
 
+// Accomplishment Inspector Filter state (empty Set = All Inspectors; non-empty = colIdx 0..4)
+let _adminSelectedInspectorCols = new Set();
+// Stores full unfiltered 145-element array for the currently displayed period
+let _adminCurrentFullTotals = null;
+let _adminIsReportEditing = false;
+
 // Excel display order: Rommel, Michael, April, Olive, Zaldy (Rizaldy)
 const ADMIN_EXCEL_NAME_ORDER = ['ROMMEL', 'MICHAEL', 'APRIL', 'OLIVE', 'ZALDY', 'RIZALDY'];
 
@@ -3042,23 +3048,37 @@ function sortNamesExcelOrder(names) {
     return (names || []).slice().sort((a, b) => rank(a) - rank(b));
 }
 
+function populateAdminInspectorMapFromList(inspectors) {
+    const list = (inspectors || []).slice(0, 5);
+    _adminInspectorNames = sortNamesExcelOrder(list.map(i => i.fullName || i.full_name || '').filter(Boolean));
+    ADMIN_INSPECTOR_COL_MAP = {};
+    const byName = {};
+    list.forEach(insp => {
+        const name = insp.fullName || insp.full_name || '';
+        if (name) byName[name] = insp;
+    });
+    _adminInspectorNames.forEach((name, idx) => {
+        if (byName[name]) ADMIN_INSPECTOR_COL_MAP[name] = idx;
+    });
+    // Prune any out-of-range selected column indices if inspector count changed
+    if (_adminSelectedInspectorCols.size > 0) {
+        for (const colIdx of Array.from(_adminSelectedInspectorCols)) {
+            if (colIdx < 0 || colIdx >= _adminInspectorNames.length) {
+                _adminSelectedInspectorCols.delete(colIdx);
+            }
+        }
+    }
+    populateInspectorColumns();
+    renderAdminInspectorDropdowns();
+    renderInspectorSignatures(list);
+}
+
 async function buildAdminInspectorColumnMap() {
     try {
         const resp = await fetch(`${API_BASE_URL}/inspector.php`);
         const json = await resp.json();
         if (json.success && Array.isArray(json.data)) {
-            const inspectors = json.data.slice(0, 5);
-            _adminInspectorNames = sortNamesExcelOrder(inspectors.map(i => i.fullName));
-            ADMIN_INSPECTOR_COL_MAP = {};
-            // Rebuild map in Excel display order so column indices match headers
-            const byName = {};
-            inspectors.forEach(insp => { byName[insp.fullName] = insp; });
-            _adminInspectorNames.forEach((name, idx) => {
-                if (byName[name]) ADMIN_INSPECTOR_COL_MAP[name] = idx;
-            });
-            // Refresh headers + signatures so they share the same name order
-            populateInspectorColumns();
-            renderInspectorSignatures(inspectors);
+            populateAdminInspectorMapFromList(json.data);
             return true;
         }
         console.warn('Failed to build admin inspector column map: invalid response');
@@ -3072,26 +3092,264 @@ async function buildAdminInspectorColumnMap() {
 // Ensure the column map is ready before showing the accomplishment report.
 // Retries once if the initial load failed or DataStore has inspectors we can reuse.
 async function ensureAdminInspectorColumnMap() {
-    if (_adminInspectorNames && _adminInspectorNames.length > 0) return true;
+    if (_adminInspectorNames && _adminInspectorNames.length > 0) {
+        const hasHostMenu = document.querySelector('#accomplishmentReportView [data-ms-host] .inspector-ms-btn');
+        if (!hasHostMenu) {
+            renderAdminInspectorDropdowns();
+        } else {
+            syncAdminInspectorDropdownState();
+        }
+        return true;
+    }
 
     // Reuse already-fetched inspectors if available
     const cached = DataStore.inspectors;
     if (Array.isArray(cached) && cached.length > 0) {
-        const inspectors = cached.slice(0, 5);
-        _adminInspectorNames = sortNamesExcelOrder(inspectors.map(i => i.fullName || i.full_name || ''));
-        ADMIN_INSPECTOR_COL_MAP = {};
-        const byName = {};
-        inspectors.forEach(insp => {
-            const name = insp.fullName || insp.full_name || '';
-            if (name) byName[name] = insp;
-        });
-        _adminInspectorNames.forEach((name, idx) => {
-            if (name && byName[name]) ADMIN_INSPECTOR_COL_MAP[name] = idx;
-        });
+        populateAdminInspectorMapFromList(cached);
         return _adminInspectorNames.length > 0;
     }
 
     return await buildAdminInspectorColumnMap();
+}
+
+function getAdminActiveColIndices() {
+    if (!_adminSelectedInspectorCols || _adminSelectedInspectorCols.size === 0) {
+        return [0, 1, 2, 3, 4];
+    }
+    const cols = Array.from(_adminSelectedInspectorCols)
+        .filter(c => Number.isInteger(c) && c >= 0 && c < 5)
+        .sort((a, b) => a - b);
+    return cols.length > 0 ? cols : [0, 1, 2, 3, 4];
+}
+
+function getAdminFilteredInspectorDisplayNames(shortOnly = false) {
+    const activeCols = getAdminActiveColIndices();
+    return activeCols
+        .filter(idx => idx < _adminInspectorNames.length && _adminInspectorNames[idx])
+        .map(idx => {
+            const full = _adminInspectorNames[idx];
+            return shortOnly ? full.split(/\s+/)[0].toUpperCase() : full.toUpperCase();
+        });
+}
+
+let _adminDropdownListenersBound = false;
+function initAdminInspectorDropdownListeners() {
+    if (_adminDropdownListenersBound) return;
+    _adminDropdownListenersBound = true;
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.inspector-ms-wrap')) {
+            document.querySelectorAll('.inspector-ms-menu').forEach(m => m.classList.add('hidden'));
+        }
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.inspector-ms-menu').forEach(m => m.classList.add('hidden'));
+        }
+    });
+}
+
+function toggleAdminInspectorDropdown(btn, event) {
+    if (event) event.stopPropagation();
+    initAdminInspectorDropdownListeners();
+    const wrap = btn ? btn.closest('.inspector-ms-wrap') : null;
+    const menu = wrap ? wrap.querySelector('.inspector-ms-menu') : null;
+    if (!menu) return;
+    const willOpen = menu.classList.contains('hidden');
+    document.querySelectorAll('.inspector-ms-menu').forEach(m => m.classList.add('hidden'));
+    if (willOpen) menu.classList.remove('hidden');
+}
+
+function getAdminInspectorDropdownSummary() {
+    if (_adminSelectedInspectorCols.size === 0) {
+        return { text: 'All Inspectors', title: 'Showing all inspectors', filtered: false };
+    }
+    const shortNames = getAdminFilteredInspectorDisplayNames(true);
+    const fullNames = getAdminFilteredInspectorDisplayNames(false);
+    let text;
+    if (shortNames.length <= 2) {
+        text = `Inspector: ${shortNames.join(', ')}`;
+    } else {
+        text = `Inspectors (${shortNames.length}): ${shortNames.slice(0, 2).join(', ')}...`;
+    }
+    return { text, title: `Filtered: ${fullNames.join(', ')}`, filtered: true };
+}
+
+function syncAdminInspectorDropdownState() {
+    const isAllMode = _adminSelectedInspectorCols.size === 0;
+    const summary = getAdminInspectorDropdownSummary();
+
+    document.querySelectorAll('#accomplishmentReportView [data-ms-host]').forEach(host => {
+        const btn = host.querySelector('.inspector-ms-btn');
+        const labelEl = host.querySelector('.inspector-ms-label');
+        if (btn) {
+            btn.classList.toggle('is-filtered', summary.filtered);
+            btn.title = summary.title;
+        }
+        if (labelEl) {
+            labelEl.textContent = summary.text;
+        }
+        const allCb = host.querySelector('input[data-inspector-all]');
+        if (allCb) {
+            allCb.checked = isAllMode;
+        }
+        host.querySelectorAll('input[data-inspector-col]').forEach(cb => {
+            const idx = parseInt(cb.dataset.inspectorCol, 10);
+            cb.checked = _adminSelectedInspectorCols.has(idx);
+        });
+    });
+}
+
+function renderAdminInspectorDropdowns() {
+    initAdminInspectorDropdownListeners();
+    const hosts = document.querySelectorAll('#accomplishmentReportView [data-ms-host]');
+    if (!hosts.length) return;
+
+    const inspectorOptionsHtml = (_adminInspectorNames && _adminInspectorNames.length > 0)
+        ? _adminInspectorNames.slice(0, 5).map((fullName, idx) => {
+            const isSelected = _adminSelectedInspectorCols.has(idx);
+            return `
+                <label class="inspector-ms-option">
+                    <input type="checkbox" class="inspector-ms-checkbox"
+                        data-inspector-col="${idx}"
+                        ${isSelected ? 'checked' : ''}
+                        onchange="adminToggleInspectorFilter(${idx}, this)">
+                    <span>${Utils.esc(fullName)}</span>
+                </label>`;
+        }).join('')
+        : '<div class="px-3 py-2 text-xs text-gray-400">Inspector list unavailable</div>';
+
+    const menuHtml = `
+        <button type="button" class="inspector-ms-btn" onclick="toggleAdminInspectorDropdown(this, event)">
+            <span class="flex items-center gap-1.5 min-w-0">
+                <i class="fas fa-filter text-emerald-600 text-xs shrink-0"></i>
+                <span class="inspector-ms-label">All Inspectors</span>
+            </span>
+            <i class="fas fa-chevron-down text-xs opacity-60 shrink-0"></i>
+        </button>
+        <div class="inspector-ms-menu hidden" onclick="event.stopPropagation()">
+            <label class="inspector-ms-option font-semibold text-emerald-800">
+                <input type="checkbox" class="inspector-ms-checkbox"
+                    data-inspector-all="1"
+                    ${_adminSelectedInspectorCols.size === 0 ? 'checked' : ''}
+                    onchange="adminResetInspectorFilter(this)">
+                <span>All Inspectors</span>
+            </label>
+            <div class="inspector-ms-divider"></div>
+            ${inspectorOptionsHtml}
+        </div>`;
+
+    hosts.forEach(host => {
+        host.innerHTML = menuHtml;
+    });
+    syncAdminInspectorDropdownState();
+}
+
+function adminComputeFilteredTotals(baseTotals, activeCols) {
+    if (!Array.isArray(baseTotals) || baseTotals.length === 0) return [];
+    const result = baseTotals.slice();
+    const cols = (Array.isArray(activeCols) && activeCols.length > 0) ? activeCols : [0, 1, 2, 3, 4];
+    const activeSet = new Set(cols);
+
+    // Simple rows (0..13): zero unselected inspectors so template stays intact; sum active TOTAL
+    for (let r = 0; r < 14; r++) {
+        let sum = 0;
+        for (let c = 0; c < 5; c++) {
+            if (activeSet.has(c)) {
+                sum += (result[r * 6 + c] || 0);
+            } else {
+                result[r * 6 + c] = 0;
+            }
+        }
+        result[r * 6 + 5] = sum;
+    }
+
+    // M/F rows (9.1, 9.2, 10.1–10.3): zero unselected M/F cells; sum active TOTAL
+    const mfBase = 14 * 6;
+    for (let r = 0; r < 5; r++) {
+        const base = mfBase + r * 11;
+        let sum = 0;
+        for (let c = 0; c < 5; c++) {
+            if (activeSet.has(c)) {
+                sum += (result[base + c * 2] || 0) + (result[base + c * 2 + 1] || 0);
+            } else {
+                result[base + c * 2] = 0;
+                result[base + c * 2 + 1] = 0;
+            }
+        }
+        result[base + 10] = sum;
+    }
+
+    // Bottom Total row: zero unselected inspector totals + sum Grand Total from active inspectors
+    const bottomBase = mfBase + 5 * 11;
+    let grand = 0;
+    for (let c = 0; c < 5; c++) {
+        if (activeSet.has(c)) {
+            grand += (result[bottomBase + c] || 0);
+        } else {
+            result[bottomBase + c] = 0;
+        }
+    }
+    result[bottomBase + 5] = grand;
+
+    return result;
+}
+
+function adminRecalcFullTotalsBottom(fullTotals) {
+    if (!Array.isArray(fullTotals) || fullTotals.length === 0) return;
+    const mfBase = 14 * 6;
+    const bottomBase = mfBase + 5 * 11;
+    for (let c = 0; c < 5; c++) {
+        let sum = 0;
+        for (let r = 0; r < 14; r++) sum += (fullTotals[r * 6 + c] || 0);
+        for (let r = 0; r < 5; r++) {
+            const base = mfBase + r * 11;
+            sum += (fullTotals[base + c * 2] || 0) + (fullTotals[base + c * 2 + 1] || 0);
+        }
+        fullTotals[bottomBase + c] = sum;
+    }
+    let grand = 0;
+    for (let c = 0; c < 5; c++) grand += (fullTotals[bottomBase + c] || 0);
+    fullTotals[bottomBase + 5] = grand;
+}
+
+function adminApplyInspectorFilterEverywhere() {
+    syncAdminInspectorDropdownState();
+    const activeCols = getAdminActiveColIndices();
+
+    const reportEl = document.getElementById('admin-accomplishment-report');
+    if (reportEl && !reportEl.classList.contains('hidden') && Array.isArray(_adminCurrentFullTotals)) {
+        const filteredTotals = adminComputeFilteredTotals(_adminCurrentFullTotals, activeCols);
+        adminSetReportValues(filteredTotals);
+        adminMakeReportReadOnly();
+    }
+}
+
+function adminToggleInspectorFilter(colIdx, checkboxEl) {
+    if (_adminIsReportEditing) {
+        if (checkboxEl) checkboxEl.checked = _adminSelectedInspectorCols.has(colIdx);
+        adminShowNotification('Please save or cancel edits before changing the Inspector filter.', 'warning');
+        return;
+    }
+    if (_adminSelectedInspectorCols.has(colIdx)) {
+        _adminSelectedInspectorCols.delete(colIdx);
+    } else {
+        _adminSelectedInspectorCols.add(colIdx);
+    }
+    const totalAvail = Math.min(_adminInspectorNames.length, 5);
+    if (totalAvail > 0 && _adminSelectedInspectorCols.size >= totalAvail) {
+        _adminSelectedInspectorCols.clear();
+    }
+    adminApplyInspectorFilterEverywhere();
+}
+
+function adminResetInspectorFilter(checkboxEl) {
+    if (_adminIsReportEditing) {
+        if (checkboxEl) checkboxEl.checked = (_adminSelectedInspectorCols.size === 0);
+        adminShowNotification('Please save or cancel edits before changing the Inspector filter.', 'warning');
+        return;
+    }
+    _adminSelectedInspectorCols.clear();
+    adminApplyInspectorFilterEverywhere();
 }
 
 // Tracks values before editing so Cancel can restore them
@@ -3216,8 +3474,15 @@ function adminShowReportTab(type, tabEl) {
     document.querySelectorAll('#accomplishmentReportView .tab').forEach(tab => tab.classList.remove('tab-active'));
     if (tabEl) tabEl.classList.add('tab-active');
 
-    // Refresh inspector headers if the initial map load failed
-    ensureAdminInspectorColumnMap().then(() => populateInspectorColumns()).catch(() => {});
+    _adminCurrentFullTotals = null;
+    _adminIsReportEditing = false;
+    document.querySelectorAll('.inspector-ms-menu').forEach(m => m.classList.add('hidden'));
+
+    // Refresh inspector headers + filter dropdowns if the initial map load failed
+    ensureAdminInspectorColumnMap().then(() => {
+        populateInspectorColumns();
+        syncAdminInspectorDropdownState();
+    }).catch(() => {});
 
     ['monthly', 'quarterly', 'annual'].forEach(t => {
         document.getElementById(`admin-${t}-controls`).classList.add('hidden');
@@ -3321,8 +3586,14 @@ function renderInspectorSignatures(inspectors) {
 }
 
 function adminShowReportResult(totals, periodLabel, typeLabel) {
-    adminSetReportValues(totals);
+    _adminIsReportEditing = false;
+    _adminCurrentFullTotals = Array.isArray(totals) ? totals.slice() : [];
+    const activeCols = getAdminActiveColIndices();
+    const displayTotals = adminComputeFilteredTotals(_adminCurrentFullTotals, activeCols);
+
+    adminSetReportValues(displayTotals);
     adminMakeReportReadOnly();
+    document.querySelectorAll('.inspector-ms-menu').forEach(m => m.classList.add('hidden'));
 
     document.getElementById('admin-report-type-label').textContent = typeLabel;
     document.getElementById('admin-report-period-display').textContent = periodLabel;
@@ -3336,6 +3607,23 @@ function adminShowReportResult(totals, periodLabel, typeLabel) {
     document.getElementById('admin-edit-notice').classList.add('hidden');
 }
 
+function adminShowPeriodNotification(baseTotals, defaultSuccessMsg, periodDesc) {
+    if (_adminSelectedInspectorCols.size === 0) {
+        adminShowNotification(defaultSuccessMsg, 'success');
+        return;
+    }
+    const activeCols = getAdminActiveColIndices();
+    const filteredTotals = adminComputeFilteredTotals(baseTotals, activeCols);
+    const bottomBase = 14 * 6 + 5 * 11;
+    const filteredGrand = filteredTotals[bottomBase + 5] || 0;
+    const shortNames = getAdminFilteredInspectorDisplayNames(true).join(', ');
+    if (filteredGrand > 0) {
+        adminShowNotification(`${defaultSuccessMsg} (Filtered: ${shortNames})`, 'success');
+    } else {
+        adminShowNotification(`Report loaded for ${periodDesc} — ${shortNames} ${activeCols.length === 1 ? 'has' : 'have'} no recorded entries.`, 'info');
+    }
+}
+
 async function adminLoadMonthlyReport() {
     const monthVal = document.getElementById('admin-report-month').value;
     const year     = document.getElementById('admin-report-year').value;
@@ -3343,6 +3631,7 @@ async function adminLoadMonthlyReport() {
 
     const totals = await adminGetAccomplishmentDataForPeriod([parseInt(monthVal)], year);
     if (!totals.some(v => v > 0)) {
+        _adminCurrentFullTotals = null;
         adminShowNotification(`No data found for ${ADMIN_MONTH_NAMES[parseInt(monthVal)]} ${year}.`, 'error');
         adminClearReportInputs();
         document.getElementById('admin-accomplishment-report').classList.add('hidden');
@@ -3351,12 +3640,30 @@ async function adminLoadMonthlyReport() {
         return;
     }
 
+    const periodDesc = `${ADMIN_MONTH_NAMES[parseInt(monthVal)]} ${year}`;
     adminShowReportResult(
         totals,
         `${ADMIN_MONTH_NAMES[parseInt(monthVal)].toUpperCase()} ${year}`,
         'ACCOMPLISHMENT REPORT FOR THE MONTH OF'
     );
-    adminShowNotification(`✅ Report loaded for ${ADMIN_MONTH_NAMES[parseInt(monthVal)]} ${year}`, 'success');
+    adminShowPeriodNotification(totals, `✅ Report loaded for ${periodDesc}`, periodDesc);
+}
+
+function adminOnQuarterOptionChange() {
+    const mode = document.getElementById('admin-report-quarter')?.value || '1';
+    const customSpan = document.getElementById('admin-quarter-custom-range');
+    if (customSpan) {
+        customSpan.style.display = (mode === 'custom') ? 'inline-flex' : 'none';
+    }
+}
+
+async function adminLoadQuarterlyOrRangeReport() {
+    const mode = document.getElementById('admin-report-quarter')?.value || '1';
+    if (mode === 'custom') {
+        await adminLoadCustomRangeReport();
+    } else {
+        await adminLoadQuarterlyReport();
+    }
 }
 
 async function adminLoadQuarterlyReport() {
@@ -3367,6 +3674,7 @@ async function adminLoadQuarterlyReport() {
     const months = ADMIN_QUARTER_MONTHS[quarter];
     const totals = await adminGetAccomplishmentDataForPeriod(months, year);
     if (!totals.some(v => v > 0)) {
+        _adminCurrentFullTotals = null;
         adminShowNotification(`No data found for Q${quarter} ${year}.`, 'error');
         adminClearReportInputs();
         document.getElementById('admin-accomplishment-report').classList.add('hidden');
@@ -3378,13 +3686,14 @@ async function adminLoadQuarterlyReport() {
     const qOrdinal = ['','1st Quarter','2nd Quarter','3rd Quarter','4th Quarter'][quarter];
     const qLabel   = ['','January – March','April – June','July – September','October – December'][quarter];
     adminShowReportResult(totals, `${qOrdinal} — ${qLabel} ${year}`, 'QUARTERLY ACCOMPLISHMENT REPORT —');
-    adminShowNotification(`✅ Quarterly report loaded for Q${quarter} ${year}`, 'success');
+    adminShowPeriodNotification(totals, `✅ Quarterly report loaded for Q${quarter} ${year}`, `Q${quarter} ${year}`);
 }
 
 async function adminLoadCustomRangeReport() {
     const fromMonth = parseInt(document.getElementById('admin-report-quarter-from').value);
     const toMonth   = parseInt(document.getElementById('admin-report-quarter-to').value);
-    const year      = document.getElementById('admin-report-quarter-custom-year').value;
+    const yearEl    = document.getElementById('admin-report-quarter-year') || document.getElementById('admin-report-quarter-custom-year');
+    const year      = yearEl ? yearEl.value : '';
     if (!year) { adminShowNotification('Please enter a Year.', 'error'); return; }
     if (fromMonth > toMonth) { adminShowNotification('"From" month must not be later than "To" month.', 'error'); return; }
 
@@ -3393,6 +3702,7 @@ async function adminLoadCustomRangeReport() {
 
     const totals = await adminGetAccomplishmentDataForPeriod(months, year);
     if (!totals.some(v => v > 0)) {
+        _adminCurrentFullTotals = null;
         adminShowNotification(`No data found for ${ADMIN_MONTH_NAMES[fromMonth]} – ${ADMIN_MONTH_NAMES[toMonth]} ${year}.`, 'error');
         adminClearReportInputs();
         document.getElementById('admin-accomplishment-report').classList.add('hidden');
@@ -3403,7 +3713,7 @@ async function adminLoadCustomRangeReport() {
 
     const rangeLabel = fromMonth === toMonth ? ADMIN_MONTH_NAMES[fromMonth] : `${ADMIN_MONTH_NAMES[fromMonth]} – ${ADMIN_MONTH_NAMES[toMonth]}`;
     adminShowReportResult(totals, `${rangeLabel} ${year}`, 'QUARTERLY ACCOMPLISHMENT REPORT —');
-    adminShowNotification(`✅ Custom range report loaded: ${rangeLabel} ${year}`, 'success');
+    adminShowPeriodNotification(totals, `✅ Custom range report loaded: ${rangeLabel} ${year}`, `${rangeLabel} ${year}`);
 }
 
 function adminSelectAllMonths() {
@@ -3424,6 +3734,7 @@ async function adminLoadAnnualReport() {
 
     const totals = await adminGetAccomplishmentDataForPeriod(checkedMonths, year);
     if (!totals.some(v => v > 0)) {
+        _adminCurrentFullTotals = null;
         adminShowNotification(`No data found for selected months in ${year}.`, 'error');
         adminClearReportInputs();
         document.getElementById('admin-accomplishment-report').classList.add('hidden');
@@ -3437,12 +3748,13 @@ async function adminLoadAnnualReport() {
         : checkedMonths.map(m => ADMIN_MONTH_NAMES[m]).join(', ') + ` ${year}`;
 
     adminShowReportResult(totals, monthLabel, 'ANNUAL ACCOMPLISHMENT REPORT —');
-    adminShowNotification(`✅ Annual report loaded for selected months in ${year}`, 'success');
+    adminShowPeriodNotification(totals, `✅ Annual report loaded for selected months in ${year}`, monthLabel);
 }
 
 // ---- Edit / Save / Cancel ----
 
 function adminToggleReportEdit() {
+    _adminIsReportEditing = true;
     // Snapshot current values so Cancel can restore them
     adminReportSnapshot = [...document.querySelectorAll('#admin-accomplishment-report .admin-report-input')]
         .map(inp => inp.value);
@@ -3459,12 +3771,14 @@ async function adminSaveReportEdit() {
     // Save edited values back to the matching accomplishment records via API
     const inputs = [...document.querySelectorAll('#admin-accomplishment-report .admin-report-input')];
     const newValues = inputs.map(inp => parseFloat(inp.value) || 0);
+    const activeCols = getAdminActiveColIndices();
 
     const records = await adminGetAllAccomplishmentRecords();
 
-    // Update each inspector's record fields based on the edited values
+    // Update each visible/active inspector's record fields based on the edited values
     const updatePromises = [];
     Object.entries(ADMIN_INSPECTOR_COL_MAP).forEach(([inspectorName, colIdx]) => {
+        if (!activeCols.includes(colIdx)) return;
         const fieldIndices = adminBuildInspectorFieldMap(colIdx);
         records.forEach(rec => {
             if (rec.inspector !== inspectorName) return;
@@ -3492,6 +3806,19 @@ async function adminSaveReportEdit() {
 
     await Promise.all(updatePromises);
 
+    // Sync edited visible inspector cells into cached full totals and refresh filtered TOTAL column
+    if (Array.isArray(_adminCurrentFullTotals) && _adminCurrentFullTotals.length === newValues.length) {
+        activeCols.forEach(colIdx => {
+            adminBuildInspectorFieldMap(colIdx).forEach(inputIdx => {
+                if (inputIdx !== undefined) _adminCurrentFullTotals[inputIdx] = newValues[inputIdx] || 0;
+            });
+        });
+        adminRecalcFullTotalsBottom(_adminCurrentFullTotals);
+        const refreshed = adminComputeFilteredTotals(_adminCurrentFullTotals, activeCols);
+        adminSetReportValues(refreshed);
+    }
+
+    _adminIsReportEditing = false;
     adminMakeReportReadOnly();
     document.getElementById('admin-report-edit-btn').style.display = 'inline-flex';
     document.getElementById('admin-report-save-btn').style.display = 'none';
@@ -3502,6 +3829,7 @@ async function adminSaveReportEdit() {
 }
 
 function adminCancelReportEdit() {
+    _adminIsReportEditing = false;
     // Restore snapshot values
     const inputs = [...document.querySelectorAll('#admin-accomplishment-report .admin-report-input')];
     inputs.forEach((inp, i) => { inp.value = adminReportSnapshot[i] || ''; });

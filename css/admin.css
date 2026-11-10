@@ -2065,6 +2065,116 @@ dialog.modal::backdrop {
 .admin-report-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .admin-report-input:focus { background: #ecfdf5; }
 
+/* ===== ACCOMPLISHMENT REPORT — MULTI-SELECT INSPECTOR DROPDOWN ===== */
+#accomplishmentReportView .card.overflow-visible {
+    overflow: visible !important;
+}
+#accomplishmentReportView .card.overflow-visible:hover {
+    transform: none !important;
+}
+#accomplishmentReportView .btn.btn-sm {
+    height: 2rem;
+    min-height: 2rem;
+    padding: 0 0.85rem;
+    font-size: 0.875rem;
+    line-height: 1;
+    border-radius: 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+}
+#admin-annual-controls .annual-clear-btn {
+    background-color: #dc2626 !important;
+    border-color: #dc2626 !important;
+    color: #ffffff !important;
+}
+#admin-annual-controls .annual-clear-btn:hover {
+    background-color: #b91c1c !important;
+    border-color: #b91c1c !important;
+    color: #ffffff !important;
+}
+.inspector-ms-wrap {
+    position: relative;
+    display: inline-block;
+}
+.inspector-ms-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    height: 2rem;
+    min-height: 2rem;
+    min-width: 175px;
+    max-width: 280px;
+    padding: 0 10px;
+    border-radius: 0.5rem;
+    border: 1px solid #10b981;
+    background: #ffffff;
+    color: #111827;
+    font-size: 0.85rem;
+    font-weight: 500;
+    line-height: 1;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.inspector-ms-btn:hover {
+    border-color: #059669;
+    background: #f0fdf4;
+}
+.inspector-ms-btn.is-filtered {
+    border-color: #059669;
+    background: #ecfdf5;
+    color: #065f46;
+    font-weight: 600;
+}
+.inspector-ms-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.inspector-ms-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 230px;
+    max-height: 170px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    z-index: 999;
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.14);
+    padding: 6px 0;
+}
+.inspector-ms-menu.hidden {
+    display: none;
+}
+.inspector-ms-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    font-size: 0.85rem;
+    color: #1f2937;
+    white-space: nowrap;
+    transition: background-color 0.12s ease;
+}
+.inspector-ms-option:hover {
+    background: #ecfdf5;
+}
+.inspector-ms-checkbox {
+    accent-color: #059669;
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+}
+.inspector-ms-divider {
+    height: 1px;
+    background: #e5e7eb;
+    margin: 4px 0;
+}
+
 /* ===== ACCOMPLISHMENT REPORT — SCREEN SIZES (print restored at EOF) ===== */
 #admin-accomplishment-report { font-size: 14px; }
 #admin-accomplishment-report .report-title { font-size: 16px; }
