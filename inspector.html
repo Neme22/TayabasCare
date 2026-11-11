@@ -9,7 +9,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/inspector.css?v=16">
+    <link rel="stylesheet" href="css/inspector.css?v=18">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
 </head>
@@ -1531,7 +1531,7 @@
                     <!-- Name of Business -->
                     <div class="form-control md:col-span-2">
                         <label class="label"><span class="label-text font-semibold">Name of Business <span class="text-red-500">*</span></span></label>
-                        <input type="text" id="sanitary-business" class="input input-bordered input-success" data-testid="sanitary-business" required />
+                        <input type="text" id="sanitary-business" class="input input-bordered input-success" data-testid="sanitary-business" oninput="this.value=this.value.replace(/^(\s*)([a-z\u00e0-\u00f6\u00f8-\u00ff])/,(m,s,c)=>s+c.toUpperCase())" required />
                     </div>
 
                     <!-- Barangay -->
@@ -1545,13 +1545,13 @@
                     <!-- Building No. / Street -->
                     <div class="form-control">
                         <label class="label"><span class="label-text font-semibold">Building No. / Street</span></label>
-                        <input type="text" id="sanitary-building-street" class="input input-bordered input-success" placeholder="e.g. 123 Rizal St. or N/A" />
+                        <input type="text" id="sanitary-building-street" class="input input-bordered input-success" placeholder="e.g. 123 Rizal St. or N/A" oninput="this.value=this.value.replace(/^(\s*)([a-z\u00e0-\u00f6\u00f8-\u00ff])/,(m,s,c)=>s+c.toUpperCase())" />
                     </div>
 
                     <!-- Name of Corporation/Cooperative -->
                     <div class="form-control md:col-span-2">
                         <label class="label"><span class="label-text font-semibold">Name of Corporation/Cooperative</span></label>
-                        <input type="text" id="sanitary-corporation" class="input input-bordered input-success" placeholder="Enter corporation or cooperative name" />
+                        <input type="text" id="sanitary-corporation" class="input input-bordered input-success" placeholder="Enter corporation or cooperative name" oninput="this.value=this.value.replace(/^(\s*)([a-z\u00e0-\u00f6\u00f8-\u00ff])/,(m,s,c)=>s+c.toUpperCase())" />
                     </div>
 
                     <!-- Owner Name -->
@@ -1621,7 +1621,7 @@
                     <!-- Remarks -->
                     <div class="form-control">
                         <label class="label"><span class="label-text font-semibold">Remarks</span></label>
-                        <textarea id="sanitary-remarks" class="textarea textarea-bordered textarea-success" data-testid="sanitary-remarks"></textarea>
+                        <textarea id="sanitary-remarks" class="textarea textarea-bordered textarea-success" data-testid="sanitary-remarks" oninput="this.value=this.value.replace(/^(\s*)([a-z\u00e0-\u00f6\u00f8-\u00ff])/,(m,s,c)=>s+c.toUpperCase())"></textarea>
                     </div>
                 </div>
 
@@ -1696,7 +1696,7 @@
                     <!-- Name of Deceased -->
                     <div class="form-control md:col-span-2">
                         <label class="label"><span class="label-text font-semibold">Name of the Deceased <span class="text-red-500">*</span></span></label>
-                        <input type="text" id="burial-deceased" class="input input-bordered input-success" data-testid="burial-deceased" required />
+                        <input type="text" id="burial-deceased" class="input input-bordered input-success" data-testid="burial-deceased" oninput="this.value=this.value.replace(/[^a-zA-Z\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u00ff\s\-\.]/g,'').replace(/(?:^|\s|-)\S/g,c=>c.toUpperCase())" required />
                     </div>
 
                     <!-- Sex of Deceased (used for monthly accomplishment M/F counts) -->
@@ -1726,7 +1726,7 @@
                     <!-- Place of Death + Age -->
                     <div class="form-control">
                         <label class="label"><span class="label-text font-semibold">Place of Death <span class="text-red-500">*</span></span></label>
-                        <input type="text" id="burial-death-place" class="input input-bordered input-success" data-testid="burial-death-place" required />
+                        <input type="text" id="burial-death-place" class="input input-bordered input-success" data-testid="burial-death-place" oninput="this.value=this.value.replace(/^(\s*)([a-z\u00e0-\u00f6\u00f8-\u00ff])/,(m,s,c)=>s+c.toUpperCase())" required />
                     </div>
 
                     <div class="form-control">
@@ -1737,13 +1737,13 @@
                     <!-- Cause of Death (used on burial permit print) -->
                     <div class="form-control md:col-span-2">
                         <label class="label"><span class="label-text font-semibold">Cause of Death <span class="text-red-500">*</span></span></label>
-                        <input type="text" id="burial-cause-of-death" class="input input-bordered input-success" data-testid="burial-cause-of-death" placeholder="e.g. Cardiac arrest" required />
+                        <input type="text" id="burial-cause-of-death" class="input input-bordered input-success" data-testid="burial-cause-of-death" placeholder="e.g. Cardiac arrest" oninput="this.value=this.value.replace(/^(\s*)([a-z\u00e0-\u00f6\u00f8-\u00ff])/,(m,s,c)=>s+c.toUpperCase())" required />
                     </div>
 
                     <!-- Name of Informant -->
                     <div class="form-control md:col-span-2">
                         <label class="label"><span class="label-text font-semibold">Name of Informant <span class="text-red-500">*</span></span></label>
-                        <input type="text" id="burial-informant" class="input input-bordered input-success" data-testid="burial-informant" required />
+                        <input type="text" id="burial-informant" class="input input-bordered input-success" data-testid="burial-informant" oninput="this.value=this.value.replace(/[^a-zA-Z\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u00ff\s\-\.]/g,'').replace(/(?:^|\s|-)\S/g,c=>c.toUpperCase())" required />
                     </div>
 
                     <!-- Cadaver Specific Fields -->
@@ -1776,7 +1776,7 @@
 
                         <div class="form-control">
                             <label class="label"><span class="label-text font-semibold">Funeral Service</span></label>
-                            <input type="text" id="burial-funeral" class="input input-bordered input-success" data-testid="burial-funeral" />
+                            <input type="text" id="burial-funeral" class="input input-bordered input-success" data-testid="burial-funeral" oninput="this.value=this.value.replace(/^(\s*)([a-z\u00e0-\u00f6\u00f8-\u00ff])/,(m,s,c)=>s+c.toUpperCase())" />
                         </div>
 
                         <div class="form-control">
@@ -1818,7 +1818,7 @@
                     <!-- Funeral Service (for skeletal/exhumation) -->
                     <div class="form-control">
                         <label class="label"><span class="label-text font-semibold">Funeral Service</span></label>
-                        <input type="text" id="burial-funeral-skeletal" class="input input-bordered input-success" data-testid="burial-funeral-skeletal" />
+                        <input type="text" id="burial-funeral-skeletal" class="input input-bordered input-success" data-testid="burial-funeral-skeletal" oninput="this.value=this.value.replace(/^(\s*)([a-z\u00e0-\u00f6\u00f8-\u00ff])/,(m,s,c)=>s+c.toUpperCase())" />
                     </div>
 
                     <div class="form-control">
@@ -2293,19 +2293,22 @@
                     <h3 class="font-bold text-gray-800 text-base truncate mb-0" id="file-viewer-title">Attached File</h3>
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
-                    <div id="file-viewer-zoom-controls" class="inline-flex items-center gap-1 bg-gray-100 rounded-lg p-1 border border-gray-200">
-                        <button type="button" onclick="zoomFileViewer(-0.25)" class="btn btn-xs btn-ghost text-gray-700 hover:bg-white hover:text-emerald-700 px-2" title="Zoom Out" data-testid="file-viewer-zoom-out">
-                            <i class="fas fa-search-minus text-sm"></i>
+                    <div id="file-viewer-zoom-controls" class="fv-zoom-toolbar">
+                        <button type="button" onclick="zoomFileViewer(-0.25)" class="fv-zoom-btn" title="Zoom Out" aria-label="Zoom Out" data-testid="file-viewer-zoom-out">
+                            <i class="fas fa-search-minus"></i>
                         </button>
-                        <span id="file-viewer-zoom-level" class="text-xs font-bold text-gray-700 px-1 select-none min-w-[44px] text-center">100%</span>
-                        <button type="button" onclick="zoomFileViewer(0.25)" class="btn btn-xs btn-ghost text-gray-700 hover:bg-white hover:text-emerald-700 px-2" title="Zoom In" data-testid="file-viewer-zoom-in">
-                            <i class="fas fa-search-plus text-sm"></i>
+                        <span id="file-viewer-zoom-level" class="fv-zoom-level">100%</span>
+                        <button type="button" onclick="zoomFileViewer(0.25)" class="fv-zoom-btn" title="Zoom In" aria-label="Zoom In" data-testid="file-viewer-zoom-in">
+                            <i class="fas fa-search-plus"></i>
                         </button>
-                        <button type="button" onclick="resetFileViewerZoom()" class="btn btn-xs btn-ghost text-gray-500 hover:bg-white hover:text-emerald-700 px-1.5" title="Reset Zoom">
-                            <i class="fas fa-undo text-xs"></i>
+                        <span class="fv-zoom-sep" aria-hidden="true"></span>
+                        <button type="button" onclick="resetFileViewerZoom()" class="fv-zoom-btn" title="Reset Zoom" aria-label="Reset Zoom">
+                            <i class="fas fa-undo"></i>
                         </button>
                     </div>
-                    <button type="button" onclick="closeFileViewerModal()" class="btn btn-sm btn-circle btn-ghost text-gray-500 hover:text-red-500" data-testid="file-viewer-close">✕</button>
+                    <button type="button" onclick="closeFileViewerModal()" class="fv-close-btn" title="Close" aria-label="Close" data-testid="file-viewer-close">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
             </div>
             <div class="relative bg-slate-900 flex items-center justify-center min-h-[380px] h-[75vh] overflow-hidden select-none" id="file-viewer-body">
@@ -2322,7 +2325,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
     <script src="js/import_common.js?v=2"></script>
-    <script src="js/inspector.js?v=30"></script>
+    <script src="js/inspector.js?v=34"></script>
 
     <script>
 document.addEventListener('click', function(e) {

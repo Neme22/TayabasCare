@@ -5,7 +5,7 @@
 if (php_sapi_name() !== 'cli') { http_response_code(403); exit('CLI only'); }
 $endpoint = $argv[1] ?? '';
 $action   = $argv[2] ?? '';
-if (!in_array($endpoint, ['notification_runner', 'alerts'], true)) { exit("bad endpoint\n"); }
+if (!in_array($endpoint, ['notification_runner', 'alerts', 'backup'], true)) { exit("bad endpoint\n"); }
 if (!preg_match('/^[a-z_]+$/', $action)) { exit("bad action\n"); }
 $_SERVER['REQUEST_METHOD'] = 'GET';
 $_GET['action'] = $action;

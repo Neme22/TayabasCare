@@ -1,0 +1,2 @@
+# Deny direct web access to database backup files; admins download via php/backup.php
+Require all denied

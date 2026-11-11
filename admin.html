@@ -9,7 +9,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="css/admin.css?v=21">
+    <link rel="stylesheet" href="css/admin.css?v=23">
 
 </head>
 <body class="bg-gray-50">
@@ -434,6 +434,10 @@
                         <div id="barangayStats" style="font-size:13px;color:#374151;line-height:2;margin-bottom:10px;">
                             <span style="color:#9ca3af;">Select a barangay to filter</span>
                         </div>
+                        <div id="barangayChartLegend" style="display:none;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;font-size:11px;color:#4b5563;margin:4px 0 8px;">
+                            <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:2px;background:#10b981;display:inline-block;"></span>Complied</span>
+                            <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:2px;background:#ef4444;display:inline-block;"></span>Not Complied (Violations)</span>
+                        </div>
                         <canvas id="barangayViolationsChart" style="display:none;max-height:180px;"></canvas>
                     </div>
                 </div>
@@ -447,7 +451,8 @@
                             <i class="fas fa-exclamation-triangle" style="color:#f59e0b;font-size:16px;"></i>
                             <h3 style="font-size:15px;font-weight:700;color:#374151;margin:0;">Most Common Violation Types</h3>
                         </div>
-                        <p style="font-size:11px;color:#9ca3af;margin:0 0 14px;">Based on inspection report recommendations</p>
+                        <p style="font-size:11px;color:#9ca3af;margin:0 0 8px;">Based on inspection report recommendations</p>
+                        <div id="violationTypeLegend" style="display:flex;flex-wrap:wrap;gap:6px 12px;font-size:11px;color:#4b5563;margin-bottom:10px;"></div>
                         <div style="position:relative;height:220px;overflow:hidden;">
                             <canvas id="violationTypeChart" role="img" aria-label="Bar chart showing most common violation types">No data yet.</canvas>
                         </div>
@@ -459,7 +464,12 @@
                             <i class="fas fa-user-check" style="color:#10b981;font-size:16px;"></i>
                             <h3 style="font-size:15px;font-weight:700;color:#374151;margin:0;">Inspector Productivity</h3>
                         </div>
-                        <p style="font-size:11px;color:#9ca3af;margin:0 0 14px;">Inspections conducted per inspector</p>
+                        <p style="font-size:11px;color:#9ca3af;margin:0 0 8px;">Inspections conducted per inspector</p>
+                        <div id="inspectorProductivityLegend" style="display:flex;flex-wrap:wrap;gap:8px 14px;font-size:11px;color:#4b5563;margin-bottom:10px;padding:6px 10px;background:#f9fafb;border-radius:6px;border:1px solid #f3f4f6;">
+                            <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:#374151;display:inline-block;"></span>Total Inspections</span>
+                            <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:#059669;display:inline-block;"></span>Complied</span>
+                            <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:#dc2626;display:inline-block;"></span>Not Complied</span>
+                        </div>
                         <div style="overflow-y:auto;max-height:220px;">
                             <table style="width:100%;border-collapse:collapse;font-size:12px;">
                                 <thead>
@@ -547,11 +557,19 @@
                     </div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
                         <div>
-                            <h4 style="font-size:13px;font-weight:600;color:#374151;margin:0 0 10px;">Violation Rate by FOOD / NON FOOD Establishment</h4>
+                            <h4 style="font-size:13px;font-weight:600;color:#374151;margin:0 0 6px;">Violation Rate by FOOD / NON FOOD Establishment</h4>
+                            <div id="patternCategoryLegend" style="display:flex;flex-wrap:wrap;gap:6px 12px;font-size:11px;color:#4b5563;margin-bottom:8px;">
+                                <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:9px;height:9px;border-radius:2px;background:#ef4444;display:inline-block;"></span>High (&gt;50%)</span>
+                                <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:9px;height:9px;border-radius:2px;background:#f59e0b;display:inline-block;"></span>Moderate (26–50%)</span>
+                                <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:9px;height:9px;border-radius:2px;background:#10b981;display:inline-block;"></span>Low (&le;25%)</span>
+                            </div>
                             <canvas id="patternCategoryChart" height="200"></canvas>
                         </div>
                         <div>
-                            <h4 style="font-size:13px;font-weight:600;color:#374151;margin:0 0 10px;">Violation Rate by Barangay</h4>
+                            <h4 style="font-size:13px;font-weight:600;color:#374151;margin:0 0 6px;">Violation Rate by Barangay</h4>
+                            <div id="patternBarangayLegend" style="display:flex;flex-wrap:wrap;gap:6px 12px;font-size:11px;color:#4b5563;margin-bottom:8px;">
+                                <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:9px;height:9px;border-radius:2px;background:#3b82f6;display:inline-block;"></span>Total Violations by Barangay</span>
+                            </div>
                             <canvas id="patternBarangayChart" height="200"></canvas>
                         </div>
                     </div>
@@ -571,9 +589,9 @@
                             <h3 style="font-size:15px;font-weight:700;color:#374151;margin:0;">Year-over-Year Comparison</h3>
                         </div>
                         <div style="display:flex;gap:8px;align-items:center;">
-                            <select id="yoyYear1" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;background:#fff;"></select>
+                            <select id="yoyYear1" autocomplete="off" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;background:#fff;"></select>
                             <span style="font-size:12px;color:#6b7280;">vs</span>
-                            <select id="yoyYear2" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;background:#fff;"></select>
+                            <select id="yoyYear2" autocomplete="off" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;background:#fff;"></select>
                             <button onclick="YoYComparison.load()" style="background:#059669;border:none;color:#fff;padding:6px 14px;border-radius:8px;font-weight:600;cursor:pointer;font-size:12px;">Compare</button>
                         </div>
                     </div>
@@ -584,8 +602,8 @@
 
                 <!-- Compliance Alerts Button -->
                 <div style="margin-top:20px;display:flex;justify-content:flex-end;">
-                    <button onclick="fetch(`${API_BASE_URL}/notification_runner.php?action=send_compliance_alerts`).then(r=>r.json()).then(d=>Utils.showToast(d.message||'Done'))" style="background:#dc2626;border:none;color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:12px;" title="Send compliance alerts to admin email">
-                        <i class="fas fa-exclamation-triangle" style="margin-right:4px;"></i>Send Compliance Alerts Email
+                    <button onclick="Dashboard.sendComplianceAlerts(this)" style="background:#dc2626;border:none;color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:12px;" title="Send compliance alert emails and bell notifications to assigned inspectors">
+                        <i class="fas fa-exclamation-triangle" style="margin-right:4px;"></i>Send Compliance Alerts
                     </button>
                 </div>
 
@@ -609,10 +627,29 @@
                     <span id="admin-inspector-count" style="font-size:12px;color:#9ca3af;margin-left:auto;"></span>
                 </div>
                 <div class="card">
+                    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;padding:14px 20px;">
+                        <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+                            <h3 style="margin:0;font-size:16px;font-weight:700;color:#111827;">Inspector Accounts</h3>
+                            <label class="select-all-label" style="margin:0;display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:#4b5563;">
+                                <input type="checkbox" id="selectAllInspectors" onchange="RecordBulkArchive.toggleSelectAll('inspectors')">
+                                <span>Select All</span>
+                            </label>
+                        </div>
+                        <div class="bulk-actions" id="inspectorsBulkActions" style="display:none;align-items:center;gap:8px;padding:0;background:transparent;border:none;animation:none;flex-wrap:wrap;">
+                            <span class="selected-count" id="inspectorsSelectedCount" style="font-size:12px;font-weight:700;padding:5px 10px;background:#dbeafe;color:#1e40af;border-radius:6px;">0 selected</span>
+                            <button type="button" class="btn btn-danger btn-small" onclick="RecordBulkArchive.archiveSelected('inspectors')" style="background:#dc2626;border-color:#dc2626;color:#fff;font-size:12px;font-weight:600;padding:6px 12px;border-radius:6px;display:inline-flex;align-items:center;gap:6px;">
+                                <i class="bi bi-archive"></i> Archive Selected
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-small" onclick="RecordBulkArchive.clearSelection('inspectors')" style="background:#f3f4f6;border-color:#e5e7eb;color:#374151;font-size:12px;font-weight:600;padding:6px 12px;border-radius:6px;">
+                                Clear
+                            </button>
+                        </div>
+                    </div>
                     <div class="table-container">
                         <table class="data-table">
                             <thead>
                                 <tr>
+                                    <th style="width:40px;"></th>
                                     <th>ID</th>
                                     <th>Full Name</th>
                                     <th>Email</th>
@@ -621,7 +658,7 @@
                                 </tr>
                             </thead>
                             <tbody id="inspectorsTableBody">
-                                <tr><td colspan="5" class="empty-state">No inspectors found</td></tr>
+                                <tr><td colspan="6" class="empty-state">No inspectors found</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -673,10 +710,29 @@
                     <span id="admin-sanitary-count" style="font-size:12px;color:#9ca3af;margin-left:auto;"></span>
                 </div>
                 <div class="card">
+                    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;padding:14px 20px;">
+                        <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+                            <h3 style="margin:0;font-size:16px;font-weight:700;color:#111827;">Sanitary Records</h3>
+                            <label class="select-all-label" style="margin:0;display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:#4b5563;">
+                                <input type="checkbox" id="selectAllSanitary" onchange="RecordBulkArchive.toggleSelectAll('sanitary')">
+                                <span>Select All</span>
+                            </label>
+                        </div>
+                        <div class="bulk-actions" id="sanitaryBulkActions" style="display:none;align-items:center;gap:8px;padding:0;background:transparent;border:none;animation:none;flex-wrap:wrap;">
+                            <span class="selected-count" id="sanitarySelectedCount" style="font-size:12px;font-weight:700;padding:5px 10px;background:#dbeafe;color:#1e40af;border-radius:6px;">0 selected</span>
+                            <button type="button" class="btn btn-danger btn-small" onclick="RecordBulkArchive.archiveSelected('sanitary')" style="background:#dc2626;border-color:#dc2626;color:#fff;font-size:12px;font-weight:600;padding:6px 12px;border-radius:6px;display:inline-flex;align-items:center;gap:6px;">
+                                <i class="bi bi-archive"></i> Archive Selected
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-small" onclick="RecordBulkArchive.clearSelection('sanitary')" style="background:#f3f4f6;border-color:#e5e7eb;color:#374151;font-size:12px;font-weight:600;padding:6px 12px;border-radius:6px;">
+                                Clear
+                            </button>
+                        </div>
+                    </div>
                     <div class="table-container">
                         <table class="data-table">
                             <thead>
                                 <tr>
+                                    <th style="width:40px;"></th>
                                     <th>Record ID</th>
                                     <th>Establishment Name</th>
                                     <th>Date</th>
@@ -684,7 +740,7 @@
                                 </tr>
                             </thead>
                             <tbody id="sanitaryTableBody">
-                                <tr><td colspan="4" class="empty-state">No sanitary records found</td></tr>
+                                <tr><td colspan="5" class="empty-state">No sanitary records found</td></tr>
                             </tbody>
                         </table>
                         <div id="admin-sanitary-pager" class="pager-bar"></div>
@@ -720,10 +776,29 @@
                     <span id="admin-burial-count" style="font-size:12px;color:#9ca3af;margin-left:auto;"></span>
                 </div>
                 <div class="card">
+                    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;padding:14px 20px;">
+                        <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+                            <h3 style="margin:0;font-size:16px;font-weight:700;color:#111827;">Burial Records</h3>
+                            <label class="select-all-label" style="margin:0;display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:#4b5563;">
+                                <input type="checkbox" id="selectAllBurial" onchange="RecordBulkArchive.toggleSelectAll('burial')">
+                                <span>Select All</span>
+                            </label>
+                        </div>
+                        <div class="bulk-actions" id="burialBulkActions" style="display:none;align-items:center;gap:8px;padding:0;background:transparent;border:none;animation:none;flex-wrap:wrap;">
+                            <span class="selected-count" id="burialSelectedCount" style="font-size:12px;font-weight:700;padding:5px 10px;background:#dbeafe;color:#1e40af;border-radius:6px;">0 selected</span>
+                            <button type="button" class="btn btn-danger btn-small" onclick="RecordBulkArchive.archiveSelected('burial')" style="background:#dc2626;border-color:#dc2626;color:#fff;font-size:12px;font-weight:600;padding:6px 12px;border-radius:6px;display:inline-flex;align-items:center;gap:6px;">
+                                <i class="bi bi-archive"></i> Archive Selected
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-small" onclick="RecordBulkArchive.clearSelection('burial')" style="background:#f3f4f6;border-color:#e5e7eb;color:#374151;font-size:12px;font-weight:600;padding:6px 12px;border-radius:6px;">
+                                Clear
+                            </button>
+                        </div>
+                    </div>
                     <div class="table-container">
                         <table class="data-table">
                     <thead>
                         <tr>
+                            <th style="width:40px;"></th>
                             <th>Category</th>
                             <th>Deceased Name</th>
                             <th>Date</th>
@@ -731,7 +806,7 @@
                         </tr>
                     </thead>
                             <tbody id="burialTableBody">
-                                <tr><td colspan="4" class="empty-state">No burial records found</td></tr>
+                                <tr><td colspan="5" class="empty-state">No burial records found</td></tr>
                             </tbody>
                         </table>
                         <div id="admin-burial-pager" class="pager-bar"></div>
@@ -900,10 +975,29 @@
                     <span id="admin-reports-count" style="font-size:12px;color:#9ca3af;margin-left:auto;"></span>
                 </div>
                 <div class="card">
+                    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;padding:14px 20px;">
+                        <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+                            <h3 style="margin:0;font-size:16px;font-weight:700;color:#111827;">Inspection Reports</h3>
+                            <label class="select-all-label" style="margin:0;display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:#4b5563;">
+                                <input type="checkbox" id="selectAllReports" onchange="RecordBulkArchive.toggleSelectAll('reports')">
+                                <span>Select All</span>
+                            </label>
+                        </div>
+                        <div class="bulk-actions" id="reportsBulkActions" style="display:none;align-items:center;gap:8px;padding:0;background:transparent;border:none;animation:none;flex-wrap:wrap;">
+                            <span class="selected-count" id="reportsSelectedCount" style="font-size:12px;font-weight:700;padding:5px 10px;background:#dbeafe;color:#1e40af;border-radius:6px;">0 selected</span>
+                            <button type="button" class="btn btn-danger btn-small" onclick="RecordBulkArchive.archiveSelected('reports')" style="background:#dc2626;border-color:#dc2626;color:#fff;font-size:12px;font-weight:600;padding:6px 12px;border-radius:6px;display:inline-flex;align-items:center;gap:6px;">
+                                <i class="bi bi-archive"></i> Archive Selected
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-small" onclick="RecordBulkArchive.clearSelection('reports')" style="background:#f3f4f6;border-color:#e5e7eb;color:#374151;font-size:12px;font-weight:600;padding:6px 12px;border-radius:6px;">
+                                Clear
+                            </button>
+                        </div>
+                    </div>
                     <div class="table-container">
                         <table class="data-table">
                             <thead>
                                 <tr>
+                                    <th style="width:40px;"></th>
                                     <th>Report ID</th>
                                     <th>Inspector</th>
                                     <th>Establishment</th>
@@ -913,7 +1007,7 @@
                                 </tr>
                             </thead>
                             <tbody id="reportsTableBody">
-                                <tr><td colspan="6" class="empty-state">No inspection reports found</td></tr>
+                                <tr><td colspan="7" class="empty-state">No inspection reports found</td></tr>
                             </tbody>
                         </table>
                         <div id="admin-reports-pager" class="pager-bar"></div>
@@ -1885,7 +1979,7 @@
                             </div>
                             <div>
                                 <h4 class="font-semibold text-lg">Database Backup</h4>
-                                <p class="text-sm text-gray-500">Create, download, or restore a full database backup</p>
+                                <p class="text-sm text-gray-500">Manual, weekly &amp; monthly automated database backups</p>
                             </div>
                         </div>
                         <i class="bi bi-chevron-right text-emerald-600"></i>
@@ -1973,16 +2067,39 @@
             </div>
             
             <div class="p-6">
-                <p class="text-sm text-gray-500 mb-4">
-                    Full backup of <strong>tayabascare_db</strong>. Use <em>Create Backup</em> regularly;
-                    <em>Restore</em> only when data is lost or corrupted.
+                <p class="text-sm text-gray-500 mb-3">
+                    Full backup of <strong>tayabascare_db</strong>. Automated <strong>Weekly</strong> and <strong>Monthly</strong> backups run on schedule;
+                    use <em>Create Backup</em> anytime before major changes, and <em>Restore</em> only when data is lost or corrupted.
                 </p>
 
-                <div class="flex flex-wrap gap-3 mb-4">
-                    <button type="button" id="btnCreateBackup" class="btn btn-success btn-small" onclick="BackupManager.create()" data-testid="create-backup-btn">
+                <div id="backup-schedule-summary" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                    <div class="p-3 rounded-lg bg-blue-50 border border-blue-200 text-xs">
+                        <div class="font-semibold text-blue-800 flex items-center gap-1.5">
+                            <i class="bi bi-calendar-week"></i> Weekly Auto-Backup
+                        </div>
+                        <div class="text-blue-700 mt-1">Every Sunday at 2:00 AM (keeps last 8)</div>
+                        <div class="text-gray-600 mt-0.5" id="backup-weekly-meta">Checking…</div>
+                    </div>
+                    <div class="p-3 rounded-lg bg-purple-50 border border-purple-200 text-xs">
+                        <div class="font-semibold text-purple-800 flex items-center gap-1.5">
+                            <i class="bi bi-calendar-month"></i> Monthly Auto-Backup
+                        </div>
+                        <div class="text-purple-700 mt-1">1st of every month at 3:00 AM (keeps last 12)</div>
+                        <div class="text-gray-600 mt-0.5" id="backup-monthly-meta">Checking…</div>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap gap-2 mb-4 items-center">
+                    <button type="button" id="btnCreateBackup" class="btn btn-success btn-small" onclick="BackupManager.create('manual')" data-testid="create-backup-btn">
                         <i class="bi bi-plus-circle mr-1"></i>Create Backup Now
                     </button>
-                    <span id="backup-status" class="text-sm text-gray-500 self-center"></span>
+                    <button type="button" id="btnCreateWeeklyBackup" class="btn btn-secondary btn-small" onclick="BackupManager.create('weekly')" title="Run a weekly snapshot now (keeps latest 8)">
+                        <i class="bi bi-calendar-week mr-1"></i>Run Weekly
+                    </button>
+                    <button type="button" id="btnCreateMonthlyBackup" class="btn btn-secondary btn-small" onclick="BackupManager.create('monthly')" title="Run a monthly snapshot now (keeps latest 12)">
+                        <i class="bi bi-calendar-month mr-1"></i>Run Monthly
+                    </button>
+                    <span id="backup-status" class="text-sm text-gray-500 self-center ml-1"></span>
                 </div>
 
                 <div class="card bg-white border border-gray-200 mb-3">
@@ -2001,13 +2118,14 @@
                         <thead>
                             <tr>
                                 <th>Backup file</th>
+                                <th>Type</th>
                                 <th>Size</th>
                                 <th>Created</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="backupTableBody">
-                            <tr><td colspan="4" class="empty-state">Loading…</td></tr>
+                            <tr><td colspan="5" class="empty-state">Loading…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -2173,19 +2291,22 @@
                     <h3 class="font-bold text-gray-800 text-base truncate mb-0" id="file-viewer-title">Attached File</h3>
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
-                    <div id="file-viewer-zoom-controls" class="inline-flex items-center gap-1 bg-gray-100 rounded-lg p-1 border border-gray-200">
-                        <button type="button" onclick="zoomFileViewer(-0.25)" class="btn btn-xs btn-ghost text-gray-700 hover:bg-white hover:text-emerald-700 px-2" title="Zoom Out" data-testid="file-viewer-zoom-out">
-                            <i class="fas fa-search-minus text-sm"></i>
+                    <div id="file-viewer-zoom-controls" class="fv-zoom-toolbar">
+                        <button type="button" onclick="zoomFileViewer(-0.25)" class="fv-zoom-btn" title="Zoom Out" aria-label="Zoom Out" data-testid="file-viewer-zoom-out">
+                            <i class="fas fa-search-minus"></i>
                         </button>
-                        <span id="file-viewer-zoom-level" class="text-xs font-bold text-gray-700 px-1 select-none min-w-[44px] text-center">100%</span>
-                        <button type="button" onclick="zoomFileViewer(0.25)" class="btn btn-xs btn-ghost text-gray-700 hover:bg-white hover:text-emerald-700 px-2" title="Zoom In" data-testid="file-viewer-zoom-in">
-                            <i class="fas fa-search-plus text-sm"></i>
+                        <span id="file-viewer-zoom-level" class="fv-zoom-level">100%</span>
+                        <button type="button" onclick="zoomFileViewer(0.25)" class="fv-zoom-btn" title="Zoom In" aria-label="Zoom In" data-testid="file-viewer-zoom-in">
+                            <i class="fas fa-search-plus"></i>
                         </button>
-                        <button type="button" onclick="resetFileViewerZoom()" class="btn btn-xs btn-ghost text-gray-500 hover:bg-white hover:text-emerald-700 px-1.5" title="Reset Zoom">
-                            <i class="fas fa-undo text-xs"></i>
+                        <span class="fv-zoom-sep" aria-hidden="true"></span>
+                        <button type="button" onclick="resetFileViewerZoom()" class="fv-zoom-btn" title="Reset Zoom" aria-label="Reset Zoom">
+                            <i class="fas fa-undo"></i>
                         </button>
                     </div>
-                    <button type="button" onclick="closeFileViewerModal()" class="btn btn-sm btn-circle btn-ghost text-gray-500 hover:text-red-500" data-testid="file-viewer-close">✕</button>
+                    <button type="button" onclick="closeFileViewerModal()" class="fv-close-btn" title="Close" aria-label="Close" data-testid="file-viewer-close">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
             </div>
             <div class="relative bg-slate-900 flex items-center justify-center min-h-[380px] h-[75vh] overflow-hidden select-none" id="file-viewer-body">
@@ -2205,7 +2326,7 @@
     <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
     <script src="js/import_common.js?v=1"></script>
 
-    <script src="js/admin.js?v=41"></script>
+    <script src="js/admin.js?v=49"></script>
 
     <script>
 document.addEventListener('click', function(e) {

@@ -548,17 +548,16 @@ const FormDrafts = {
         setTimeout(() => {
             const toast = document.createElement('div');
             toast.id = 'draft-restore-toast';
-            toast.className = 'fixed bottom-4 right-4 bg-amber-500 text-white px-6 py-4 rounded-lg shadow-2xl z-[9999] transition-all transform';
-            toast.style.animation = 'slideInRight 0.3s ease-out';
-            toast.style.maxWidth = '420px';
+            toast.className = 'fixed bottom-5 right-5 text-white px-4 py-3.5 z-[9999]';
+            toast.style.cssText = 'max-width:420px;border-radius:12px;background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);border:1px solid rgba(255,255,255,0.18);box-shadow:0 12px 28px rgba(15,23,42,0.22),0 4px 10px rgba(15,23,42,0.12);animation:tcToastIn 0.22s cubic-bezier(0.16,1,0.3,1);';
             toast.innerHTML = `
                 <div style="display:flex;align-items:flex-start;gap:12px;">
-                    <i class="fas fa-save" style="font-size:20px;margin-top:2px;"></i>
+                    <span class="tc-toast__icon" style="margin-top:2px;"><i class="fas fa-save"></i></span>
                     <div style="flex:1;">
-                        <p style="margin:0 0 10px 0;font-weight:600;">You have unsaved form drafts from your previous session.</p>
+                        <p style="margin:0 0 10px 0;font-weight:600;font-size:13.5px;color:#ffffff;">You have unsaved form drafts from your previous session.</p>
                         <div style="display:flex;gap:8px;">
-                            <button id="draft-restore-btn" style="padding:4px 14px;background:#ffffff;color:#92400e;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">Restore Drafts</button>
-                            <button id="draft-discard-btn" style="padding:4px 14px;background:rgba(255,255,255,0.2);color:#ffffff;border:1px solid rgba(255,255,255,0.4);border-radius:6px;cursor:pointer;font-size:13px;">Discard</button>
+                            <button id="draft-restore-btn" style="padding:5px 14px;background:#ffffff;color:#b45309;border:none;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;">Restore Drafts</button>
+                            <button id="draft-discard-btn" style="padding:5px 14px;background:rgba(255,255,255,0.18);color:#ffffff;border:none;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;">Discard</button>
                         </div>
                     </div>
                 </div>`;
@@ -3145,7 +3144,7 @@ function loadSanitaryData(id) {
     // Handle owner data
     if (record.owner) {
         document.getElementById('owner-first').value = record.owner.first || '';
-        document.getElementById('owner-middle').value = record.owner.middle || '';
+        document.getElementById('owner-middle').value = String(record.owner.middle || '').replace(/[^a-zA-Z\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u00ff]/g, '').charAt(0).toUpperCase();
         document.getElementById('owner-last').value = record.owner.last || '';
     }
     
@@ -3311,11 +3310,17 @@ async function handleSanitarySubmit(e) {
     // Combine permit parts into format: 001-00-FR
     const permitNo = `${permit1}-${permit2}-${permit3}`;
 
+    const formatMiWithDot = v => {
+        const ch = String(v || '').replace(/[^a-zA-Z\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u00ff]/g, '').charAt(0).toUpperCase();
+        return ch ? `${ch}.` : '';
+    };
+    const capLeading = v => String(v || '').trim().replace(/^[a-z\u00e0-\u00f6\u00f8-\u00ff]/, c => c.toUpperCase());
+
     let personnelValid = true;
     personnelRows.forEach((row, rowIndex) => {
-        const first = row.querySelector('.first-name').value.trim();
-        const middle = row.querySelector('.middle-name').value.trim();
-        const last = row.querySelector('.last-name').value.trim();
+        const first = capLeading(row.querySelector('.first-name').value);
+        const middle = formatMiWithDot(row.querySelector('.middle-name').value);
+        const last = capLeading(row.querySelector('.last-name').value);
         const sex = row.querySelector('.personnel-sex:checked')?.value || '';
         const xray = row.querySelector('.personnel-xray').checked;
         const stool = row.querySelector('.personnel-stool').checked;
@@ -3345,14 +3350,14 @@ async function handleSanitarySubmit(e) {
     const record = {
         date: dateInput.getAttribute('data-db-date') || dateInput.value,
         permitNo: permitNo,
-        businessName: businessName,
+        businessName: capLeading(businessName),
         barangay: barangay,
-        buildingStreet: buildingStreet,
-        corporationName: document.getElementById('sanitary-corporation').value,
+        buildingStreet: capLeading(buildingStreet) || 'N/A',
+        corporationName: capLeading(document.getElementById('sanitary-corporation').value),
         owner: {
-            first: ownerFirst,
-            middle: document.getElementById('owner-middle').value,
-            last: ownerLast
+            first: capLeading(ownerFirst),
+            middle: formatMiWithDot(document.getElementById('owner-middle').value),
+            last: capLeading(ownerLast)
         },
         
         sex: document.querySelector('input[name="sex"]:checked')?.value || '',
@@ -3362,7 +3367,7 @@ async function handleSanitarySubmit(e) {
         },
         personnelNo: personnelNo,
         personnel: personnelList,
-        remarks: document.getElementById('sanitary-remarks').value
+        remarks: capLeading(document.getElementById('sanitary-remarks').value)
     };
     
     try {
@@ -4988,12 +4993,15 @@ function loadBurialData(type, index) {
     const causeEl = document.getElementById('burial-cause-of-death');
     if (causeEl) causeEl.value = record.causeOfDeath || '';
     const ageEl = document.getElementById('burial-age');
-    if (ageEl) ageEl.value = record.age || '';
+    if (ageEl) ageEl.value = String(record.age || '').trim();
     document.getElementById('burial-informant').value = record.informant || '';
     // Inspector is a locked label — record's inspector, falling back to logged-in user
     setBurialInspector(record.inspector || getLoggedInInspectorName());
     const sexSelect = document.getElementById('burial-sex');
-    if (sexSelect) sexSelect.value = record.sex || '';
+    if (sexSelect) {
+        const sx = String(record.sex || '').trim().toLowerCase();
+        sexSelect.value = (sx === 'm' || sx === 'male') ? 'Male' : ((sx === 'f' || sx === 'female') ? 'Female' : '');
+    }
     
     // 4. Fill type-specific fields
     if (type === 'cadaver') {
@@ -5765,40 +5773,34 @@ function showNotification(message, type = 'success') {
     }
 
     // Remove any existing notifications
-    const existingToasts = document.querySelectorAll('.toast-notification');
-    existingToasts.forEach(t => t.remove());
-    
-    // Define styles based on type
-    const types = {
-        success: { bg: 'bg-emerald-600', icon: 'fa-check-circle' },
-        error: { bg: 'bg-red-600', icon: 'fa-exclamation-circle' },
-        warning: { bg: 'bg-yellow-500', icon: 'fa-exclamation-triangle' },
-        info: { bg: 'bg-blue-600', icon: 'fa-info-circle' }
+    document.querySelectorAll('.toast-notification').forEach(t => t.remove());
+
+    const alertType = ['success', 'error', 'warning', 'info'].includes(type) ? type : 'success';
+    const icons = {
+        success: 'fa-check',
+        error: 'fa-exclamation',
+        warning: 'fa-exclamation-triangle',
+        info: 'fa-info'
     };
-    
-    const style = types[type] || types.success;
-    
-    // Create toast notification
+    const cleanMsg = String(message ?? '').replace(/^[\u2705\u26a0\ufe0f\u274c\u2139]+\s*/, '');
+
     const toast = document.createElement('div');
-    toast.className = `toast-notification fixed bottom-4 right-4 ${style.bg} text-white px-6 py-4 rounded-lg shadow-2xl z-[9999] transition-all transform`;
-    toast.style.animation = 'slideInRight 0.3s ease-out';
-    toast.innerHTML = `
-        <div class="flex items-center gap-3">
-            <i class="fas ${style.icon} text-xl"></i>
-            <span class="font-medium">${esc(message)}</span>
-            <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-white hover:text-gray-200">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-    `;
-    
+    toast.className = `toast-notification tc-toast tc-toast--${alertType}`;
+    toast.setAttribute('role', 'status');
+    toast.innerHTML = `<span class="tc-toast__icon"><i class="fas ${icons[alertType]}"></i></span>
+        <span class="tc-toast__msg">${esc(cleanMsg)}</span>
+        <button type="button" class="tc-toast__close" aria-label="Close"><i class="fas fa-times"></i></button>`;
+
+    const dismiss = () => {
+        if (toast.dataset.leaving) return;
+        toast.dataset.leaving = '1';
+        toast.classList.add('tc-toast--leaving');
+        setTimeout(() => toast.remove(), 200);
+    };
+    toast.querySelector('button').onclick = dismiss;
+
     document.body.appendChild(toast);
-    
-    // Auto-remove after 4 seconds
-    setTimeout(() => {
-        toast.style.animation = 'slideOutRight 0.3s ease-in';
-        setTimeout(() => toast.remove(), 300);
-    }, 4000);
+    setTimeout(dismiss, 4000);
 }
 
 // Loading spinner functions
@@ -6744,8 +6746,9 @@ const InspNotifManager = {
         tomorrow:    { title: 'Inspection reminder' },
         overdue:     { title: 'Follow-up inspection needed' },
         noncomplied: { title: 'Non-compliance follow-up' },
-        assigned:    { title: 'New schedule assigned' },
-        reschedule:  { title: 'Schedule updated' }
+        assigned:         { title: 'New schedule assigned' },
+        reschedule:       { title: 'Schedule updated' },
+        compliance_alert: { title: 'Compliance alert' }
     },
 
     getReadIds: () => {
@@ -6821,7 +6824,9 @@ const InspNotifManager = {
                 ? dutyStyles[n.dutyType]
                 : (n.type === 'reschedule'
                     ? { icon: 'bi-arrow-repeat', iconClr: '#f59e0b', bg: '#fffbeb' }
-                    : { icon: 'bi-calendar-check', iconClr: '#2563eb', bg: '#eff6ff' });
+                    : n.type === 'compliance_alert'
+                        ? { icon: 'bi-exclamation-triangle-fill', iconClr: '#dc2626', bg: '#fef2f2' }
+                        : { icon: 'bi-calendar-check', iconClr: '#2563eb', bg: '#eff6ff' });
             const nid = sanitizeNotifId(n.id);
             return {
                 id:         nid,

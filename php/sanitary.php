@@ -79,6 +79,7 @@ function getRecords() {
                     'stool' => (bool)($r['result_stool'] ?? 0)
                 ],
                 'barangay' => $r['barangay'],
+                'buildingStreet' => $r['building_street'] ?? '',
                 'corporationName' => $r['corporation_name'] ?? '',
                 'remarks' => $r['remarks'] ?? '',
                 'businessType' => $r['business_type'] ?? 'Other',
@@ -127,7 +128,7 @@ function createRecord() {
         
         $stmt->execute([
             $input['no'] ?? '',
-            $input['date'] ?? date('Y-m-d'),
+            !empty($input['date']) ? $input['date'] : date('Y-m-d'),
             $input['permitNo'] ?? '',
             $input['personnelNo'] ?? '',
             $input['businessName'] ?? '',
@@ -136,8 +137,8 @@ function createRecord() {
             encryptField($input['owner']['last'] ?? '', 'sanitary_records.owner_last_name'),
             encryptField(json_encode($input['personnel_list'] ?? $input['personnel'] ?? []), 'sanitary_records.personnel_list'),
             encryptField($input['sex'] ?? '', 'sanitary_records.sex'),
-            $input['result']['xray'] ?? 0,
-            $input['result']['stool'] ?? 0,
+            !empty($input['result']['xray']) ? 1 : 0,
+            !empty($input['result']['stool']) ? 1 : 0,
             $input['barangay'] ?? '',
             encryptField($input['buildingStreet'] ?? 'N/A', 'sanitary_records.building_street'),
             encryptField($input['corporationName'] ?? '', 'sanitary_records.corporation_name'),
@@ -224,7 +225,7 @@ function updateRecord() {
 
         $stmt->execute([
             $input['no'] ?? $current['record_no'],
-            $input['date'] ?? '',
+            !empty($input['date']) ? $input['date'] : $current['date'],
             $input['permitNo'] ?? '',
             $input['personnelNo'] ?? '',
             $input['businessName'] ?? '',
@@ -233,13 +234,13 @@ function updateRecord() {
             encryptField($input['owner']['last'] ?? '', 'sanitary_records.owner_last_name'),
             encryptField(json_encode($input['personnel_list'] ?? $input['personnel'] ?? []), 'sanitary_records.personnel_list'),
             encryptField($input['sex'] ?? '', 'sanitary_records.sex'),
-            $input['result']['xray'] ?? 0,
-            $input['result']['stool'] ?? 0,
+            !empty($input['result']['xray']) ? 1 : 0,
+            !empty($input['result']['stool']) ? 1 : 0,
             $input['barangay'] ?? '',
-            encryptField($input['buildingStreet'] ?? 'N/A', 'sanitary_records.building_street'),
+            encryptField(array_key_exists('buildingStreet', $input) ? ($input['buildingStreet'] ?? 'N/A') : ($current['building_street'] ?? 'N/A'), 'sanitary_records.building_street'),
             encryptField($input['corporationName'] ?? '', 'sanitary_records.corporation_name'),
             $input['remarks'] ?? '',
-            $input['businessType'] ?? $current['business_type'],
+            !empty($input['businessType']) ? $input['businessType'] : ($current['business_type'] ?? 'Other'),
             accomplishmentSessionFullName($db),
             $input['id']
         ]);

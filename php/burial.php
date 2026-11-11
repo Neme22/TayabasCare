@@ -145,7 +145,7 @@ function createRecord() {
             $input['type'] ?? 'cadaver',
             $input['datetime'] ?? date('Y-m-d H:i:s'),
             encryptField($input['deceased'] ?? '', 'burial_records.deceased'),
-            $input['deathDate'] ?? null,
+            !empty($input['deathDate']) ? $input['deathDate'] : null,
             encryptField($input['deathPlace'] ?? '', 'burial_records.death_place'),
             encryptField($input['causeOfDeath'] ?? '', 'burial_records.cause_of_death'),
             encryptField($input['informant'] ?? '', 'burial_records.informant'),
@@ -226,7 +226,7 @@ function updateRecord() {
         $stmt->execute([
             $input['type'] ?? 'cadaver', $input['datetime'] ?? '',
             encryptField($input['deceased'] ?? '', 'burial_records.deceased'),
-            $input['deathDate'] ?? null,
+            !empty($input['deathDate']) ? $input['deathDate'] : null,
             encryptField($input['deathPlace'] ?? '', 'burial_records.death_place'),
             encryptField($input['causeOfDeath'] ?? ($current['cause_of_death'] ?? ''), 'burial_records.cause_of_death'),
             encryptField($input['informant'] ?? '', 'burial_records.informant'),

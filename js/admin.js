@@ -212,7 +212,10 @@ function renderNumberedPager(elId, info, key) {
     }
     el.style.display = '';
     if (info.pages <= 1) {
-        el.innerHTML = `<span class="pager-summary">Showing all ${info.total} record${info.total === 1 ? '' : 's'}</span>`;
+        el.innerHTML = `<button type="button" class="pager-btn" disabled aria-label="Previous page">&laquo;</button>`
+            + `<button type="button" class="pager-btn active" disabled>1</button>`
+            + `<button type="button" class="pager-btn" disabled aria-label="Next page">&raquo;</button>`
+            + `<span class="pager-summary">Page 1 of 1 &middot; ${info.total} record${info.total === 1 ? '' : 's'}</span>`;
         return;
     }
 
@@ -320,8 +323,41 @@ const Utils = {
         }
         return Utils.esc(parts[0]);
     },
+    capFirstInput: (el) => {
+        if (!el) return;
+        const pos = el.selectionStart;
+        const next = String(el.value || '').replace(/^(\s*)([a-z\u00e0-\u00f6\u00f8-\u00ff])/, (_, sp, ch) => sp + ch.toUpperCase());
+        if (next !== el.value) {
+            el.value = next;
+            if (typeof pos === 'number') el.setSelectionRange(pos, pos);
+        }
+    },
+    capWordLettersInput: (el) => {
+        if (!el) return;
+        const pos = el.selectionStart;
+        const next = String(el.value || '')
+            .replace(/[^a-zA-Z\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u00ff\s\-]/g, '')
+            .replace(/(?:^|\s|-)\S/g, c => c.toUpperCase());
+        if (next !== el.value) {
+            el.value = next;
+            if (typeof pos === 'number' && pos <= next.length) el.setSelectionRange(pos, pos);
+        }
+    },
+    miInput: (el) => {
+        if (!el) return;
+        const next = String(el.value || '').replace(/[^a-zA-Z\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u00ff]/g, '').charAt(0).toUpperCase();
+        if (next !== el.value) el.value = next;
+    },
+    capFirstStr: (s) => {
+        const v = String(s || '').trim();
+        return v.replace(/^[a-z\u00e0-\u00f6\u00f8-\u00ff]/, c => c.toUpperCase());
+    },
+    formatMiSave: (s) => {
+        const ch = String(s || '').replace(/[^a-zA-Z\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u00ff]/g, '').charAt(0).toUpperCase();
+        return ch ? `${ch}.` : '';
+    },
 
-    // Single DaisyUI toast renderer used by Utils.showToast and adminShowNotification
+    // Unified floating toast renderer used by Utils.showToast and adminShowNotification
     _renderToast: (message, type = 'success') => {
         let container = document.getElementById('toast');
         if (!container) {
@@ -333,20 +369,27 @@ const Utils = {
         container.innerHTML = '';
         const alertType = ['success', 'error', 'warning', 'info'].includes(type) ? type : 'success';
         const icons = {
-            success: 'fa-check-circle',
-            error: 'fa-exclamation-circle',
+            success: 'fa-check',
+            error: 'fa-exclamation',
             warning: 'fa-exclamation-triangle',
-            info: 'fa-info-circle'
+            info: 'fa-info'
         };
+        const cleanMsg = String(message ?? '').replace(/^[\u2705\u26a0\ufe0f\u274c\u2139]+\s*/, '');
         const item = document.createElement('div');
-        item.className = `alert alert-${alertType} shadow-lg`;
-        item.style.pointerEvents = 'auto';
-        item.innerHTML = `<i class="fas ${icons[alertType]}"></i>
-            <span>${Utils.esc(message)}</span>
-            <button class="btn btn-ghost btn-xs" aria-label="Close"><i class="fas fa-times"></i></button>`;
-        item.querySelector('button').onclick = () => item.remove();
+        item.className = `tc-toast tc-toast--${alertType}`;
+        item.setAttribute('role', 'status');
+        item.innerHTML = `<span class="tc-toast__icon"><i class="fas ${icons[alertType]}"></i></span>
+            <span class="tc-toast__msg">${Utils.esc(cleanMsg)}</span>
+            <button type="button" class="tc-toast__close" aria-label="Close"><i class="fas fa-times"></i></button>`;
+        const dismiss = () => {
+            if (item.dataset.leaving) return;
+            item.dataset.leaving = '1';
+            item.classList.add('tc-toast--leaving');
+            setTimeout(() => item.remove(), 200);
+        };
+        item.querySelector('button').onclick = dismiss;
         container.appendChild(item);
-        setTimeout(() => item.remove(), 4000);
+        setTimeout(dismiss, 4000);
     },
 
     showToast: (message, type = 'success') => {
@@ -762,17 +805,7 @@ const Dashboard = {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        align: 'end',
-                        labels: {
-                            boxWidth: 12,
-                            boxHeight: 12,
-                            color: '#4b5563',
-                            font: { size: 11, weight: '600' }
-                        }
-                    },
+                    legend: { display: false },
                     tooltip: {
                         callbacks: {
                             label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y} report${ctx.parsed.y === 1 ? '' : 's'}`
@@ -1129,6 +1162,16 @@ const Dashboard = {
 
         const colors = ['#f59e0b','#ef4444','#3b82f6','#10b981','#8b5cf6','#ec4899','#06b6d4','#9ca3af'];
 
+        const legendEl = document.getElementById('violationTypeLegend');
+        if (legendEl) {
+            legendEl.innerHTML = keywords.map((k, i) => `
+                <span style="display:inline-flex;align-items:center;gap:4px;">
+                    <span style="width:9px;height:9px;border-radius:2px;background:${colors[i]};display:inline-block;"></span>
+                    <span>${Utils.esc(k.label)} (${counts[i]})</span>
+                </span>
+            `).join('');
+        }
+
         if (window.violationTypeChartInstance) window.violationTypeChartInstance.destroy();
         window.violationTypeChartInstance = new Chart(ctx, {
             type: 'bar',
@@ -1161,6 +1204,36 @@ const Dashboard = {
         });
     },
 
+    resolveInspectorName: (rawName) => {
+        const raw = String(rawName || '').trim();
+        const lc = raw.toLowerCase();
+        if (!lc || lc === 'admin' || lc === 'administrator' || lc === 'system' || lc === 'unknown') {
+            return null;
+        }
+
+        const list = Array.isArray(DataStore.inspectors) ? DataStore.inspectors : [];
+        for (const ins of list) {
+            const fullName = String(ins.fullName || ins.full_name || ins.name || '').trim();
+            const username = String(ins.username || '').trim();
+            if ((fullName && fullName.toLowerCase() === lc) || (username && username.toLowerCase() === lc)) {
+                return fullName || raw;
+            }
+        }
+
+        const aliasMap = {
+            'mel': 'Rommel D. Sate',
+            'rommel': 'Rommel D. Sate',
+            'michael': 'Michael O. Baldovino',
+            'olive': 'Olive B. Caagbay',
+            'april': 'April Wendy S. Ponce',
+            'zaldy': 'Rizaldy A. Ramos',
+            'rizaldy': 'Rizaldy A. Ramos'
+        };
+        if (aliasMap[lc]) return aliasMap[lc];
+
+        return raw;
+    },
+
     renderInspectorProductivity: (filteredReports) => {
         const tbody = document.getElementById('inspectorProductivityBody');
         if (!tbody) return;
@@ -1169,10 +1242,11 @@ const Dashboard = {
         const map = {};
 
         reports.forEach(r => {
-            const name = r.inspector || 'Unknown';
+            const name = Dashboard.resolveInspectorName(r.inspector);
+            if (!name) return;
             if (!map[name]) map[name] = { total: 0, complied: 0, notComplied: 0 };
             map[name].total++;
-            if (r.complied === true || r.complied === 'true' || r.complied === 1) {
+            if (r.complied === true || r.complied === 'true' || r.complied === 1 || r.complied === '1') {
                 map[name].complied++;
             } else {
                 map[name].notComplied++;
@@ -1182,7 +1256,7 @@ const Dashboard = {
         const sorted = Object.entries(map).sort((a, b) => b[1].total - a[1].total);
 
         if (sorted.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:#9ca3af;">No inspection reports yet.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:#9ca3af;">No inspector inspection reports yet.</td></tr>';
             return;
         }
 
@@ -1384,14 +1458,29 @@ const Dashboard = {
         document.getElementById('totalReports').textContent = all.length;
     },
 
+    _barangayReportsFor: (estabs, reports) => {
+        return reports.filter(r => {
+            const hay = (r.establishment || r.location || '').toLowerCase();
+            if (!hay) return false;
+            return estabs.some(rec => {
+                const bn = (rec.businessName || '').trim().toLowerCase();
+                return bn !== '' && hay.includes(bn);
+            });
+        });
+    },
+
+    _isReportComplied: (r) => r.complied === true || r.complied === 'true' || r.complied === 1 || r.complied === '1',
+
     filterByBarangay: () => {
         const selected = document.getElementById('barangayFilter')?.value || '';
         const statsEl  = document.getElementById('barangayStats');
         const chartCanvas = document.getElementById('barangayViolationsChart');
+        const legendEl = document.getElementById('barangayChartLegend');
         if (!statsEl) return;
 
         if (!selected) {
             statsEl.innerHTML = '<span style="color:#9ca3af;">Select a barangay to filter</span>';
+            if (legendEl) legendEl.style.display = 'none';
             if (chartCanvas) chartCanvas.style.display = 'none';
             return;
         }
@@ -1405,21 +1494,19 @@ const Dashboard = {
                 const reports = DataStore.inspectionReports;
 
                 const filtered = records.filter(r => (r.barangay || '') === selected);
-                const filteredReports = reports.filter(r =>
-                    filtered.some(rec => (r.establishment || r.location || '').toLowerCase().includes((rec.businessName || '').toLowerCase()))
-                );
-                const compliedCount    = filteredReports.filter(r => r.complied === true || r.complied === 'true').length;
-                const nonCompliedCount = filteredReports.filter(r => r.complied === false || r.complied === 'false').length;
+                const filteredReports = Dashboard._barangayReportsFor(filtered, reports);
+                const compliedCount    = filteredReports.filter(Dashboard._isReportComplied).length;
+                const nonCompliedCount = filteredReports.length - compliedCount;
 
                 statsEl.innerHTML = `
-                    <div style="padding:6px 0;border-bottom:1px solid #f3f4f6;"><b>${selected}</b></div>
+                    <div style="padding:6px 0;border-bottom:1px solid #f3f4f6;"><b>${Utils.esc(selected)}</b></div>
                     <div style="padding:4px 0;">Establishments: <b>${filtered.length}</b></div>
                     <div style="padding:4px 0;">Total Reports: <b>${filteredReports.length}</b></div>
                     <div style="padding:4px 0;color:#10b981;">Complied: <b>${compliedCount}</b></div>
                     <div style="padding:4px 0;color:#ef4444;">Not Complied: <b>${nonCompliedCount}</b></div>
                 `;
 
-                // Draw violations-per-barangay chart using all barangays
+                // Draw complied & violations-per-barangay chart using all barangays
                 Dashboard.renderBarangayViolationsChart(records, reports);
             })
             .catch(() => {
@@ -1431,21 +1518,21 @@ const Dashboard = {
         const chartCanvas = document.getElementById('barangayViolationsChart');
         if (!chartCanvas) return;
 
-        // Count non-complied (violations) per barangay
-        const barangayViolations = {};
+        // Count complied and non-complied (violations) per barangay
         const barangays = [...new Set(sanitaryRecords.map(r => r.barangay).filter(Boolean))].sort();
+        const compliedCounts = [];
+        const violationCounts = [];
 
         barangays.forEach(b => {
             const estabs = sanitaryRecords.filter(r => (r.barangay || '') === b);
-            const relatedReports = inspectionReports.filter(r =>
-                estabs.some(rec => (r.establishment || r.location || '').toLowerCase().includes((rec.businessName || '').toLowerCase()))
-            );
-            barangayViolations[b] = relatedReports.filter(r => r.complied === false || r.complied === 'false').length;
+            const relatedReports = Dashboard._barangayReportsFor(estabs, inspectionReports);
+            const complied = relatedReports.filter(Dashboard._isReportComplied).length;
+            compliedCounts.push(complied);
+            violationCounts.push(relatedReports.length - complied);
         });
 
-        const labels = Object.keys(barangayViolations);
-        const values = Object.values(barangayViolations);
-
+        const legendEl = document.getElementById('barangayChartLegend');
+        if (legendEl) legendEl.style.display = 'flex';
         chartCanvas.style.display = 'block';
 
         // Destroy previous chart instance if any
@@ -1456,13 +1543,21 @@ const Dashboard = {
         window._barangayChartInstance = new Chart(chartCanvas, {
             type: 'bar',
             data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Violations (Not Complied)',
-                    data: values,
-                    backgroundColor: labels.map(b => barangayViolations[b] > 0 ? '#ef4444' : '#10b981'),
-                    borderRadius: 5
-                }]
+                labels: barangays,
+                datasets: [
+                    {
+                        label: 'Complied',
+                        data: compliedCounts,
+                        backgroundColor: '#10b981',
+                        borderRadius: 5
+                    },
+                    {
+                        label: 'Not Complied (Violations)',
+                        data: violationCounts,
+                        backgroundColor: '#ef4444',
+                        borderRadius: 5
+                    }
+                ]
             },
             options: {
                 responsive: true,
@@ -1470,7 +1565,7 @@ const Dashboard = {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            label: ctx => ` ${ctx.parsed.y} violation${ctx.parsed.y !== 1 ? 's' : ''}`
+                            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} report${ctx.parsed.y !== 1 ? 's' : ''}`
                         }
                     }
                 },
@@ -1580,6 +1675,14 @@ const Dashboard = {
                 tab.classList.add('active');
                 const target = tab.dataset.tab;
                 document.querySelector(`.dashboard-tab-content[data-tab="${target}"]`)?.classList.add('active');
+                if (target === 'insights') {
+                    if (typeof PatternAnalysis !== 'undefined' && typeof PatternAnalysis.load === 'function') {
+                        PatternAnalysis.load();
+                    }
+                    if (typeof YoYComparison !== 'undefined' && typeof YoYComparison.load === 'function') {
+                        YoYComparison.load();
+                    }
+                }
                 // Resize Chart.js canvases in the now-visible tab
                 setTimeout(() => {
                     if (typeof Chart !== 'undefined') {
@@ -1587,6 +1690,182 @@ const Dashboard = {
                     }
                 }, 50);
             });
+        });
+    },
+
+    sendComplianceAlerts: async (btn) => {
+        const origHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:4px;"></i>Sending...';
+        }
+        try {
+            const res = await fetch(`${API_BASE_URL}/notification_runner.php?action=send_compliance_alerts&force=1`);
+            const data = await res.json();
+            const msg = (data && (data.message || data.data?.message)) || '';
+            if (data && data.success) {
+                const failedCount = data.data?.failed || 0;
+                Utils.showToast(msg || 'Compliance alerts sent to assigned inspectors', failedCount > 0 ? 'warning' : 'success');
+            } else {
+                Utils.showToast(msg || 'Failed to send compliance alerts', 'error');
+            }
+        } catch (err) {
+            console.error('sendComplianceAlerts error:', err);
+            Utils.showToast('Error sending compliance alerts', 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+            }
+        }
+    }
+};
+
+// Shared Bulk Select-All & Archive helper for Records & Inspector tables
+async function refreshArchiveBadgeCount() {
+    try {
+        const r = await fetch(`${API_BASE_URL}/archive.php`);
+        const j = await r.json();
+        if (j.success && Array.isArray(j.data) && typeof ArchiveManager !== 'undefined') {
+            ArchiveManager._cache = j.data;
+            ArchiveManager.updateBadgeCount(j.data.length);
+        }
+    } catch (_) {}
+}
+
+const RecordBulkArchive = {
+    MODULES: {
+        inspectors: {
+            selectAllId: 'selectAllInspectors',
+            barId: 'inspectorsBulkActions',
+            countId: 'inspectorsSelectedCount',
+            endpoint: 'inspector.php',
+            noun: 'inspector account',
+            refresh: async () => InspectorManager.render()
+        },
+        sanitary: {
+            selectAllId: 'selectAllSanitary',
+            barId: 'sanitaryBulkActions',
+            countId: 'sanitarySelectedCount',
+            endpoint: 'sanitary.php',
+            noun: 'sanitary record',
+            refresh: async () => SanitaryManager.render()
+        },
+        burial: {
+            selectAllId: 'selectAllBurial',
+            barId: 'burialBulkActions',
+            countId: 'burialSelectedCount',
+            endpoint: 'burial.php',
+            noun: 'burial record',
+            refresh: async () => BurialManager.render()
+        },
+        reports: {
+            selectAllId: 'selectAllReports',
+            barId: 'reportsBulkActions',
+            countId: 'reportsSelectedCount',
+            endpoint: 'inspection.php',
+            noun: 'inspection report',
+            refresh: async () => ReportsManager.loadAndRender()
+        }
+    },
+
+    reset(mod) {
+        const cfg = RecordBulkArchive.MODULES[mod];
+        if (!cfg) return;
+        const selectAll = document.getElementById(cfg.selectAllId);
+        if (selectAll) {
+            selectAll.checked = false;
+            selectAll.indeterminate = false;
+        }
+        const bar = document.getElementById(cfg.barId);
+        if (bar) bar.style.display = 'none';
+    },
+
+    toggleSelectAll(mod) {
+        const cfg = RecordBulkArchive.MODULES[mod];
+        if (!cfg) return;
+        const selectAll = document.getElementById(cfg.selectAllId);
+        const checked = !!(selectAll && selectAll.checked);
+        document.querySelectorAll(`.record-select-cb[data-module="${mod}"]`).forEach(cb => {
+            cb.checked = checked;
+        });
+        RecordBulkArchive.updateBar(mod);
+    },
+
+    updateBar(mod) {
+        const cfg = RecordBulkArchive.MODULES[mod];
+        if (!cfg) return;
+        const checkboxes = document.querySelectorAll(`.record-select-cb[data-module="${mod}"]`);
+        const checked = document.querySelectorAll(`.record-select-cb[data-module="${mod}"]:checked`);
+        const bar = document.getElementById(cfg.barId);
+        const countEl = document.getElementById(cfg.countId);
+        const selectAll = document.getElementById(cfg.selectAllId);
+
+        if (selectAll) {
+            if (checkboxes.length > 0) {
+                selectAll.checked = (checked.length === checkboxes.length);
+                selectAll.indeterminate = (checked.length > 0 && checked.length < checkboxes.length);
+            } else {
+                selectAll.checked = false;
+                selectAll.indeterminate = false;
+            }
+        }
+        if (bar && countEl) {
+            if (checked.length > 0) {
+                bar.style.display = 'inline-flex';
+                countEl.textContent = `${checked.length} selected`;
+            } else {
+                bar.style.display = 'none';
+            }
+        }
+    },
+
+    clearSelection(mod) {
+        document.querySelectorAll(`.record-select-cb[data-module="${mod}"]`).forEach(cb => {
+            cb.checked = false;
+        });
+        RecordBulkArchive.updateBar(mod);
+    },
+
+    archiveSelected(mod) {
+        const cfg = RecordBulkArchive.MODULES[mod];
+        if (!cfg) return;
+        const ids = Array.from(document.querySelectorAll(`.record-select-cb[data-module="${mod}"]:checked`))
+            .map(cb => cb.dataset.id)
+            .filter(Boolean);
+        if (ids.length === 0) return;
+
+        const plural = ids.length === 1 ? cfg.noun : cfg.noun + 's';
+        Utils.showArchiveConfirmDialog({
+            title: `Archive ${ids.length} Selected`,
+            message: `Move ${ids.length} selected ${plural} to the Archive module? You can restore them later from the Archive page.`,
+            onConfirm: async (reason) => {
+                let okCount = 0;
+                let failCount = 0;
+                for (const id of ids) {
+                    try {
+                        const resp = await fetch(
+                            `${API_BASE_URL}/${cfg.endpoint}?id=${encodeURIComponent(id)}&reason=${encodeURIComponent(reason)}`,
+                            { method: 'DELETE' }
+                        );
+                        const json = await resp.json();
+                        if (json.success) okCount++;
+                        else failCount++;
+                    } catch (_) {
+                        failCount++;
+                    }
+                }
+                RecordBulkArchive.clearSelection(mod);
+                await cfg.refresh();
+                await Dashboard.updateStats();
+                Dashboard.renderActivity();
+                refreshArchiveBadgeCount();
+                if (failCount === 0) {
+                    Utils.showToast(`Archived ${okCount} ${okCount === 1 ? cfg.noun : cfg.noun + 's'} successfully`, 'success');
+                } else {
+                    Utils.showToast(`Archived ${okCount}, failed ${failCount}`, 'warning');
+                }
+            }
         });
     }
 };
@@ -1601,7 +1880,8 @@ const InspectorManager = {
             
             if (!result.success) {
                 const tbody = document.getElementById('inspectorsTableBody');
-                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Error loading inspectors</td></tr>';
+                RecordBulkArchive.reset('inspectors');
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Error loading inspectors</td></tr>';
                 return;
             }
             
@@ -1615,13 +1895,15 @@ const InspectorManager = {
     _renderList: (inspectors) => {
         const tbody = document.getElementById('inspectorsTableBody');
         const countEl = document.getElementById('admin-inspector-count');
+        RecordBulkArchive.reset('inspectors');
         if (countEl) countEl.textContent = `Showing ${inspectors.length} of ${InspectorManager._allInspectors.length} inspectors`;
         if (inspectors.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No inspectors found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No inspectors found</td></tr>';
             return;
         }
         tbody.innerHTML = inspectors.map(inspector => `
             <tr data-testid="inspector-row-${inspector.id}" class="row-clickable" style="cursor:pointer;" onclick="InspectorManager.openEditModal(${inspector.id})">
+                <td onclick="event.stopPropagation()" style="width:40px;"><input type="checkbox" class="record-select-cb" data-module="inspectors" data-id="${inspector.id}" onchange="RecordBulkArchive.updateBar('inspectors')"></td>
                 <td>${inspector.id}</td>
                 <td>${Utils.esc(inspector.fullName)}</td>
                 <td>${Utils.esc(inspector.email)}</td>
@@ -2004,6 +2286,163 @@ const VHModal = {
     }
 };
 
+// Shared Cached Lookups for Sanitary & Burial Admin Edit Forms
+const AdminLookups = {
+    _barangays: null,
+    _provinces: null,
+    _citiesByProv: {},
+
+    getBarangays: async () => {
+        if (AdminLookups._barangays) return AdminLookups._barangays;
+        try {
+            const resp = await fetch(`${API_BASE_URL}/get_barangays.php`);
+            const json = await resp.json();
+            if (json.success && Array.isArray(json.data)) {
+                AdminLookups._barangays = json.data
+                    .map(b => (typeof b === 'string' ? b : (b.name || '')))
+                    .filter(Boolean)
+                    .sort((a, b) => a.localeCompare(b));
+                return AdminLookups._barangays;
+            }
+        } catch (e) {
+            console.warn('getBarangays failed:', e);
+        }
+        return [];
+    },
+
+    populateBarangaySelect: async (selectEl, selectedVal = '') => {
+        if (!selectEl) return;
+        const list = await AdminLookups.getBarangays();
+        const cur = String(selectedVal || '').trim();
+        const opts = [...list];
+        if (cur && !opts.some(b => b.toLowerCase() === cur.toLowerCase())) {
+            opts.unshift(cur);
+        }
+        selectEl.innerHTML = '<option value="">-- Select Barangay --</option>' +
+            opts.map(b => `<option value="${Utils.esc(b)}">${Utils.esc(b)}</option>`).join('');
+        if (cur) {
+            const exact = opts.find(b => b.toLowerCase() === cur.toLowerCase()) || cur;
+            selectEl.value = exact;
+        }
+    },
+
+    getInspectors: async () => {
+        if (Array.isArray(DataStore.inspectors) && DataStore.inspectors.length > 0) {
+            return DataStore.inspectors;
+        }
+        try {
+            const resp = await fetch(`${API_BASE_URL}/inspector.php`);
+            const json = await resp.json();
+            if (json.success && Array.isArray(json.data)) {
+                DataStore.inspectors = json.data;
+                return json.data;
+            }
+        } catch (e) {
+            console.warn('getInspectors failed:', e);
+        }
+        return [];
+    },
+
+    getPsgcProvinces: async () => {
+        if (AdminLookups._provinces) return AdminLookups._provinces;
+        try {
+            const res = await fetch('https://psgc.cloud/api/provinces');
+            const list = await res.json();
+            if (Array.isArray(list)) {
+                AdminLookups._provinces = list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                return AdminLookups._provinces;
+            }
+        } catch (e) {
+            console.warn('PSGC provinces unavailable:', e);
+        }
+        return [];
+    },
+
+    getPsgcCities: async (provCode) => {
+        if (!provCode) return [];
+        if (AdminLookups._citiesByProv[provCode]) return AdminLookups._citiesByProv[provCode];
+        try {
+            const res = await fetch(`https://psgc.cloud/api/provinces/${encodeURIComponent(provCode)}/cities-municipalities`);
+            const list = await res.json();
+            if (Array.isArray(list)) {
+                const sorted = list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                AdminLookups._citiesByProv[provCode] = sorted;
+                return sorted;
+            }
+        } catch (e) {
+            console.warn('PSGC cities unavailable:', e);
+        }
+        return [];
+    },
+
+    initTransferSelectors: async (provSel, muniSel, customInput, rawValue) => {
+        if (!provSel || !muniSel) return;
+        const parts = String(rawValue || '').split('|').map(s => s.trim());
+        const savedProv = parts[0] || '';
+        const savedCity = parts[1] || '';
+
+        const provinces = await AdminLookups.getPsgcProvinces();
+        if (provinces.length === 0) {
+            provSel.innerHTML = '<option value="">-- Provinces offline --</option>';
+            provSel.disabled = true;
+            muniSel.disabled = true;
+            if (customInput) customInput.style.display = 'block';
+            return;
+        }
+
+        provSel.disabled = false;
+        provSel.innerHTML = '<option value="">-- Select Province --</option>' +
+            provinces.map(p => `<option value="${Utils.esc(p.code)}">${Utils.esc(p.name)}</option>`).join('');
+
+        const loadCities = async (provCode, preselectCity) => {
+            if (!provCode) {
+                muniSel.innerHTML = '<option value="">-- Select Province First --</option>';
+                muniSel.disabled = true;
+                return;
+            }
+            muniSel.innerHTML = '<option value="">-- Loading... --</option>';
+            muniSel.disabled = true;
+            const cities = await AdminLookups.getPsgcCities(provCode);
+            if (cities.length === 0) {
+                muniSel.innerHTML = '<option value="">-- Unavailable offline --</option>';
+                if (customInput) customInput.style.display = 'block';
+                return;
+            }
+            const cityOpts = cities.map(c => c.name).filter(Boolean);
+            if (preselectCity && !cityOpts.some(n => n.toLowerCase() === preselectCity.toLowerCase())) {
+                cityOpts.unshift(preselectCity);
+            }
+            muniSel.innerHTML = '<option value="">-- Select Municipality/City --</option>' +
+                cityOpts.map(n => `<option value="${Utils.esc(n)}">${Utils.esc(n)}</option>`).join('');
+            muniSel.disabled = false;
+            if (preselectCity) {
+                const match = cityOpts.find(n => n.toLowerCase() === preselectCity.toLowerCase()) || preselectCity;
+                muniSel.value = match;
+            }
+        };
+
+        provSel.onchange = () => {
+            if (customInput && provSel.value) customInput.value = '';
+            loadCities(provSel.value, '');
+        };
+        muniSel.onchange = () => {
+            if (customInput && provSel.value && muniSel.value) {
+                customInput.value = `${provSel.value} | ${muniSel.value}`;
+            }
+        };
+
+        if (savedProv) {
+            const matchedProv = provinces.find(p => p.code === savedProv || p.name.toLowerCase() === savedProv.toLowerCase());
+            if (matchedProv) {
+                provSel.value = matchedProv.code;
+                await loadCities(matchedProv.code, savedCity);
+            } else if (customInput) {
+                customInput.style.display = 'block';
+            }
+        }
+    }
+};
+
 // Sanitary Records Management
 const SanitaryManager = {
     records: [],
@@ -2024,7 +2463,8 @@ const SanitaryManager = {
 
     render: async () => {
         const tbody = document.getElementById('sanitaryTableBody');
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Loading...</td></tr>';
+        RecordBulkArchive.reset('sanitary');
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Loading...</td></tr>';
         await SanitaryManager.load();
         SanitaryManager.applyFilters();
     },
@@ -2071,13 +2511,14 @@ const SanitaryManager = {
         const page = TablePaging.pageSlice(sorted, 'sanitary', 10);
         const displayed = page.displayed;
         SanitaryManager._displayed = displayed;
+        RecordBulkArchive.reset('sanitary');
         renderNumberedPager('admin-sanitary-pager', page, 'sanitary');
         if (countEl) countEl.textContent = page.pages > 1 || page.total !== records.length
             ? `Showing ${displayed.length} of ${records.length} records (page ${page.page} of ${page.pages})`
             : `Showing ${page.total} of ${records.length} records`;
 
         if (displayed.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No sanitary records found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No sanitary records found</td></tr>';
             return;
         }
 
@@ -2086,6 +2527,7 @@ const SanitaryManager = {
             const riskBadge = renderAdminRiskBadge(ai);
             return `
             <tr data-testid="sanitary-row-${index}" class="row-clickable" style="cursor:pointer;" onclick="SanitaryManager.openViewModal(${index})">
+                <td onclick="event.stopPropagation()" style="width:40px;"><input type="checkbox" class="record-select-cb" data-module="sanitary" data-id="${record.id}" onchange="RecordBulkArchive.updateBar('sanitary')"></td>
                 <td>${Utils.esc(record.permitNo) || 'N/A'}</td>
                 <td><span onclick="event.stopPropagation();VHModal.openViolationModal('${(record.businessName || '').replace(/'/g, "\\'")}')" style="cursor:pointer; color:#10b981; font-weight:600; text-decoration:underline; text-underline-offset:3px;" title="Click to view violation history">${Utils.esc(record.businessName) || 'N/A'}</span></td>
                 <td>${Utils.formatDate(record.date)}</td>
@@ -2103,16 +2545,12 @@ const SanitaryManager = {
         }
 
         const ownerName = record.owner
-            ? `${record.owner.first || ''} ${record.owner.middle || ''} ${record.owner.last || ''}`
-            : 'N/A';
+            ? `${record.owner.first || ''} ${record.owner.middle || ''} ${record.owner.last || ''}`.trim()
+            : '';
 
-        const personnelList = record.personnel && Array.isArray(record.personnel)
-            ? record.personnel.map(p => `${p.first || ''} ${p.middle || ''} ${p.last || ''}`).join(', ')
+        const personnelList = record.personnel && Array.isArray(record.personnel) && record.personnel.length > 0
+            ? record.personnel.map(p => `${p.first || ''} ${p.middle || ''} ${p.last || ''}`.trim()).filter(Boolean).join(', ')
             : 'N/A';
-
-        const ai = getAdminRiskForEstablishment(record.businessName);
-        const riskBadge = renderAdminRiskBadge(ai);
-        const ai_days = ai ? (ai.daysToComply ?? (ai.riskLevel === 'HIGH' ? 7 : 30)) : null;
 
         const content = `
             <div class="modal-header">
@@ -2128,10 +2566,6 @@ const SanitaryManager = {
                     <div class="detail-section">
                         <h4>Basic Information</h4>
                         <div class="detail-grid">
-                            <div class="detail-item">
-                                <span class="detail-label">Record No.</span>
-                                <span class="detail-value">${record.no || 'N/A'}</span>
-                            </div>
                             <div class="detail-item">
                                 <span class="detail-label">Date</span>
                                 <span class="detail-value">${Utils.formatDate(record.date)}</span>
@@ -2151,21 +2585,29 @@ const SanitaryManager = {
                             </div>
                             <div class="detail-item">
                                 <span class="detail-label">Owner Name</span>
-                                <span class="detail-value">${ownerName}</span>
+                                <span class="detail-value">${Utils.esc(ownerName) || 'N/A'}</span>
                             </div>
                             <div class="detail-item">
                                 <span class="detail-label">Sex</span>
-                                <span class="detail-value">${record.sex || 'N/A'}</span>
+                                <span class="detail-value">${Utils.esc(record.sex) || 'N/A'}</span>
                             </div>
                             <div class="detail-item">
                                 <span class="detail-label">Barangay</span>
                                 <span class="detail-value">${Utils.esc(record.barangay) || 'N/A'}</span>
                             </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Building No. / Street</span>
+                                <span class="detail-value">${Utils.esc(record.buildingStreet) || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Corporation / Cooperative</span>
+                                <span class="detail-value">${Utils.esc(record.corporationName) || 'N/A'}</span>
+                            </div>
                         </div>
                     </div>
                     <div class="detail-section">
-                        <h4>Personnel</h4>
-                        <p style="font-size:14px; color:#374151;">${personnelList}</p>
+                        <h4>Personnel (${Utils.esc(record.personnelNo || (Array.isArray(record.personnel) ? record.personnel.length : 0))})</h4>
+                        <p style="font-size:14px; color:#374151;">${Utils.esc(personnelList)}</p>
                     </div>
                     <div class="detail-section">
                         <h4>Results</h4>
@@ -2188,13 +2630,360 @@ const SanitaryManager = {
 
             </div>
 
-            <div class="modal-footer">
+            <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;">
                 <button class="btn btn-primary" onclick="SanitaryManager.printPermit(${index})" data-testid="print-btn">
                     <i class="fas fa-print"></i> Print Permit
+                </button>
+                <button class="btn btn-success" onclick="SanitaryManager.openEditModal(${index})" style="background:#059669;color:#fff;border:none;" data-testid="admin-sanitary-edit-btn">
+                    <i class="fas fa-edit"></i> Edit Record
                 </button>
             </div>
         `;
         Utils.openModal(content);
+    },
+
+    _personnelRowHtml: (person = {}, idx = 0) => {
+        const maleChk = person.sex === 'Male' ? 'checked' : '';
+        const femaleChk = person.sex === 'Female' ? 'checked' : '';
+        const xrayChk = person.result?.xray ? 'checked' : '';
+        const stoolChk = person.result?.stool ? 'checked' : '';
+        const mi = String(person.middle || '').replace(/[^a-zA-Z\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u00ff]/g, '').charAt(0).toUpperCase();
+        const radioName = `admin-san-pers-sex-${idx + 1}`;
+        return `
+            <div class="admin-san-pers-row" style="border:1px solid #d1d5db;border-radius:8px;padding:12px;background:#f9fafb;display:flex;flex-direction:column;gap:8px;">
+                <div style="font-size:13px;font-weight:600;color:#047857;">Personnel #${idx + 1} <span style="color:#dc2626;">*</span></div>
+                <div style="display:grid;grid-template-columns:1fr 72px 1fr;gap:8px;">
+                    <input type="text" class="form-input pers-first" value="${Utils.esc(Utils.capFirstStr(person.first || ''))}" placeholder="First Name" oninput="Utils.capWordLettersInput(this)" style="padding:6px 8px;font-size:13px;" required>
+                    <input type="text" class="form-input pers-middle" value="${Utils.esc(mi)}" placeholder="M.I." maxlength="1" oninput="Utils.miInput(this)" style="padding:6px 8px;font-size:13px;text-align:center;" required>
+                    <input type="text" class="form-input pers-last" value="${Utils.esc(Utils.capFirstStr(person.last || ''))}" placeholder="Last Name" oninput="Utils.capWordLettersInput(this)" style="padding:6px 8px;font-size:13px;" required>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:center;">
+                    <div>
+                        <span style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Sex: <span style="color:#dc2626;">*</span></span>
+                        <div style="display:flex;gap:14px;">
+                            <label style="font-size:12px;color:#374151;display:inline-flex;align-items:center;gap:5px;cursor:pointer;">
+                                <input type="radio" name="${radioName}" value="Male" class="pers-sex" ${maleChk}> Male
+                            </label>
+                            <label style="font-size:12px;color:#374151;display:inline-flex;align-items:center;gap:5px;cursor:pointer;">
+                                <input type="radio" name="${radioName}" value="Female" class="pers-sex" ${femaleChk}> Female
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <span style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Result: <span style="color:#dc2626;">*</span></span>
+                        <div style="display:flex;gap:14px;">
+                            <label style="font-size:12px;color:#374151;display:inline-flex;align-items:center;gap:5px;cursor:pointer;">
+                                <input type="checkbox" class="pers-xray" ${xrayChk}> X-ray
+                            </label>
+                            <label style="font-size:12px;color:#374151;display:inline-flex;align-items:center;gap:5px;cursor:pointer;">
+                                <input type="checkbox" class="pers-stool" ${stoolChk}> Stool
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    syncPersonnelRows: () => {
+        const noEl = document.getElementById('admin-san-personnel-no');
+        const section = document.getElementById('admin-san-pers-section');
+        const container = document.getElementById('admin-san-pers-container');
+        if (!noEl || !container) return;
+
+        const clean = noEl.value.replace(/[^0-9]/g, '');
+        if (clean !== noEl.value) noEl.value = clean;
+        const count = clean !== '' ? parseInt(clean, 10) : 0;
+
+        if (count <= 0) {
+            if (section) section.style.display = 'none';
+            return;
+        }
+        if (section) section.style.display = 'block';
+
+        const existing = [];
+        container.querySelectorAll('.admin-san-pers-row').forEach(row => {
+            existing.push({
+                first: row.querySelector('.pers-first')?.value || '',
+                middle: row.querySelector('.pers-middle')?.value || '',
+                last: row.querySelector('.pers-last')?.value || '',
+                sex: row.querySelector('.pers-sex:checked')?.value || '',
+                result: {
+                    xray: !!row.querySelector('.pers-xray')?.checked,
+                    stool: !!row.querySelector('.pers-stool')?.checked
+                }
+            });
+        });
+
+        let html = '';
+        for (let i = 0; i < count; i++) {
+            html += SanitaryManager._personnelRowHtml(existing[i] || {}, i);
+        }
+        container.innerHTML = html;
+    },
+
+    openEditModal: async (index) => {
+        const record = SanitaryManager._displayed[index];
+        if (!record) {
+            Utils.showToast('Record not found', 'error');
+            return;
+        }
+
+        const permitParts = String(record.permitNo || '').split('-');
+        const p1 = permitParts[0] || '';
+        const p2 = permitParts[1] || '';
+        const p3 = (permitParts[2] || 'FM').toUpperCase();
+
+        const codeEntries = Object.entries(PERMIT3_LABELS);
+        const codeOptions = codeEntries.map(([code, name]) =>
+            `<option value="${Utils.esc(code)}" ${code === p3 ? 'selected' : ''}>${Utils.esc(code)} — ${Utils.esc(name)}</option>`
+        ).join('') + (p3 && !PERMIT3_LABELS[p3] ? `<option value="${Utils.esc(p3)}" selected>${Utils.esc(p3)}</option>` : '');
+
+        const persArr = Array.isArray(record.personnel) ? record.personnel : [];
+        const initCount = Math.max(persArr.length, parseInt(record.personnelNo, 10) || 1);
+        let persRowsHtml = '';
+        for (let i = 0; i < initCount; i++) {
+            persRowsHtml += SanitaryManager._personnelRowHtml(persArr[i] || {}, i);
+        }
+
+        const ownerMi = String(record.owner?.middle || '').replace(/[^a-zA-Z\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u00ff]/g, '').charAt(0).toUpperCase();
+        const sexMaleChecked = record.sex === 'Male' ? 'checked' : '';
+        const sexFemaleChecked = record.sex === 'Female' ? 'checked' : '';
+
+        const content = `
+            <div class="modal-header">
+                <h3>Edit Sanitary Record <span style="font-size:12px;font-weight:500;color:#059669;margin-left:6px;">(Admin Full Access)</span></h3>
+                <button class="modal-close" onclick="Utils.closeModal()" data-testid="modal-close-btn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="max-height:68vh;overflow-y:auto;">
+                <form id="adminSanitaryEditForm" onsubmit="event.preventDefault(); SanitaryManager.saveEdit(${index});">
+                    <div class="form-group">
+                        <label class="form-label">Date</label>
+                        <input type="date" id="admin-san-date" class="form-input" value="${Utils.esc(record.date || '')}" style="max-width:260px;">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Sanitary Permit No. <span style="color:#dc2626">*</span></label>
+                        <div style="display:grid;grid-template-columns:110px auto 110px auto 1fr;gap:8px;align-items:center;">
+                            <input type="text" id="admin-san-p1" class="form-input" value="${Utils.esc(p1)}" placeholder="001" maxlength="3" required>
+                            <span style="font-weight:700;font-size:18px;">-</span>
+                            <input type="text" id="admin-san-p2" class="form-input" value="${Utils.esc(p2)}" placeholder="00" maxlength="3" required>
+                            <span style="font-weight:700;font-size:18px;">-</span>
+                            <select id="admin-san-p3" class="form-input" required>${codeOptions}</select>
+                        </div>
+                        <small style="color:#6b7280;font-size:11px;">(e.g., 001-00-PPTD)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Name of Business <span style="color:#dc2626">*</span></label>
+                        <input type="text" id="admin-san-business" class="form-input" value="${Utils.esc(Utils.capFirstStr(record.businessName || ''))}" oninput="Utils.capFirstInput(this)" required>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div class="form-group">
+                            <label class="form-label">Barangay <span style="color:#dc2626">*</span></label>
+                            <select id="admin-san-barangay" class="form-input" required>
+                                <option value="${Utils.esc(record.barangay || '')}">${Utils.esc(record.barangay || 'Select Barangay')}</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Building No. / Street</label>
+                            <input type="text" id="admin-san-street" class="form-input" value="${Utils.esc(Utils.capFirstStr(record.buildingStreet || ''))}" placeholder="e.g. 123 Rizal St. or N/A" oninput="Utils.capFirstInput(this)">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Name of Corporation/Cooperative</label>
+                        <input type="text" id="admin-san-corp" class="form-input" value="${Utils.esc(Utils.capFirstStr(record.corporationName || ''))}" placeholder="Enter corporation or cooperative name" oninput="Utils.capFirstInput(this)">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Name of Owner <span style="color:#dc2626">*</span></label>
+                        <div style="display:grid;grid-template-columns:1fr 80px 1fr;gap:8px;">
+                            <input type="text" id="admin-san-owner-first" class="form-input" value="${Utils.esc(Utils.capFirstStr(record.owner?.first || ''))}" placeholder="First Name" oninput="Utils.capWordLettersInput(this)" required>
+                            <input type="text" id="admin-san-owner-middle" class="form-input" value="${Utils.esc(ownerMi)}" placeholder="M.I." maxlength="1" oninput="Utils.miInput(this)" style="text-align:center;">
+                            <input type="text" id="admin-san-owner-last" class="form-input" value="${Utils.esc(Utils.capFirstStr(record.owner?.last || ''))}" placeholder="Last Name" oninput="Utils.capWordLettersInput(this)" required>
+                        </div>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;">
+                        <div class="form-group">
+                            <label class="form-label">Sex <span style="color:#dc2626">*</span></label>
+                            <div style="display:flex;gap:18px;padding:6px 0;">
+                                <label style="font-size:13px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                                    <input type="radio" name="admin-san-sex" value="Male" ${sexMaleChecked} required> Male
+                                </label>
+                                <label style="font-size:13px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                                    <input type="radio" name="admin-san-sex" value="Female" ${sexFemaleChecked} required> Female
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Result <span style="color:#dc2626">*</span></label>
+                            <div style="display:flex;gap:18px;padding:6px 0;">
+                                <label style="font-size:13px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                                    <input type="checkbox" id="admin-san-xray" ${record.result?.xray ? 'checked' : ''}> Chest X-ray
+                                </label>
+                                <label style="font-size:13px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                                    <input type="checkbox" id="admin-san-stool" ${record.result?.stool ? 'checked' : ''}> Stool
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr style="border:0;border-top:1px solid #d1d5db;margin:8px 0 14px;">
+
+                    <div class="form-group">
+                        <label class="form-label">No. of Personnel <span style="color:#dc2626">*</span></label>
+                        <input type="number" id="admin-san-personnel-no" class="form-input" value="${initCount}" min="1" step="1" style="max-width:240px;"
+                            onkeydown="return event.key !== '-' && event.key !== '.' && event.key !== 'e' && event.key !== 'E' && event.key !== '+';"
+                            oninput="SanitaryManager.syncPersonnelRows()" required>
+                    </div>
+
+                    <div class="form-group" id="admin-san-pers-section">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                            <label class="form-label" style="margin:0;">Name of Personnel <span style="color:#dc2626">*</span></label>
+                            <span style="font-size:11px;color:#6b7280;">Auto-generated based on number above</span>
+                        </div>
+                        <div id="admin-san-pers-container" style="display:flex;flex-direction:column;gap:10px;">
+                            ${persRowsHtml}
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Remarks</label>
+                        <textarea id="admin-san-remarks" class="form-input" rows="2" placeholder="Remarks..." oninput="Utils.capFirstInput(this)">${Utils.esc(Utils.capFirstStr(record.remarks || ''))}</textarea>
+                    </div>
+
+                    <div id="adminSanitaryEditErr" style="display:none;margin-top:8px;padding:10px 12px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:13px;font-weight:600;"></div>
+                </form>
+            </div>
+            <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:10px;">
+                <button type="button" class="btn btn-secondary" onclick="SanitaryManager.openViewModal(${index})">Cancel</button>
+                <button type="button" id="adminSanitarySaveBtn" class="btn btn-success" onclick="SanitaryManager.saveEdit(${index})" style="background:#059669;color:#fff;border:none;" data-testid="admin-sanitary-save-btn">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+        `;
+        Utils.openModal(content);
+        AdminLookups.populateBarangaySelect(document.getElementById('admin-san-barangay'), record.barangay || '');
+    },
+
+    saveEdit: async (index) => {
+        const record = SanitaryManager._displayed[index];
+        if (!record) return;
+
+        const errEl = document.getElementById('adminSanitaryEditErr');
+        const showErr = (msg) => {
+            if (!errEl) return;
+            errEl.textContent = msg;
+            errEl.style.display = msg ? 'block' : 'none';
+            if (msg) errEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        };
+        showErr('');
+
+        const p1 = (document.getElementById('admin-san-p1')?.value || '').trim();
+        const p2 = (document.getElementById('admin-san-p2')?.value || '').trim();
+        const p3 = (document.getElementById('admin-san-p3')?.value || '').trim();
+        const businessName = Utils.capFirstStr(document.getElementById('admin-san-business')?.value || '');
+        const barangay = (document.getElementById('admin-san-barangay')?.value || '').trim();
+        const buildingStreet = Utils.capFirstStr(document.getElementById('admin-san-street')?.value || '') || 'N/A';
+        const corporationName = Utils.capFirstStr(document.getElementById('admin-san-corp')?.value || '');
+        const ownerFirst = Utils.capFirstStr(document.getElementById('admin-san-owner-first')?.value || '');
+        const ownerMiddleRaw = document.getElementById('admin-san-owner-middle')?.value || '';
+        const ownerMiddle = Utils.formatMiSave(ownerMiddleRaw);
+        const ownerLast = Utils.capFirstStr(document.getElementById('admin-san-owner-last')?.value || '');
+        const ownerSex = document.querySelector('input[name="admin-san-sex"]:checked')?.value || '';
+        const ownerResultXray = !!document.getElementById('admin-san-xray')?.checked;
+        const ownerResultStool = !!document.getElementById('admin-san-stool')?.checked;
+        const personnelNo = (document.getElementById('admin-san-personnel-no')?.value || '').replace(/[^0-9]/g, '').trim();
+        const dateVal = (document.getElementById('admin-san-date')?.value || '').trim();
+
+        if (!p1 || !p2 || !p3 || !businessName || !barangay || !ownerFirst || !ownerLast || !ownerSex || !personnelNo || parseInt(personnelNo, 10) <= 0 || (!ownerResultXray && !ownerResultStool)) {
+            showErr('Please fill in all required fields!');
+            return;
+        }
+        if (dateVal && !/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) {
+            showErr('Date must be in YYYY-MM-DD format.');
+            return;
+        }
+
+        const permitNo = `${p1}-${p2}-${p3}`;
+        const persRows = [];
+        let personnelValid = true;
+        document.querySelectorAll('#admin-san-pers-container .admin-san-pers-row').forEach(row => {
+            const first = Utils.capFirstStr(row.querySelector('.pers-first')?.value || '');
+            const middle = Utils.formatMiSave(row.querySelector('.pers-middle')?.value || '');
+            const last = Utils.capFirstStr(row.querySelector('.pers-last')?.value || '');
+            const sex = row.querySelector('.pers-sex:checked')?.value || '';
+            const xray = !!row.querySelector('.pers-xray')?.checked;
+            const stool = !!row.querySelector('.pers-stool')?.checked;
+            if (!first || !middle || !last || !sex || (!xray && !stool)) {
+                personnelValid = false;
+            }
+            persRows.push({ first, middle, last, sex, result: { xray, stool } });
+        });
+
+        if (persRows.length === 0 || !personnelValid) {
+            showErr('Please fill up the details for all personnel (First Name, M.I., Last Name, Sex, and Result)!');
+            return;
+        }
+
+        const payload = {
+            id: record.id,
+            no: record.no || '',
+            date: dateVal || record.date || '',
+            permitNo: permitNo,
+            personnelNo: personnelNo,
+            businessName: businessName,
+            businessType: record.businessType || 'Other',
+            barangay: barangay,
+            buildingStreet: buildingStreet,
+            corporationName: corporationName,
+            owner: { first: ownerFirst, middle: ownerMiddle, last: ownerLast },
+            sex: ownerSex,
+            result: {
+                xray: ownerResultXray ? 1 : 0,
+                stool: ownerResultStool ? 1 : 0
+            },
+            personnel: persRows,
+            remarks: Utils.capFirstStr(document.getElementById('admin-san-remarks')?.value || '')
+        };
+
+        const btn = document.getElementById('adminSanitarySaveBtn');
+        const origHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/sanitary.php`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            if (!result.success) {
+                showErr(result.message || 'Failed to update sanitary record.');
+                return;
+            }
+            Utils.closeModal();
+            await SanitaryManager.render();
+            Dashboard.updateStats();
+            Dashboard.renderActivity();
+            Utils.showToast('Sanitary record updated successfully', 'success');
+        } catch (err) {
+            console.error('Sanitary update error:', err);
+            showErr('Error saving changes: ' + err.message);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+            }
+        }
     },
 
     deleteRecord: (id) => {
@@ -2401,14 +3190,15 @@ const BurialManager = {
     _allRecords: [],
     render: async () => {
         const tbody = document.getElementById('burialTableBody');
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Loading...</td></tr>';
+        RecordBulkArchive.reset('burial');
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Loading...</td></tr>';
 
         try {
             const response = await fetch(`${API_BASE_URL}/burial.php`);
             const result = await response.json();
 
             if (!result.success) {
-                tbody.innerHTML = `<tr><td colspan="4" class="empty-state">Error: ${Utils.esc(result.message)}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Error: ${Utils.esc(result.message)}</td></tr>`;
                 return;
             }
 
@@ -2430,7 +3220,7 @@ const BurialManager = {
 
         } catch (error) {
             console.error('Error loading burial records:', error);
-            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Failed to load records. Check connection.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Failed to load records. Check connection.</td></tr>';
         }
     },
 
@@ -2469,24 +3259,33 @@ const BurialManager = {
         TablePaging.register('burial', () => BurialManager.applyFilters());
         const page = TablePaging.pageSlice(sorted, 'burial', 10);
         const displayed = page.displayed;
+        RecordBulkArchive.reset('burial');
         renderNumberedPager('admin-burial-pager', page, 'burial');
         if (countEl) countEl.textContent = page.pages > 1 || page.total !== BurialManager._allRecords.length
             ? `Showing ${displayed.length} of ${BurialManager._allRecords.length} records (page ${page.page} of ${page.pages})`
             : `Showing ${page.total} of ${BurialManager._allRecords.length} records`;
 
         if (displayed.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No burial records found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No burial records found</td></tr>';
             return;
         }
 
         tbody.innerHTML = displayed.map((record, index) => `
             <tr data-testid="burial-row-${index}" class="row-clickable" style="cursor:pointer;" onclick="BurialManager.openViewModal('${record.categoryType}', ${record.id})">
+                <td onclick="event.stopPropagation()" style="width:40px;"><input type="checkbox" class="record-select-cb" data-module="burial" data-id="${record.id}" onchange="RecordBulkArchive.updateBar('burial')"></td>
                 <td><span class="type-badge type-burial-${record.categoryType}">${record.category}</span></td>
                 <td>${Utils.esc(record.deceased) || 'N/A'}</td>
                 <td>${Utils.formatDate(record.datetime || record.deathDate)}</td>
                 <td>${Utils.esc(record.informant) || 'N/A'}</td>
             </tr>
         `).join('');
+    },
+
+    _normalizeSex: (val) => {
+        const s = String(val || '').trim().toLowerCase();
+        if (s === 'm' || s === 'male') return 'Male';
+        if (s === 'f' || s === 'female') return 'Female';
+        return '';
     },
 
     openViewModal: (categoryType, recordId) => {
@@ -2503,6 +3302,8 @@ const BurialManager = {
             skeletal:   'Skeletal Transfer',
             exhumation: 'Exhumation'
         }[categoryType] || categoryType;
+        const normSex = BurialManager._normalizeSex(record.sex) || record.sex || '';
+        const ageDisplay = String(record.age || '').trim();
 
         let specificFields = '';
 
@@ -2510,11 +3311,15 @@ const BurialManager = {
             specificFields = `
                 <div class="detail-item">
                     <span class="detail-label">Place of Death</span>
-                    <span class="detail-value">${record.deathPlace || 'N/A'}</span>
+                    <span class="detail-value">${Utils.esc(record.deathPlace) || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Cause of Death</span>
+                    <span class="detail-value">${Utils.esc(record.causeOfDeath) || 'N/A'}</span>
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">Place of Origin</span>
-                    <span class="detail-value">${record.origin || 'N/A'}</span>
+                    <span class="detail-value">${Utils.esc(record.origin) || 'N/A'}</span>
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">Place to be Transferred</span>
@@ -2522,11 +3327,11 @@ const BurialManager = {
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">Funeral Service</span>
-                    <span class="detail-value">${record.funeral || 'N/A'}</span>
+                    <span class="detail-value">${Utils.esc(record.funeral) || 'N/A'}</span>
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">OR / Burial Number</span>
-                    <span class="detail-value">${record.orNumber || 'N/A'}</span>
+                    <span class="detail-value">${Utils.esc(record.orNumber) || 'N/A'}</span>
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">Informant</span>
@@ -2539,8 +3344,16 @@ const BurialManager = {
         } else {
             specificFields = `
                 <div class="detail-item">
+                    <span class="detail-label">Place of Death</span>
+                    <span class="detail-value">${Utils.esc(record.deathPlace) || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Cause of Death</span>
+                    <span class="detail-value">${Utils.esc(record.causeOfDeath) || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
                     <span class="detail-label">Cemetery (Origin)</span>
-                    <span class="detail-value">${record.cemeteryOrigin || 'N/A'}</span>
+                    <span class="detail-value">${Utils.esc(record.cemeteryOrigin) || 'N/A'}</span>
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">Cemetery to be Transferred</span>
@@ -2548,11 +3361,15 @@ const BurialManager = {
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">Funeral Service</span>
-                    <span class="detail-value">${record.funeral || 'N/A'}</span>
+                    <span class="detail-value">${Utils.esc(record.funeral) || 'N/A'}</span>
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">OR Number</span>
-                    <span class="detail-value">${record.orNumber || 'N/A'}</span>
+                    <span class="detail-value">${Utils.esc(record.orNumber) || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Informant</span>
+                    <span class="detail-value">${Utils.esc(record.informant) || 'N/A'}</span>
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">Inspector</span>
@@ -2562,7 +3379,7 @@ const BurialManager = {
 
         const content = `
             <div class="modal-header">
-                <h3>${categoryLabel} Record Details</h3>
+                <h3>${Utils.esc(categoryLabel)} Record Details</h3>
                 <button class="modal-close" onclick="Utils.closeModal()" data-testid="modal-close-btn">
                     <i class="fas fa-times"></i>
                 </button>
@@ -2573,7 +3390,7 @@ const BurialManager = {
                     <div class="detail-grid">
                         <div class="detail-item">
                             <span class="detail-label">Category</span>
-                            <span class="detail-value">${categoryLabel}</span>
+                            <span class="detail-value">${Utils.esc(categoryLabel)}</span>
                         </div>
                         <div class="detail-item">
                             <span class="detail-label">Date & Time Attended</span>
@@ -2582,6 +3399,14 @@ const BurialManager = {
                         <div class="detail-item">
                             <span class="detail-label">Deceased Name</span>
                             <span class="detail-value">${Utils.esc(record.deceased) || 'N/A'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Sex of Deceased</span>
+                            <span class="detail-value">${Utils.esc(normSex) || 'N/A'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Age</span>
+                            <span class="detail-value">${Utils.esc(ageDisplay) || 'N/A'}</span>
                         </div>
                         <div class="detail-item">
                             <span class="detail-label">Date of Death</span>
@@ -2612,13 +3437,344 @@ const BurialManager = {
                 </div>
                 ` : ''}
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;">
                 <button class="btn btn-primary" onclick="window.print()" data-testid="print-btn">
                     <i class="fas fa-print"></i> Print
+                </button>
+                <button class="btn btn-success" onclick="BurialManager.openEditModal('${Utils.esc(categoryType)}', ${Number(record.id)})" style="background:#059669;color:#fff;border:none;" data-testid="admin-burial-edit-btn">
+                    <i class="fas fa-edit"></i> Edit Record
                 </button>
             </div>
         `;
         Utils.openModal(content);
+    },
+
+    _toDatetimeLocal: (raw) => {
+        if (!raw) return '';
+        const d = new Date(raw);
+        if (isNaN(d.getTime())) return '';
+        const pad = n => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    },
+
+    openEditModal: async (categoryType, recordId) => {
+        const records = cachedBurialRecords[categoryType] || [];
+        const record = records.find(r => String(r.id) === String(recordId));
+        if (!record) {
+            Utils.showToast('Record not found', 'error');
+            return;
+        }
+
+        const categoryLabel = {
+            cadaver:    'Cadaver',
+            skeletal:   'Skeletal Transfer',
+            exhumation: 'Exhumation'
+        }[categoryType] || categoryType;
+
+        const dtLocal = BurialManager._toDatetimeLocal(record.datetime);
+        const deathDateVal = record.deathDate && /^\d{4}-\d{2}-\d{2}/.test(record.deathDate)
+            ? record.deathDate.slice(0, 10)
+            : '';
+        const normSex = BurialManager._normalizeSex(record.sex);
+        const ageVal = String(record.age || '').trim();
+        const originBarangay = (record.origin || '').split(' | ').pop() || record.origin || '';
+        const cemOriginBarangay = (record.cemeteryOrigin || '').split(' | ').pop() || record.cemeteryOrigin || '';
+
+        const existingCertHtml = record.filePath ? `
+            <div onclick="openFileViewer('${Utils.esc(record.filePath)}', '${Utils.esc(record.fileName)}')" style="cursor:pointer;display:inline-flex;align-items:center;gap:8px;padding:6px 12px;margin-top:6px;border-radius:6px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;" title="Click to view current Death Certificate">
+                <i class="fas ${record.fileName && record.fileName.toLowerCase().includes('.pdf') ? 'fa-file-pdf' : 'fa-file-image'}" style="color:${record.fileName && record.fileName.toLowerCase().includes('.pdf') ? '#ef4444' : '#3b82f6'};"></i>
+                <span style="font-size:13px;font-weight:600;text-decoration:underline;">${Utils.esc(record.fileName || 'View Current Death Certificate')}</span>
+            </div>` : (record.fileName ? `<div style="font-size:12px;color:#6b7280;margin-top:4px;">Current: ${Utils.esc(record.fileName)}</div>` : '');
+
+        const typeSpecificHtml = categoryType === 'cadaver' ? `
+            <div class="form-group">
+                <label class="form-label">Place of Origin (Tayabas City Barangay)</label>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <select class="form-input" disabled style="background:#f3f4f6;color:#4b5563;">
+                        <option value="Tayabas City">Tayabas City</option>
+                    </select>
+                    <select id="admin-burial-origin" class="form-input">
+                        <option value="${Utils.esc(originBarangay)}">${Utils.esc(originBarangay || '-- Select Barangay --')}</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Place to be Transferred</label>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <select id="admin-burial-transfer-prov" class="form-input">
+                        <option value="">-- Loading Provinces... --</option>
+                    </select>
+                    <select id="admin-burial-transfer-muni" class="form-input" disabled>
+                        <option value="">-- Select Province First --</option>
+                    </select>
+                </div>
+                <input type="text" id="admin-burial-transfer-custom" class="form-input" value="${Utils.esc(record.transfer || '')}" placeholder="Province | Municipality/City" style="display:none;margin-top:6px;">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="form-group">
+                    <label class="form-label">Funeral Service</label>
+                    <input type="text" id="admin-burial-funeral" class="form-input" value="${Utils.esc(Utils.capFirstStr(record.funeral || ''))}" oninput="Utils.capFirstInput(this)">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">OR / Burial Number</label>
+                    <input type="text" id="admin-burial-or" class="form-input" value="${Utils.esc(Utils.capFirstStr(record.orNumber || ''))}" oninput="Utils.capFirstInput(this)">
+                </div>
+            </div>` : `
+            <div class="form-group">
+                <label class="form-label">Cemetery Origin (Tayabas City Barangay)</label>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <select class="form-input" disabled style="background:#f3f4f6;color:#4b5563;">
+                        <option value="Tayabas City">Tayabas City</option>
+                    </select>
+                    <select id="admin-burial-cem-origin" class="form-input">
+                        <option value="${Utils.esc(cemOriginBarangay)}">${Utils.esc(cemOriginBarangay || '-- Select Barangay --')}</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Cemetery to be Transferred</label>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <select id="admin-burial-cem-transfer-prov" class="form-input">
+                        <option value="">-- Loading Provinces... --</option>
+                    </select>
+                    <select id="admin-burial-cem-transfer-muni" class="form-input" disabled>
+                        <option value="">-- Select Province First --</option>
+                    </select>
+                </div>
+                <input type="text" id="admin-burial-cem-transfer-custom" class="form-input" value="${Utils.esc(record.cemeteryTransfer || '')}" placeholder="Province | Municipality/City" style="display:none;margin-top:6px;">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="form-group">
+                    <label class="form-label">Funeral Service</label>
+                    <input type="text" id="admin-burial-funeral" class="form-input" value="${Utils.esc(Utils.capFirstStr(record.funeral || ''))}" oninput="Utils.capFirstInput(this)">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">OR Number</label>
+                    <input type="text" id="admin-burial-or" class="form-input" value="${Utils.esc(Utils.capFirstStr(record.orNumber || ''))}" oninput="Utils.capFirstInput(this)">
+                </div>
+            </div>`;
+
+        const content = `
+            <div class="modal-header">
+                <h3>Edit ${Utils.esc(categoryLabel)} Record <span style="font-size:12px;font-weight:500;color:#059669;margin-left:6px;">(Admin Full Access)</span></h3>
+                <button class="modal-close" onclick="Utils.closeModal()" data-testid="modal-close-btn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="max-height:68vh;overflow-y:auto;">
+                <form id="adminBurialEditForm" onsubmit="event.preventDefault(); BurialManager.saveEdit('${Utils.esc(categoryType)}', ${Number(record.id)});">
+                    <input type="hidden" id="admin-burial-type" value="${Utils.esc(categoryType)}">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div class="form-group">
+                            <label class="form-label">Category <i class="fas fa-lock" style="color:#9ca3af;margin-left:4px;font-size:11px;" title="Category is fixed and cannot be edited"></i></label>
+                            <div class="form-input" style="background:#f3f4f6;color:#374151;font-weight:600;display:flex;align-items:center;justify-content:space-between;user-select:none;cursor:not-allowed;">
+                                <span>${Utils.esc(categoryLabel)}</span>
+                                <span style="font-size:11px;color:#6b7280;font-weight:500;">Fixed</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Date &amp; Time Attended</label>
+                            <input type="datetime-local" id="admin-burial-datetime" class="form-input" value="${Utils.esc(dtLocal)}">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Death Certificate ${!record.filePath && !record.fileName ? '<span style="color:#dc2626">*</span>' : '<span style="font-weight:400;color:#6b7280;">(Upload new file to replace)</span>'}</label>
+                        <input type="file" id="admin-burial-file" class="form-input" accept="image/*,.pdf" style="padding:6px;">
+                        ${existingCertHtml}
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Name of the Deceased <span style="color:#dc2626">*</span></label>
+                        <input type="text" id="admin-burial-deceased" class="form-input" value="${Utils.esc(Utils.capFirstStr(record.deceased || ''))}" oninput="Utils.capWordLettersInput(this)" required>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div class="form-group">
+                            <label class="form-label">Sex of Deceased <span style="color:#dc2626">*</span></label>
+                            <select id="admin-burial-sex" class="form-input" required>
+                                <option value="">-- Select Sex --</option>
+                                <option value="Male" ${normSex === 'Male' ? 'selected' : ''}>Male</option>
+                                <option value="Female" ${normSex === 'Female' ? 'selected' : ''}>Female</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Date of Death <span style="color:#dc2626">*</span></label>
+                            <input type="date" id="admin-burial-death-date" class="form-input" value="${Utils.esc(deathDateVal)}" required>
+                        </div>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div class="form-group">
+                            <label class="form-label">Place of Death <span style="color:#dc2626">*</span></label>
+                            <input type="text" id="admin-burial-death-place" class="form-input" value="${Utils.esc(Utils.capFirstStr(record.deathPlace || ''))}" oninput="Utils.capFirstInput(this)" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Age <span style="color:#dc2626">*</span></label>
+                            <input type="text" id="admin-burial-age" class="form-input" inputmode="numeric" value="${Utils.esc(ageVal)}" placeholder="e.g. 46" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Cause of Death <span style="color:#dc2626">*</span></label>
+                        <input type="text" id="admin-burial-cause" class="form-input" value="${Utils.esc(Utils.capFirstStr(record.causeOfDeath || ''))}" placeholder="e.g. Cardiac arrest" oninput="Utils.capFirstInput(this)" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Name of Informant <span style="color:#dc2626">*</span></label>
+                        <input type="text" id="admin-burial-informant" class="form-input" value="${Utils.esc(Utils.capFirstStr(record.informant || ''))}" oninput="Utils.capWordLettersInput(this)" required>
+                    </div>
+
+                    ${typeSpecificHtml}
+
+                    <div class="form-group">
+                        <label class="form-label">Inspector <span style="font-size:11px;font-weight:500;color:#059669;">(Editable by Admin)</span> <span style="color:#dc2626">*</span></label>
+                        <input type="text" id="admin-burial-inspector" list="admin-burial-inspector-list" class="form-input" value="${Utils.esc(Utils.capFirstStr(record.inspector || ''))}" placeholder="Select or type inspector name" oninput="Utils.capFirstInput(this)" required>
+                        <datalist id="admin-burial-inspector-list"></datalist>
+                    </div>
+
+                    <div id="adminBurialEditErr" style="display:none;margin-top:8px;padding:10px 12px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:13px;font-weight:600;"></div>
+                </form>
+            </div>
+            <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:10px;">
+                <button type="button" class="btn btn-secondary" onclick="BurialManager.openViewModal('${Utils.esc(categoryType)}', ${Number(record.id)})">Cancel</button>
+                <button type="button" id="adminBurialSaveBtn" class="btn btn-success" onclick="BurialManager.saveEdit('${Utils.esc(categoryType)}', ${Number(record.id)})" style="background:#059669;color:#fff;border:none;" data-testid="admin-burial-save-btn">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+        `;
+        Utils.openModal(content);
+
+        // Async lookups: inspectors datalist, Tayabas barangays, and PSGC province/city selectors
+        AdminLookups.getInspectors().then(list => {
+            const dl = document.getElementById('admin-burial-inspector-list');
+            if (!dl) return;
+            dl.innerHTML = list.map(ins => {
+                const name = ins.fullName || ins.full_name || ins.name || '';
+                return name ? `<option value="${Utils.esc(name)}"></option>` : '';
+            }).join('');
+        });
+        if (categoryType === 'cadaver') {
+            AdminLookups.populateBarangaySelect(document.getElementById('admin-burial-origin'), originBarangay);
+            AdminLookups.initTransferSelectors(
+                document.getElementById('admin-burial-transfer-prov'),
+                document.getElementById('admin-burial-transfer-muni'),
+                document.getElementById('admin-burial-transfer-custom'),
+                record.transfer || ''
+            );
+        } else {
+            AdminLookups.populateBarangaySelect(document.getElementById('admin-burial-cem-origin'), cemOriginBarangay);
+            AdminLookups.initTransferSelectors(
+                document.getElementById('admin-burial-cem-transfer-prov'),
+                document.getElementById('admin-burial-cem-transfer-muni'),
+                document.getElementById('admin-burial-cem-transfer-custom'),
+                record.cemeteryTransfer || ''
+            );
+        }
+    },
+
+    saveEdit: async (origType, recordId) => {
+        const records = cachedBurialRecords[origType] || [];
+        const record = records.find(r => String(r.id) === String(recordId));
+        if (!record) return;
+
+        const errEl = document.getElementById('adminBurialEditErr');
+        const showErr = (msg) => {
+            if (!errEl) return;
+            errEl.textContent = msg;
+            errEl.style.display = msg ? 'block' : 'none';
+            if (msg) errEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        };
+        showErr('');
+
+        // Category is fixed and cannot be modified
+        const type = origType;
+        const deceased = Utils.capFirstStr(document.getElementById('admin-burial-deceased')?.value || '');
+        const sex = document.getElementById('admin-burial-sex')?.value || '';
+        const deathDate = (document.getElementById('admin-burial-death-date')?.value || '').trim();
+        const age = (document.getElementById('admin-burial-age')?.value || '').trim();
+        const deathPlace = Utils.capFirstStr(document.getElementById('admin-burial-death-place')?.value || '');
+        const causeOfDeath = Utils.capFirstStr(document.getElementById('admin-burial-cause')?.value || '');
+        const informant = Utils.capFirstStr(document.getElementById('admin-burial-informant')?.value || '');
+        const inspectorName = Utils.capFirstStr(document.getElementById('admin-burial-inspector')?.value || '');
+        const fileInput = document.getElementById('admin-burial-file');
+
+        if (!deceased || !sex || !deathDate || !deathPlace || !age || !causeOfDeath || !informant || !inspectorName) {
+            showErr('Please fill in all required fields (Deceased Name, Sex, Date of Death, Place of Death, Age, Cause of Death, Informant, Inspector).');
+            return;
+        }
+        if (!record.filePath && !record.fileName && (!fileInput || !fileInput.files || !fileInput.files[0])) {
+            showErr('Death Certificate is required.');
+            return;
+        }
+
+        const dtRaw = (document.getElementById('admin-burial-datetime')?.value || '').trim();
+        const datetimeVal = dtRaw ? dtRaw.replace('T', ' ') + (dtRaw.length === 16 ? ':00' : '') : (record.datetime || '');
+
+        const readTransferVal = (provId, muniId, customId, fallbackVal) => {
+            const p = (document.getElementById(provId)?.value || '').trim();
+            const m = (document.getElementById(muniId)?.value || '').trim();
+            const c = Utils.capFirstStr(document.getElementById(customId)?.value || '');
+            if (p && m) return `${p} | ${m}`;
+            if (p) return p;
+            if (c) return c;
+            return fallbackVal || '';
+        };
+
+        const formData = new FormData();
+        formData.append('id', String(record.id));
+        formData.append('type', type);
+        formData.append('datetime', datetimeVal);
+        formData.append('deceased', deceased);
+        formData.append('sex', sex);
+        formData.append('deathDate', deathDate);
+        formData.append('age', age);
+        formData.append('deathPlace', deathPlace);
+        formData.append('causeOfDeath', causeOfDeath);
+        formData.append('informant', informant);
+        formData.append('inspector', inspectorName);
+        formData.append('origin', (document.getElementById('admin-burial-origin')?.value || '').trim());
+        formData.append('transfer', readTransferVal('admin-burial-transfer-prov', 'admin-burial-transfer-muni', 'admin-burial-transfer-custom', record.transfer));
+        formData.append('cemeteryOrigin', (document.getElementById('admin-burial-cem-origin')?.value || '').trim());
+        formData.append('cemeteryTransfer', readTransferVal('admin-burial-cem-transfer-prov', 'admin-burial-cem-transfer-muni', 'admin-burial-cem-transfer-custom', record.cemeteryTransfer));
+        formData.append('funeral', Utils.capFirstStr(document.getElementById('admin-burial-funeral')?.value || ''));
+        formData.append('orNumber', Utils.capFirstStr(document.getElementById('admin-burial-or')?.value || ''));
+
+        if (fileInput && fileInput.files && fileInput.files[0]) {
+            formData.append('attachment', fileInput.files[0]);
+        }
+
+        const btn = document.getElementById('adminBurialSaveBtn');
+        const origHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/burial.php`, {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            if (!result.success) {
+                showErr(result.message || 'Failed to update burial record.');
+                return;
+            }
+            Utils.closeModal();
+            await BurialManager.render();
+            await Dashboard.updateStats();
+            Dashboard.renderActivity();
+            Utils.showToast('Burial record updated successfully', 'success');
+        } catch (err) {
+            console.error('Burial update error:', err);
+            showErr('Error saving changes: ' + err.message);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+            }
+        }
     },
 
     deleteRecord: (categoryType, recordId) => {
@@ -2658,7 +3814,8 @@ const BurialManager = {
 const ReportsManager = {
     loadAndRender: async () => {
         const tbody = document.getElementById('reportsTableBody');
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#6b7280;"><i class="fas fa-spinner fa-spin"></i> Loading reports from database...</td></tr>';
+        RecordBulkArchive.reset('reports');
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#6b7280;"><i class="fas fa-spinner fa-spin"></i> Loading reports from database...</td></tr>';
         try {
             const resp = await fetch(`${API_BASE_URL}/inspection.php`);
             const json = await resp.json();
@@ -2680,7 +3837,8 @@ const ReportsManager = {
         const allReports = DataStore.inspectionReports;
 
         if (allReports.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No inspection reports found</td></tr>';
+            RecordBulkArchive.reset('reports');
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No inspection reports found</td></tr>';
             return;
         }
 
@@ -2719,13 +3877,20 @@ const ReportsManager = {
         TablePaging.register('reports', () => ReportsManager.applyFilters());
         const page = TablePaging.pageSlice(sorted, 'reports', 10);
         const displayed = page.displayed;
+        RecordBulkArchive.reset('reports');
         renderNumberedPager('admin-reports-pager', page, 'reports');
         if (countEl) countEl.textContent = page.pages > 1 || page.total !== allReports.length
             ? `Showing ${displayed.length} of ${allReports.length} reports (page ${page.page} of ${page.pages})`
             : `Showing ${page.total} of ${allReports.length} reports`;
 
+        if (displayed.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No inspection reports found</td></tr>';
+            return;
+        }
+
         tbody.innerHTML = displayed.map(report => `
             <tr data-testid="report-row-${report.id}" class="row-clickable" style="cursor:pointer;" onclick="ReportsManager.openViewModal(${report.id})">
+                <td onclick="event.stopPropagation()" style="width:40px;"><input type="checkbox" class="record-select-cb" data-module="reports" data-id="${report.id}" onchange="RecordBulkArchive.updateBar('reports')"></td>
                 <td>${getSanitaryPermitNoForEstablishment(report.establishment)}</td>
                 <td>${Utils.esc(report.inspector)}</td>
                 <td>${Utils.esc(report.establishment) || 'N/A'}</td>
@@ -4614,7 +5779,7 @@ const BackupManager = {
         const tbody = document.getElementById('backupTableBody');
         const status = document.getElementById('backup-status');
         if (status) status.textContent = 'Loading…';
-        if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Loading…</td></tr>';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Loading…</td></tr>';
         try {
             const r = await fetch(`${API_BASE_URL}/backup.php?action=list`, { credentials: 'include' });
             const j = await r.json();
@@ -4624,11 +5789,39 @@ const BackupManager = {
                 const n = (BackupManager._data.dumps || []).length;
                 status.textContent = n === 0 ? 'No backups yet — create one now.' : `${n} backup(s) available`;
             }
+            BackupManager.renderScheduleSummary();
             BackupManager.render();
         } catch (e) {
-            if (tbody) tbody.innerHTML = `<tr><td colspan="4" class="empty-state">${Utils.esc(e.message)}</td></tr>`;
+            if (tbody) tbody.innerHTML = `<tr><td colspan="5" class="empty-state">${Utils.esc(e.message)}</td></tr>`;
             if (status) status.textContent = '';
         }
+    },
+
+    renderScheduleSummary: () => {
+        const sched = (BackupManager._data && BackupManager._data.schedule) || {};
+        const fmt = (entry, fallbackKeep) => {
+            if (!entry) return `Stored: 0/${fallbackKeep} • Last run: None yet`;
+            const count = entry.count || 0;
+            const keep = entry.keep || fallbackKeep;
+            const when = entry.latestMtime
+                ? new Date(entry.latestMtime * 1000).toLocaleString()
+                : 'None yet';
+            return `Stored: ${count}/${keep} • Last run: ${when}`;
+        };
+        const wEl = document.getElementById('backup-weekly-meta');
+        const mEl = document.getElementById('backup-monthly-meta');
+        if (wEl) wEl.textContent = fmt(sched.weekly, 8);
+        if (mEl) mEl.textContent = fmt(sched.monthly, 12);
+    },
+
+    _typeBadgeHtml: (type) => {
+        const map = {
+            weekly:  { label: 'Weekly',  bg: '#dbeafe', fg: '#1e40af' },
+            monthly: { label: 'Monthly', bg: '#f3e8ff', fg: '#6b21a8' },
+            manual:  { label: 'Manual',  bg: '#d1fae5', fg: '#065f46' }
+        };
+        const info = map[type] || map.manual;
+        return `<span style="display:inline-block;padding:2px 8px;border-radius:9999px;font-size:11px;font-weight:700;background:${info.bg};color:${info.fg};">${info.label}</span>`;
     },
 
     render: () => {
@@ -4636,7 +5829,7 @@ const BackupManager = {
         if (!tbody) return;
         const dumps = (BackupManager._data && BackupManager._data.dumps) || [];
         if (!dumps.length) {
-            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No backups yet. Click <strong>Create Backup Now</strong>.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No backups yet. Click <strong>Create Backup Now</strong>.</td></tr>';
             return;
         }
         tbody.innerHTML = dumps.map(d => {
@@ -4645,8 +5838,10 @@ const BackupManager = {
             const size = d.size >= 1048576
                 ? (d.size / 1048576).toFixed(2) + ' MB'
                 : Math.max(1, Math.round(d.size / 1024)) + ' KB';
+            const type = d.type || (d.file && d.file.includes('_weekly_') ? 'weekly' : (d.file && d.file.includes('_monthly_') ? 'monthly' : 'manual'));
             return `<tr>
                 <td style="font-family:monospace;font-size:12px;word-break:break-all;">${Utils.esc(d.file)}</td>
+                <td>${BackupManager._typeBadgeHtml(type)}</td>
                 <td>${size}</td>
                 <td>${Utils.esc(when)}</td>
                 <td style="white-space:nowrap;">
@@ -4661,13 +5856,17 @@ const BackupManager = {
         }).join('');
     },
 
-    create: async () => {
+    create: async (type = 'manual') => {
+        const validType = (type === 'weekly' || type === 'monthly') ? type : 'manual';
+        const btnIds = ['btnCreateBackup', 'btnCreateWeeklyBackup', 'btnCreateMonthlyBackup'];
         const btn = document.getElementById('btnCreateBackup');
         const status = document.getElementById('backup-status');
-        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split mr-1"></i>Creating…'; }
-        if (status) status.textContent = 'Creating backup… do not close this window.';
+        btnIds.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = true; });
+        if (btn && validType === 'manual') btn.innerHTML = '<i class="bi bi-hourglass-split mr-1"></i>Creating…';
+        if (status) status.textContent = `Creating ${validType} backup… do not close this window.`;
         try {
             const token = _csrfToken || await _fetchCsrfToken();
+            const body = new URLSearchParams({ action: 'create', type: validType });
             const r = await fetch(`${API_BASE_URL}/backup.php`, {
                 method: 'POST',
                 credentials: 'include',
@@ -4675,7 +5874,7 @@ const BackupManager = {
                     'Content-Type': 'application/x-www-form-urlencoded',
                     'X-CSRF-Token': token || ''
                 },
-                body: 'action=create'
+                body: body.toString()
             });
             const j = await r.json();
             if (!j.success) throw new Error(j.message || 'Backup failed');
@@ -4685,7 +5884,8 @@ const BackupManager = {
             Utils.showToast(e.message || 'Backup failed', 'error');
             if (status) status.textContent = '';
         } finally {
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-plus-circle mr-1"></i>Create Backup Now'; }
+            btnIds.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
+            if (btn) btn.innerHTML = '<i class="bi bi-plus-circle mr-1"></i>Create Backup Now';
         }
     },
 
@@ -6455,7 +7655,8 @@ const PredictionEngine = {
 
             PredictionEngine.results = results;
             PredictionEngine.updateSummary(results);
-            PredictionEngine.renderTable(results);
+            TablePaging.setPage('prediction', 1);
+            PredictionEngine.filter();
             statusEl.textContent = `Prescription last run: ${new Date().toLocaleTimeString('en-PH')} · ${results.length} establishments prescribed`;
 
             // Update sidebar badge with HIGH count
@@ -6683,9 +7884,16 @@ const PredictionEngine = {
                                     <strong>Last Inspected:</strong> ${r.lastInspected}<br>
                                     <strong>Prescription basis:</strong> PD 856 — Sanitation Code of the Philippines
                                 </div>
-                                <button onclick="EstablishmentTrend.show('${Utils.esc(r.businessName).replace(/'/g, "\\'")}')" style="margin-top:12px;background:#7c3aed;border:none;color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">
-                                    <i class="fas fa-chart-line" style="margin-right:6px;"></i>View Risk Level Trend
-                                </button>
+                                <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;align-items:center;">
+                                    <button onclick="EstablishmentTrend.show('${Utils.esc(r.businessName).replace(/'/g, "\\'")}')" style="background:#7c3aed;border:none;color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">
+                                        <i class="fas fa-chart-line" style="margin-right:6px;"></i>View Risk Level Trend
+                                    </button>
+                                    ${r.riskLevel === 'HIGH' ? `
+                                    <button type="button" id="predReinspectBtn" onclick="PredictionEngine.openReinspectForm(${index})" style="background:#dc2626;border:none;color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">
+                                        <i class="fas fa-calendar-check" style="margin-right:6px;"></i>Re-inspect
+                                    </button>` : ''}
+                                </div>
+                                <div id="predReinspectBox" style="display:none;margin-top:14px;padding:14px 16px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;"></div>
                             </div>
                         </div>
                         <div id="aiAssessmentBox" style="margin-top:24px;padding:28px;background:#f0f9ff;border:2px solid #bae6fd;border-radius:12px;">
@@ -6750,6 +7958,177 @@ const PredictionEngine = {
             else alert(err.message || 'Could not save remark.');
         } finally {
             if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save" style="margin-right:6px;"></i>Save Remark'; }
+        }
+    },
+
+    findClusterInspectorForBarangay: async (barangay) => {
+        if (!ClusterAssignments._clusters) {
+            await ClusterAssignments.load();
+        }
+        const norm = s => String(s || '').trim().toLowerCase().replace(/^(brgy\.?|barangay)\s+/i, '').trim();
+        const target = norm(barangay);
+        if (target && ClusterAssignments._clusters) {
+            for (const n of [1, 2, 3, 4, 5]) {
+                const c = ClusterAssignments._clusters[n];
+                if (!c || !Array.isArray(c.barangays)) continue;
+                if (c.barangays.some(b => norm(b) === target)) {
+                    return { clusterNumber: n, inspector: (c.inspector || '').trim() };
+                }
+            }
+        }
+        return { clusterNumber: null, inspector: '' };
+    },
+
+    openReinspectForm: async (index) => {
+        const r = PredictionEngine.results[index];
+        const box = document.getElementById('predReinspectBox');
+        if (!r || !box) return;
+
+        box.style.display = 'block';
+        box.innerHTML = '<div style="font-size:13px;color:#7f1d1d;"><i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i>Looking up assigned inspector for ' + Utils.esc(r.barangay || 'this barangay') + '...</div>';
+
+        const { clusterNumber, inspector } = await PredictionEngine.findClusterInspectorForBarangay(r.barangay);
+        const nowPh = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+        const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const todayStr = fmt(nowPh);
+        const tmrw = new Date(nowPh);
+        tmrw.setDate(tmrw.getDate() + 1);
+        const defaultDate = fmt(tmrw);
+
+        const inspectorsList = ClusterAssignments._inspectors || [];
+        let inspectorFieldHtml = '';
+        if (inspector) {
+            inspectorFieldHtml = `
+                <div style="padding:8px 10px;background:#fff;border:1px solid #fecaca;border-radius:8px;font-size:13px;color:#111827;">
+                    <strong><i class="fas fa-user-check" style="color:#059669;margin-right:6px;"></i>${Utils.esc(inspector)}</strong>
+                    ${clusterNumber ? `<span style="color:#6b7280;font-size:12px;"> · Cluster ${clusterNumber} (${Utils.esc(r.barangay || '')})</span>` : ''}
+                </div>
+                <input type="hidden" id="predReinspectInspector" value="${Utils.esc(inspector)}">`;
+        } else {
+            const opts = ['<option value="">— Select Inspector —</option>']
+                .concat(inspectorsList.map(i => {
+                    const name = i.fullName || i.full_name || '';
+                    return `<option value="${Utils.esc(name)}">${Utils.esc(name)}</option>`;
+                })).join('');
+            inspectorFieldHtml = `
+                <div style="font-size:12px;color:#b45309;margin-bottom:6px;">
+                    <i class="fas fa-exclamation-triangle" style="margin-right:4px;"></i>No cluster inspector assigned for barangay "${Utils.esc(r.barangay || 'N/A')}". Pick an inspector below:
+                </div>
+                <select id="predReinspectInspector" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:7px 10px;font-size:13px;background:#fff;">${opts}</select>`;
+        }
+
+        box.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <span style="font-size:13px;font-weight:700;color:#991b1b;">
+                    <i class="fas fa-calendar-check" style="margin-right:5px;"></i>Schedule High-Risk Re-inspection
+                </span>
+                <button type="button" onclick="document.getElementById('predReinspectBox').style.display='none'" style="background:none;border:none;color:#6b7280;font-size:16px;line-height:1;">&times;</button>
+            </div>
+            <div style="margin-bottom:10px;">
+                <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Assigned Inspector</label>
+                ${inspectorFieldHtml}
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Re-inspection Date <span style="color:#dc2626;">*</span></label>
+                    <input type="date" id="predReinspectDate" min="${todayStr}" value="${defaultDate}" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:7px 10px;font-size:13px;background:#fff;box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Notes (Optional)</label>
+                    <input type="text" id="predReinspectNotes" value="Re-inspection (High Risk)" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:7px 10px;font-size:13px;background:#fff;box-sizing:border-box;">
+                </div>
+            </div>
+            <div id="predReinspectStatus" style="font-size:12px;margin-bottom:8px;"></div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;">
+                <button type="button" onclick="document.getElementById('predReinspectBox').style.display='none'" style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600;">Cancel</button>
+                <button type="button" id="predConfirmReinspectBtn" onclick="PredictionEngine.submitReinspect(${index})" style="background:#dc2626;color:#fff;border:none;padding:6px 16px;border-radius:8px;font-size:12px;font-weight:600;">
+                    <i class="fas fa-paper-plane" style="margin-right:5px;"></i>Confirm Re-inspection
+                </button>
+            </div>
+        `;
+    },
+
+    submitReinspect: async (index) => {
+        const r = PredictionEngine.results[index];
+        const inspEl = document.getElementById('predReinspectInspector');
+        const dateEl = document.getElementById('predReinspectDate');
+        const notesEl = document.getElementById('predReinspectNotes');
+        const statusEl = document.getElementById('predReinspectStatus');
+        const btn = document.getElementById('predConfirmReinspectBtn');
+        if (!r || !dateEl) return;
+
+        const inspector = (inspEl?.value || '').trim();
+        const schedDate = (dateEl.value || '').trim();
+        const notes = (notesEl?.value || '').trim() || 'Re-inspection (High Risk)';
+
+        if (!inspector) {
+            if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626;">Please select an assigned inspector.</span>';
+            return;
+        }
+        if (!schedDate) {
+            if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626;">Please choose a re-inspection date.</span>';
+            return;
+        }
+
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:5px;"></i>Scheduling...'; }
+        if (statusEl) statusEl.innerHTML = '<span style="color:#1e40af;">Saving re-inspection schedule...</span>';
+
+        try {
+            const resp = await fetch(`${API_BASE_URL}/inspection_schedules.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    inspector: inspector,
+                    establishment: r.businessName,
+                    riskLevel: r.riskLevel || 'HIGH',
+                    schedDate: schedDate,
+                    notes: notes
+                })
+            });
+            const json = await resp.json();
+            if (!json.success) throw new Error(json.message || 'Failed to schedule re-inspection.');
+
+            const assignedInspector = (json.data && json.data.inspector) ? json.data.inspector : inspector;
+
+            // Send email notification to the assigned inspector (non-blocking)
+            fetch(`${API_BASE_URL}/PHPMailer/send_notification.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    inspector: assignedInspector,
+                    establishment: r.businessName,
+                    schedDate: schedDate,
+                    notes: notes,
+                    type: 'assigned'
+                })
+            }).catch(() => {});
+
+            // Refresh schedule cache & badge
+            ScheduleManager.fetchAll().then(() => {
+                ScheduleManager.render();
+                const schedBadge = document.getElementById('scheduleBadge');
+                if (schedBadge) {
+                    const pending = ScheduleManager._cache.filter(s => ScheduleManager.getStatus(s.schedDate, s.done, s.dutyType) !== 'Done').length;
+                    schedBadge.textContent = pending;
+                    schedBadge.style.display = pending > 0 ? 'inline-block' : 'none';
+                }
+            }).catch(() => {});
+
+            const fmtDate = new Date(schedDate + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+            const box = document.getElementById('predReinspectBox');
+            if (box) {
+                box.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:8px;color:#065f46;font-size:13px;font-weight:600;">
+                        <i class="fas fa-check-circle" style="color:#059669;font-size:16px;"></i>
+                        <span>Re-inspection scheduled for <strong>${Utils.esc(assignedInspector)}</strong> on <strong>${Utils.esc(fmtDate)}</strong>. Inspector notified.</span>
+                    </div>`;
+                box.style.background = '#ecfdf5';
+                box.style.borderColor = '#a7f3d0';
+            }
+            Utils.showToast(`Re-inspection scheduled for ${assignedInspector} on ${fmtDate}`, 'success');
+        } catch (err) {
+            if (statusEl) statusEl.innerHTML = `<span style="color:#dc2626;">${Utils.esc(err.message || 'Failed to schedule')}</span>`;
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:5px;"></i>Confirm Re-inspection'; }
         }
     },
 
@@ -7493,7 +8872,8 @@ async function adminLoadIHEstablishments() {
     });
 
     _adminIHEstablishments = Object.values(estabMap).sort((a, b) => (b.lastDate || 0) - (a.lastDate || 0));
-    adminRenderIHEstablishments(_adminIHEstablishments);
+    TablePaging.setPage('admin-ih', 1);
+    adminFilterIHEstablishments();
 }
 
 function adminRenderIHEstablishments(list) {
@@ -7517,13 +8897,12 @@ function adminRenderIHEstablishments(list) {
                 <th>Total Inspections</th>
                 <th>Violations</th>
                 <th>Last Inspected</th>
-                <th>Action</th>
             </tr>
         </thead>
         <tbody>
             ${list.map(e => {
                 const lastInspected = e.lastDate ? e.lastDate.toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' }) : 'N/A';
-                return `<tr>
+                return `<tr class="row-clickable" data-estab="${Utils.esc(e.name)}" style="cursor:pointer;" onclick="adminOpenIHDetail(this.dataset.estab)">
                     <td style="font-weight:600;">${Utils.esc(e.name)}</td>
                     <td>${Utils.esc(e.barangay)}</td>
                     <td style="text-align:center;">${e.count}</td>
@@ -7531,12 +8910,6 @@ function adminRenderIHEstablishments(list) {
                         <span style="background:${e.violations > 0 ? '#fee2e2' : '#d1fae5'};color:${e.violations > 0 ? '#dc2626' : '#059669'};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">${e.violations}</span>
                     </td>
                     <td>${lastInspected}</td>
-                    <td>
-                        <button onclick="adminOpenIHDetail('${e.name.replace(/'/g, "\\'")}')"
-                            style="background:#059669;color:#fff;border:none;padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
-                            <i class="fas fa-history" style="margin-right:5px;"></i>View History
-                        </button>
-                    </td>
                 </tr>`;
             }).join('')}
         </tbody>
@@ -7763,30 +9136,45 @@ const YoYComparison = {
         const sel1 = document.getElementById('yoyYear1');
         const sel2 = document.getElementById('yoyYear2');
         if (!sel1 || !sel2) return;
+        let opts1 = '';
+        let opts2 = '';
         for (let y = currentYear; y >= currentYear - 5; y--) {
-            sel1.innerHTML += `<option value="${y}" ${y === currentYear - 1 ? 'selected' : ''}>${y}</option>`;
-            sel2.innerHTML += `<option value="${y}" ${y === currentYear ? 'selected' : ''}>${y}</option>`;
+            opts1 += `<option value="${y}" ${y === currentYear - 1 ? 'selected' : ''}>${y}</option>`;
+            opts2 += `<option value="${y}" ${y === currentYear ? 'selected' : ''}>${y}</option>`;
         }
+        sel1.innerHTML = opts1;
+        sel2.innerHTML = opts2;
+        sel1.value = String(currentYear - 1);
+        sel2.value = String(currentYear);
     },
 
     load: async () => {
-        const year1 = document.getElementById('yoyYear1')?.value;
-        const year2 = document.getElementById('yoyYear2')?.value;
+        const sel1 = document.getElementById('yoyYear1');
+        const sel2 = document.getElementById('yoyYear2');
+        if (sel1 && sel2 && (sel1.options.length === 0 || sel2.options.length === 0)) {
+            YoYComparison.init();
+        }
+        const year1 = sel1?.value;
+        const year2 = sel2?.value;
         if (!year1 || !year2) return;
 
-        try {
-            const resp = await fetch(`${API_BASE_URL}/statistics.php?action=year_over_year&year1=${year1}&year2=${year2}`);
-            const json = await resp.json();
-            if (!json.success) return;
+        const container = document.getElementById('yoyResults');
+        if (!container) return;
 
-            const { years, changes } = json.data;
-            const container = document.getElementById('yoyResults');
-            if (!container) return;
+        try {
+            const resp = await fetch(`${API_BASE_URL}/statistics.php?action=year_over_year&year1=${encodeURIComponent(year1)}&year2=${encodeURIComponent(year2)}`);
+            const json = await resp.json();
+            if (!json.success) {
+                container.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:#ef4444;font-size:13px;padding:12px;">${Utils.esc(json.message || 'Failed to load Year-over-Year comparison.')}</div>`;
+                return;
+            }
+
+            const { changes } = json.data;
 
             const metrics = [
-                { key: 'totalInspections', label: 'Total Inspections', icon: 'fa-clipboard-list' },
-                { key: 'complianceRate', label: 'Compliance Rate', icon: 'fa-check-circle' },
-                { key: 'totalViolations', label: 'Violations', icon: 'fa-exclamation-triangle' }
+                { key: 'totalInspections', label: 'Total Inspections', icon: 'fa-clipboard-list', suffix: '' },
+                { key: 'complianceRate', label: 'Compliance Rate', icon: 'fa-check-circle', suffix: '%' },
+                { key: 'totalViolations', label: 'Violations', icon: 'fa-exclamation-triangle', suffix: '' }
             ];
 
             container.innerHTML = metrics.map(m => {
@@ -7799,15 +9187,16 @@ const YoYComparison = {
                     <i class="fas ${m.icon}" style="color:#6b7280;font-size:18px;margin-bottom:8px;"></i>
                     <div style="font-size:12px;color:#6b7280;margin-bottom:4px;">${m.label}</div>
                     <div style="display:flex;justify-content:center;gap:20px;margin:8px 0;">
-                        <div><div style="font-size:18px;font-weight:700;color:#374151;">${c[year1]}</div><div style="font-size:10px;color:#9ca3af;">${year1}</div></div>
+                        <div><div style="font-size:18px;font-weight:700;color:#374151;">${c[year1]}${m.suffix}</div><div style="font-size:10px;color:#9ca3af;">${Utils.esc(year1)}</div></div>
                         <div style="font-size:18px;color:#6b7280;">→</div>
-                        <div><div style="font-size:18px;font-weight:700;color:#374151;">${c[year2]}</div><div style="font-size:10px;color:#9ca3af;">${year2}</div></div>
+                        <div><div style="font-size:18px;font-weight:700;color:#374151;">${c[year2]}${m.suffix}</div><div style="font-size:10px;color:#9ca3af;">${Utils.esc(year2)}</div></div>
                     </div>
                     <div style="font-size:14px;font-weight:700;color:${color};">${arrow} ${Math.abs(change)}%</div>
                 </div>`;
             }).join('');
         } catch (err) {
             console.error('YoY comparison failed:', err);
+            container.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#ef4444;font-size:13px;padding:12px;">Error loading Year-over-Year comparison.</div>';
         }
     }
 };
@@ -7974,9 +9363,13 @@ const EstablishmentTrend = {
 };
 
 // ==================== INIT NEW MODULES ====================
-document.addEventListener('DOMContentLoaded', () => {
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        YoYComparison.init();
+    });
+} else {
     YoYComparison.init();
-});
+}
 
 // ==================== BULK IMPORT — BURIAL (admin) ====================
 // Shared engine + parsers live in js/import_common.js (window.ImportFlow).

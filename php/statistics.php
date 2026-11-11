@@ -112,17 +112,18 @@ try {
         foreach ([$year1, $year2] as $year) {
             $from = "$year-01-01";
             $to = "$year-12-31 23:59:59";
+            $dateExpr = "COALESCE(NULLIF(report_date, ''), DATE(created_at))";
 
             // Inspections count (current + history)
-            $stmt = $db->prepare("SELECT COUNT(*) as c FROM inspection_reports WHERE report_date BETWEEN ? AND ?");
+            $stmt = $db->prepare("SELECT COUNT(*) as c FROM inspection_reports WHERE $dateExpr BETWEEN ? AND ?");
             $stmt->execute([$from, $to]);
             $inspCount = (int)$stmt->fetch()['c'];
-            $stmt = $db->prepare("SELECT COUNT(*) as c FROM inspection_history WHERE report_date BETWEEN ? AND ?");
+            $stmt = $db->prepare("SELECT COUNT(*) as c FROM inspection_history WHERE COALESCE(NULLIF(report_date, ''), DATE(archived_at)) BETWEEN ? AND ?");
             $stmt->execute([$from, $to]);
             $inspCount += (int)$stmt->fetch()['c'];
 
             // Compliance rate
-            $stmt = $db->prepare("SELECT COUNT(*) as total, SUM(CASE WHEN complied = 1 THEN 1 ELSE 0 END) as comp FROM inspection_reports WHERE report_date BETWEEN ? AND ?");
+            $stmt = $db->prepare("SELECT COUNT(*) as total, SUM(CASE WHEN complied = 1 THEN 1 ELSE 0 END) as comp FROM inspection_reports WHERE $dateExpr BETWEEN ? AND ?");
             $stmt->execute([$from, $to]);
             $compData = $stmt->fetch();
             $compRate = $compData['total'] > 0 ? round($compData['comp'] / $compData['total'] * 100, 1) : 0;
@@ -133,24 +134,25 @@ try {
                                   'improper', 'garbage', 'waste', 'polluted', 'infest'];
             $pattern = '/\b(' . implode('|', array_map('preg_quote', $violationKeywords)) . ')\b/i';
 
-            $stmt = $db->prepare("SELECT recommendation, remarks, complied FROM inspection_reports WHERE report_date BETWEEN ? AND ?");
+            $stmt = $db->prepare("SELECT recommendation, remarks, complied FROM inspection_reports WHERE $dateExpr BETWEEN ? AND ?");
             $stmt->execute([$from, $to]);
             $allRemarks = $stmt->fetchAll();
-            $stmt = $db->prepare("SELECT recommendation, remarks, complied FROM inspection_history WHERE report_date BETWEEN ? AND ?");
+            $stmt = $db->prepare("SELECT recommendation, remarks, complied FROM inspection_history WHERE COALESCE(NULLIF(report_date, ''), DATE(archived_at)) BETWEEN ? AND ?");
             $stmt->execute([$from, $to]);
             $allRemarks = array_merge($allRemarks, $stmt->fetchAll());
 
             $violationCount = 0;
             foreach ($allRemarks as $r) {
+                $r = decryptRow(isset($r['archived_at']) ? 'inspection_history' : 'inspection_reports', $r);
                 $text = strtolower(($r['recommendation'] ?? '') . ' ' . ($r['remarks'] ?? ''));
                 $complied = isset($r['complied']) ? (bool)$r['complied'] : true;
                 if (!$complied || preg_match($pattern, $text)) $violationCount++;
             }
 
             // Monthly breakdown
-            $stmt = $db->prepare("SELECT DATE_FORMAT(report_date, '%m') as month, COUNT(*) as cnt
-                FROM inspection_reports WHERE report_date BETWEEN ? AND ?
-                GROUP BY DATE_FORMAT(report_date, '%m') ORDER BY month");
+            $stmt = $db->prepare("SELECT DATE_FORMAT($dateExpr, '%m') as month, COUNT(*) as cnt
+                FROM inspection_reports WHERE $dateExpr BETWEEN ? AND ?
+                GROUP BY DATE_FORMAT($dateExpr, '%m') ORDER BY month");
             $stmt->execute([$from, $to]);
             $monthly = [];
             foreach ($stmt->fetchAll() as $row) {

@@ -191,149 +191,247 @@ try {
         ]);
     }
 
-    // ---- GET ?action=send_compliance_alerts: Email admin about HIGH-risk & violations ----
+    // ---- GET ?action=send_compliance_alerts: Email & notify inspectors about compliance alerts ----
     if ($action === 'send_compliance_alerts') {
         // GET-triggered write — require CSRF token
         requireCsrf();
         require_once __DIR__ . '/risk_utils.php';
+        require_once __DIR__ . '/cluster_lib.php';
+        require_once __DIR__ . '/inspector_notif_lib.php';
 
-        // Check if already sent today
         $today = date('Y-m-d');
-        $stmt = $db->prepare("SELECT COUNT(*) as cnt FROM notification_log WHERE DATE(sent_at) = ? AND status = 'sent' AND notification_type = 'compliance_alert'");
-        $stmt->execute([$today]);
-        if ($stmt->fetch()['cnt'] > 0 && !isset($_GET['force'])) {
-            jsonResponse(true, ['sent' => 0, 'skipped' => true, 'message' => 'Compliance alerts already sent today.']);
+        $force = isset($_GET['force']) && $_GET['force'] === '1';
+
+        if (!$force) {
+            $stmt = $db->prepare("SELECT COUNT(*) as cnt FROM notification_log WHERE DATE(sent_at) = ? AND status = 'sent' AND notification_type = 'compliance_alert'");
+            $stmt->execute([$today]);
+            if ($stmt->fetch()['cnt'] > 0) {
+                jsonResponse(true, ['sent' => 0, 'skipped' => true], 'Compliance alerts already sent today.');
+            }
         }
 
-        // Get admin email
-        $adminStmt = $db->query("SELECT email FROM users WHERE role = 'admin' AND email IS NOT NULL AND email != '' LIMIT 1");
-        $admin = $adminStmt->fetch();
-        if (!$admin) {
-            errorResponse('No admin email configured.', 400);
+        ensureClusterTables($db);
+        $ownersMap = clusterOwners($db);
+        $archivedIndex = getArchivedEstablishmentIndex($db);
+
+        // Build lookup of real inspectors from inspector_accounts
+        $inspRows = $db->query("SELECT full_name, username, email FROM inspector_accounts ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+        $inspectorsByKey = [];
+        foreach ($inspRows as $ir) {
+            $full = trim((string)($ir['full_name'] ?? ''));
+            $user = trim((string)($ir['username'] ?? ''));
+            if ($full === '') continue;
+            $entry = ['full_name' => $full, 'username' => $user, 'email' => trim((string)($ir['email'] ?? ''))];
+            $inspectorsByKey[strtolower($full)] = $entry;
+            if ($user !== '') $inspectorsByKey[strtolower($user)] = $entry;
+            $first = strtolower(explode(' ', $full)[0] ?? '');
+            if ($first !== '' && !isset($inspectorsByKey[$first])) $inspectorsByKey[$first] = $entry;
+        }
+        if (isset($inspectorsByKey['rizaldy a. ramos'])) {
+            $inspectorsByKey['rizaldy'] = $inspectorsByKey['rizaldy a. ramos'];
+            $inspectorsByKey['zaldy'] = $inspectorsByKey['rizaldy a. ramos'];
         }
 
-        // Find HIGH-risk establishments
-        $records = $db->query("SELECT * FROM sanitary_records ORDER BY created_at DESC")->fetchAll();
-        $liveInspections = $db->query("SELECT * FROM inspection_reports ORDER BY report_date ASC")->fetchAll();
-        $historyInspections = $db->query("SELECT * FROM inspection_history ORDER BY report_date ASC")->fetchAll();
+        $records = $db->query("SELECT * FROM sanitary_records ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+        $liveRaw = $db->query("SELECT * FROM inspection_reports ORDER BY report_date ASC")->fetchAll(PDO::FETCH_ASSOC);
+        $histRaw = $db->query("SELECT * FROM inspection_history ORDER BY report_date ASC")->fetchAll(PDO::FETCH_ASSOC);
+
+        $liveInspections = array_map(fn($r) => decryptRow('inspection_reports', $r), $liveRaw);
+        $historyInspections = array_map(fn($r) => decryptRow('inspection_history', $r), $histRaw);
         $allInspections = array_merge($liveInspections, $historyInspections);
 
-        $highRiskItems = [];
-        $violationThresholdItems = [];
+        $inspectorBuckets = [];
         $seen = [];
 
         foreach ($records as $record) {
-            $name = $record['business_name'];
-            if (isset($seen[$name])) continue;
-            $seen[$name] = true;
+            $record = decryptRow('sanitary_records', $record);
+            $name = trim((string)($record['business_name'] ?? ''));
+            $permit = trim((string)($record['permit_no'] ?? ''));
+            $recId = (int)($record['id'] ?? 0);
+            if ($name === '' || isEstablishmentArchived($name, $permit, $archivedIndex, $recId)) continue;
+            if (isset($seen[strtolower($name)])) continue;
+            $seen[strtolower($name)] = true;
 
-            $myInspections = array_filter($allInspections, function($i) use ($name) {
+            $myInspections = array_values(array_filter($allInspections, function ($i) use ($name) {
                 $estab = $i['establishment'] ?? $i['location'] ?? '';
                 return matchEstablishment($estab, $name);
-            });
+            }));
+            if (empty($myInspections)) continue;
 
-            if (count($myInspections) === 0) continue;
+            // Find latest live inspection report for deadline/complied check
+            $liveMatches = array_values(array_filter($liveInspections, function ($i) use ($name) {
+                return matchEstablishment($i['establishment'] ?? $i['location'] ?? '', $name);
+            }));
+            $latestLive = !empty($liveMatches) ? end($liveMatches) : null;
 
             $sanitaryRecord = [
-                'remarks' => $record['remarks'] ?? '',
-                'result_xray' => $record['result_xray'] ?? null,
-                'result_stool' => $record['result_stool'] ?? null,
+                'remarks'       => $record['remarks'] ?? '',
+                'result_xray'   => $record['result_xray'] ?? null,
+                'result_stool'  => $record['result_stool'] ?? null,
                 'business_type' => $record['business_type'] ?? 'Other',
             ];
-            $scored = calculateRiskScore($name, array_values($myInspections), $sanitaryRecord);
+            $scored = calculateRiskScore($name, $myInspections, $sanitaryRecord);
 
-            if (($scored['riskLevel'] ?? '') === 'HIGH') {
-                $openLabels = implode(', ', array_column($scored['matchedViolations'] ?? [], 'label'));
-                $openPart = $openLabels !== '' ? " — open: {$openLabels}" : '';
-                $highRiskItems[] = "{$name}{$openPart} (Risk: HIGH, Barangay: " . ($record['barangay'] ?? 'N/A') . ")";
+            $riskLevel = $scored['riskLevel'] ?? 'LOW';
+            $merits = (int)($scored['merits'] ?? $scored['totalScore'] ?? 100);
+            $openViolations = $scored['matchedViolations'] ?? [];
+            $violationCount = (int)($scored['openViolationCount'] ?? count($openViolations));
+            $latestNonComplied = $latestLive && empty($latestLive['complied']);
+
+            if ($riskLevel !== 'HIGH' && $violationCount === 0 && !$latestNonComplied) {
+                continue;
             }
 
-            $violationCount = $scored['openViolationCount'] ?? count($scored['matchedViolations'] ?? []);
-            if ($violationCount >= 3) {
-                $violationThresholdItems[] = "{$name} — {$violationCount} open violation(s) on record";
+            // Determine responsible inspector via barangay cluster first, else latest inspection inspector
+            $barangay = trim((string)($record['barangay'] ?? ($latestLive['location'] ?? '')));
+            $assignedEntry = null;
+            if ($barangay !== '') {
+                $clusterN = fixedClusterForBarangay($barangay, $db);
+                if ($clusterN && !empty($ownersMap[$clusterN])) {
+                    $assignedEntry = $inspectorsByKey[strtolower(trim($ownersMap[$clusterN]))] ?? null;
+                }
             }
+            if (!$assignedEntry && $latestLive && !empty($latestLive['inspector_name'])) {
+                $cand = strtolower(trim((string)$latestLive['inspector_name']));
+                if (!in_array($cand, ['admin', 'system', ''], true) && isset($inspectorsByKey[$cand])) {
+                    $assignedEntry = $inspectorsByKey[$cand];
+                }
+            }
+            if (!$assignedEntry) continue;
+
+            $deadline = trim((string)($latestLive['compliance_deadline'] ?? ''));
+            $overdueDays = 0;
+            if ($deadline !== '' && $deadline < $today) {
+                $overdueDays = (int)(new DateTime($today))->diff(new DateTime($deadline))->days;
+            }
+
+            $key = strtolower($assignedEntry['full_name']);
+            if (!isset($inspectorBuckets[$key])) {
+                $inspectorBuckets[$key] = ['inspector' => $assignedEntry, 'items' => []];
+            }
+            $inspectorBuckets[$key]['items'][] = [
+                'name'          => $name,
+                'barangay'      => $barangay !== '' ? $barangay : 'N/A',
+                'riskLevel'     => $riskLevel,
+                'merits'        => $merits,
+                'openCount'     => $violationCount,
+                'openLabels'    => array_column($openViolations, 'label'),
+                'deadline'      => $deadline,
+                'overdueDays'   => $overdueDays,
+            ];
         }
 
-        if (empty($highRiskItems) && empty($violationThresholdItems)) {
-            jsonResponse(true, ['sent' => 0, 'message' => 'No compliance issues to report.']);
+        if (empty($inspectorBuckets)) {
+            jsonResponse(true, ['sent' => 0, 'notifications' => 0], 'No open compliance alerts for inspectors right now.');
         }
 
-        // Build and send email
-        $mail = new PHPMailer(true);
-        try {
-            $mail->isSMTP();
-            $mail->Host = MAIL_HOST;
-            $mail->SMTPAuth = true;
-            $mail->Username = MAIL_USERNAME;
-            $mail->Password = MAIL_PASSWORD;
-            $mail->SMTPSecure = 'tls';
-            $mail->Port = MAIL_PORT;
-            $mail->setFrom(MAIL_FROM, MAIL_FROMNAME);
-            $mail->CharSet = 'UTF-8';
-            $mail->addAddress($admin['email']);
-            $mail->Subject = 'TayabasCare - Daily Compliance Alert (' . date('M j, Y') . ')';
+        $emailsSent = 0;
+        $emailsFailed = 0;
+        $notifsCreated = 0;
+        $errors = [];
 
-            $content = '<p style="margin:0 0 16px 0;">Dear <strong>City Health Officer</strong>,</p>'
-                . '<p style="margin:0 0 20px 0;">This is your daily compliance alert from TayabasCare.</p>';
+        foreach ($inspectorBuckets as $bucket) {
+            $insp = $bucket['inspector'];
+            $items = $bucket['items'];
+            $cnt = count($items);
+            $highCnt = count(array_filter($items, fn($x) => $x['riskLevel'] === 'HIGH'));
 
-            if (!empty($highRiskItems)) {
-                $content .= '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px 0;">'
-                    . '<tr><td style="background-color:#fef2f2;border-left:4px solid #dc2626;padding:12px 16px;border-radius:0 6px 6px 0;">'
-                    . '<span style="font-size:15px;font-weight:700;color:#991b1b;">&#9888; High-Risk Establishments (' . count($highRiskItems) . ')</span>'
-                    . '</td></tr></table>'
+            $namesPreview = implode(', ', array_slice(array_column($items, 'name'), 0, 3));
+            if ($cnt > 3) $namesPreview .= ' +' . ($cnt - 3) . ' more';
+
+            $notifTitle = $highCnt > 0
+                ? "High-Risk & Compliance Alert ({$cnt})"
+                : "Compliance Follow-Up Alert ({$cnt})";
+            $notifMsg = "Establishments needing compliance action: {$namesPreview}. Please check email or Reports for details.";
+
+            $nid = createInspectorNotification(
+                $db,
+                $insp['full_name'],
+                'compliance_alert',
+                '',
+                $notifTitle,
+                $notifMsg,
+                $today
+            );
+            if ($nid) $notifsCreated++;
+
+            if ($insp['email'] === '' || !filter_var($insp['email'], FILTER_VALIDATE_EMAIL)) {
+                $emailsFailed++;
+                $errors[] = "{$insp['full_name']}: No valid email configured";
+                continue;
+            }
+
+            $mail = new PHPMailer(true);
+            try {
+                $mail->isSMTP();
+                $mail->Host = MAIL_HOST;
+                $mail->SMTPAuth = true;
+                $mail->Username = MAIL_USERNAME;
+                $mail->Password = MAIL_PASSWORD;
+                $mail->SMTPSecure = 'tls';
+                $mail->Port = MAIL_PORT;
+                $mail->setFrom(MAIL_FROM, MAIL_FROMNAME);
+                $mail->CharSet = 'UTF-8';
+                $mail->addAddress($insp['email'], $insp['full_name']);
+                $mail->Subject = 'TayabasCare - Compliance Alert (' . $cnt . ' Establishment' . ($cnt > 1 ? 's' : '') . ' · ' . date('M j, Y') . ')';
+
+                $content = '<p style="margin:0 0 16px 0;">Dear <strong>' . htmlspecialchars($insp['full_name']) . '</strong>,</p>'
+                    . '<p style="margin:0 0 20px 0;">The following establishment' . ($cnt > 1 ? 's in your assigned area require' : ' in your assigned area requires') . ' compliance attention or follow-up inspection:</p>'
                     . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px 0;">';
-                foreach ($highRiskItems as $item) {
-                    $content .= emailListItem($item);
+
+                $altLines = [];
+                foreach ($items as $it) {
+                    $statusParts = ["Risk: {$it['riskLevel']} ({$it['merits']}/100 merits)"];
+                    if ($it['openCount'] > 0) {
+                        $labels = !empty($it['openLabels']) ? ' — ' . implode(', ', array_slice($it['openLabels'], 0, 3)) : '';
+                        $statusParts[] = "{$it['openCount']} open violation(s){$labels}";
+                    }
+                    if ($it['overdueDays'] > 0) {
+                        $statusParts[] = "Overdue by {$it['overdueDays']} day(s) (Deadline: {$it['deadline']})";
+                    } elseif ($it['deadline'] !== '') {
+                        $statusParts[] = "Deadline: {$it['deadline']}";
+                    }
+                    $summaryText = "{$it['name']} (Brgy. {$it['barangay']}) — " . implode(' | ', $statusParts);
+                    $content .= emailListItem($summaryText);
+                    $altLines[] = "  - {$summaryText}";
                 }
                 $content .= '</table>'
-                    . '<p style="margin:0 0 20px 0;font-size:14px;color:#dc2626;font-weight:600;">These establishments require priority inspection.</p>';
+                    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0;">'
+                    . '<tr><td style="background-color:#fef2f2;border-left:4px solid #dc2626;border-radius:0 8px 8px 0;padding:12px 16px;font-size:14px;color:#991b1b;">'
+                    . 'Please log in to <strong>TayabasCare</strong> to conduct follow-up or update compliance status.'
+                    . '</td></tr></table>';
+
+                $altBody = "Dear {$insp['full_name']},\n\n"
+                    . "Establishments in your assigned area requiring compliance attention:\n\n"
+                    . implode("\n", $altLines) . "\n\n"
+                    . "Please log in to TayabasCare for full details.\n\n- TayabasCare System";
+
+                $mail->isHTML(true);
+                $mail->Body = renderEmailTemplate('Compliance Alert Notice', $content, '#dc2626');
+                $mail->AltBody = $altBody;
+                $mail->send();
+                $emailsSent++;
+
+                $logStmt = $db->prepare("INSERT INTO notification_log (inspector_name, email, status, notification_type) VALUES (?, ?, 'sent', 'compliance_alert')");
+                $logStmt->execute([$insp['full_name'], $insp['email']]);
+            } catch (Exception $e) {
+                $emailsFailed++;
+                $errMsg = $e->getMessage();
+                $errors[] = "{$insp['full_name']}: {$errMsg}";
+                $logStmt = $db->prepare("INSERT INTO notification_log (inspector_name, email, status, error_message, notification_type) VALUES (?, ?, 'failed', ?, 'compliance_alert')");
+                $logStmt->execute([$insp['full_name'], $insp['email'], $errMsg]);
             }
-
-            if (!empty($violationThresholdItems)) {
-                $content .= '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px 0;">'
-                    . '<tr><td style="background-color:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;border-radius:0 6px 6px 0;">'
-                    . '<span style="font-size:15px;font-weight:700;color:#92400e;">&#9888; Violation Threshold Alerts (' . count($violationThresholdItems) . ')</span>'
-                    . '</td></tr></table>'
-                    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px 0;">';
-                foreach ($violationThresholdItems as $item) {
-                    $content .= emailListItem($item);
-                }
-                $content .= '</table>'
-                    . '<p style="margin:0 0 20px 0;font-size:14px;color:#92400e;font-weight:600;">These establishments have 3+ violations and need corrective action.</p>';
-            }
-
-            $content .= '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0;">'
-                . '<tr><td style="background-color:#eff6ff;border-radius:8px;padding:14px 18px;font-size:14px;color:#1e40af;">'
-                . '&#128200; Please review these in the <strong>TayabasCare Dashboard</strong> for full details and action items.'
-                . '</td></tr></table>';
-
-            $altBody = "Dear City Health Officer,\n\nThis is the daily compliance alert from TayabasCare.\n\n";
-            if (!empty($highRiskItems)) {
-                $altBody .= "=== HIGH-RISK ESTABLISHMENTS (" . count($highRiskItems) . ") ===\n";
-                foreach ($highRiskItems as $item) $altBody .= "  - {$item}\n";
-                $altBody .= "\nThese establishments require priority inspection.\n\n";
-            }
-            if (!empty($violationThresholdItems)) {
-                $altBody .= "=== VIOLATION THRESHOLD ALERTS (" . count($violationThresholdItems) . ") ===\n";
-                foreach ($violationThresholdItems as $item) $altBody .= "  - {$item}\n";
-                $altBody .= "\nThese establishments have 3+ violations and need corrective action.\n\n";
-            }
-            $altBody .= "Please review these in the TayabasCare dashboard.\n\n- TayabasCare System";
-
-            $mail->isHTML(true);
-            $mail->Body = renderEmailTemplate('Daily Compliance Alert', $content, '#dc2626');
-            $mail->AltBody = $altBody;
-            $mail->send();
-
-            $logStmt = $db->prepare("INSERT INTO notification_log (inspector_name, email, status, notification_type) VALUES ('Admin', ?, 'sent', 'compliance_alert')");
-            $logStmt->execute([$admin['email']]);
-
-            jsonResponse(true, ['sent' => 1, 'highRisk' => count($highRiskItems), 'violationAlerts' => count($violationThresholdItems)], 'Compliance alert sent to admin.');
-        } catch (Exception $e) {
-            $logStmt = $db->prepare("INSERT INTO notification_log (inspector_name, email, status, error_message, notification_type) VALUES ('Admin', ?, 'failed', ?, 'compliance_alert')");
-            $logStmt->execute([$admin['email'], $e->getMessage()]);
-            errorResponse('Failed to send notification. Please try again.', 500);
         }
+
+        $totalInsp = count($inspectorBuckets);
+        $summaryMsg = "Sent compliance alerts to {$totalInsp} inspector(s) ({$emailsSent} email(s), {$notifsCreated} notification(s))" . ($emailsFailed > 0 ? ", {$emailsFailed} email failed" : '') . ".";
+        jsonResponse(true, [
+            'sent'               => $emailsSent,
+            'failed'             => $emailsFailed,
+            'notifications'      => $notifsCreated,
+            'inspectorsNotified' => $totalInsp,
+            'errors'             => $errors
+        ], $summaryMsg);
     }
 
     // ---- GET ?action=send_followup_reminders: Email inspectors about overdue deadlines ----

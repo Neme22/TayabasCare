@@ -62,6 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $schedDate     = trim($input['schedDate'] ?? '');
     $schedDatesRaw = $input['schedDates'] ?? null;
     $dutyType      = trim($input['dutyType'] ?? ($input['duty_type'] ?? ''));
+    $establishment = trim($input['establishment'] ?? '');
     $notes         = trim($input['notes'] ?? '');
     $emailType     = trim($input['type'] ?? 'assigned'); // 'assigned' or 'reschedule'
 
@@ -127,12 +128,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             . ($countDays > 1 ? ' for <strong>' . $countDays . ' days</strong>.' : '.');
     } else {
         $accentColor = '#1e40af';
-        $title = 'New Inspection Schedule';
-        $subject = 'TayabasCare - New Inspection Schedule Assigned';
-        $intro = 'You have been assigned a new inspection schedule.';
+        $title = $establishment !== '' ? 'Re-inspection / Inspection Schedule' : 'New Inspection Schedule';
+        $subject = $establishment !== ''
+            ? 'TayabasCare - Inspection Scheduled: ' . $establishment
+            : 'TayabasCare - New Inspection Schedule Assigned';
+        $intro = $establishment !== ''
+            ? 'You have been scheduled to inspect <strong>' . htmlspecialchars($establishment) . '</strong>.'
+            : 'You have been assigned a new inspection schedule.';
     }
 
     $infoRowsHtml = '';
+    if ($establishment !== '') {
+        $infoRowsHtml .= emailInfoRow('Establishment', $establishment);
+    }
     if ($dutyType !== '') {
         $infoRowsHtml .= emailInfoRow('Duty Assignment', $dutyType . ' Duty');
     }
@@ -168,6 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         : (($emailType === 'reschedule' ? "New Date" : "Scheduled Date") . ": " . $formattedDates[0]);
 
     $altBody = "Dear $recipientName,\n\n" . strip_tags($intro) . "\n\n"
+        . ($establishment !== '' ? "Establishment: $establishment\n" : '')
         . ($dutyType !== '' ? "Duty Assignment: $dutyType Duty\n" : '')
         . $altDates . "\n"
         . ($notes !== '' ? "Notes: $notes\n" : '')
