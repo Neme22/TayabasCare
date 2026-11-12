@@ -676,55 +676,8 @@ const Dashboard = {
             const records = result.success ? (result.data || []) : [];
             document.getElementById('totalSanitary').textContent = records.length;
 
-            let highCount = 0, modCount = 0, lowCount = 0, pendingCount = 0;
-            records.forEach(record => {
-                const ai = getAdminRiskForEstablishment(record.businessName);
-                if (!ai)                             pendingCount++;
-                else if (ai.riskLevel === 'HIGH')    highCount++;
-                else if (ai.riskLevel === 'MODERATE') modCount++;
-                else                                 lowCount++;
-            });
-
-            const highEl    = document.getElementById('riskHighCount');
-            const modEl     = document.getElementById('riskModCount');
-            const lowEl     = document.getElementById('riskLowCount');
-            const pendingEl = document.getElementById('riskPendingCount');
-            if (highEl)    highEl.textContent    = highCount;
-            if (modEl)     modEl.textContent     = modCount;
-            if (lowEl)     lowEl.textContent     = lowCount;
-            if (pendingEl) pendingEl.textContent = pendingCount;
-
-            const totalHighStat = document.getElementById('totalHighRisk');
-            if (totalHighStat) {
-                totalHighStat.textContent = highCount;
-                totalHighStat.style.color = highCount > 0 ? '#dc2626' : '#10b981';
-            }
-
-            // Draw risk doughnut chart
-            const riskCtx = document.getElementById('riskChart');
-            if (riskCtx) {
-                if (riskChartInstance) riskChartInstance.destroy();
-                riskChartInstance = new Chart(riskCtx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: ['High Risk', 'Moderate Risk', 'Low Risk', 'Not Analyzed'],
-                        datasets: [{
-                            data: [highCount, modCount, lowCount, pendingCount],
-                            backgroundColor: ['#ef4444', '#f59e0b', '#10b981', '#9ca3af'],
-                            borderWidth: 2,
-                            borderColor: '#fff'
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false }
-                        },
-                        cutout: '65%'
-                    }
-                });
-            }
+            // Render risk assessment summary chart & high-risk establishment count using actual establishment predictions
+            Dashboard.renderRiskSummaryChart(records);
 
             // Draw records overview chart using latest counts
             Dashboard.drawRecordsChart();
@@ -732,6 +685,7 @@ const Dashboard = {
         })
         .catch(() => {
             document.getElementById('totalSanitary').textContent = 0;
+            Dashboard.renderRiskSummaryChart([]);
         });
 
         fetch(`${API_BASE_URL}/burial.php`)
@@ -758,6 +712,86 @@ const Dashboard = {
 
         // Render High Risk Establishments dashboard section
         Dashboard.renderHighRiskEstablishments();
+    },
+
+    renderRiskSummaryChart: async (records = []) => {
+        // Ensure prediction results are loaded
+        if (!PredictionEngine.results || PredictionEngine.results.length === 0) {
+            try {
+                const rResp = await fetch(`${API_BASE_URL}/predict.php`, { method: 'GET' });
+                const rJson = await rResp.json();
+                if (rJson.success && Array.isArray(rJson.data)) {
+                    PredictionEngine.results = rJson.data;
+                }
+            } catch (e) {
+                console.warn('Could not fetch predictions for risk summary chart:', e);
+            }
+        }
+
+        const predResults = PredictionEngine.results || [];
+        const highCount = predResults.filter(r => r.riskLevel === 'HIGH').length;
+        const modCount  = predResults.filter(r => r.riskLevel === 'MODERATE').length;
+        const lowCount  = predResults.filter(r => r.riskLevel === 'LOW').length;
+
+        // Pending count: unique non-archived establishment names in sanitary records that are not in predictions
+        const evaluatedNames = new Set(predResults.map(r => (r.businessName || '').toLowerCase().trim()));
+        const seenSanitary = new Set();
+        let pendingCount = 0;
+        records.forEach(record => {
+            const name = (record.businessName || '').toLowerCase().trim();
+            if (!name || seenSanitary.has(name)) return;
+            seenSanitary.add(name);
+            if (!evaluatedNames.has(name)) {
+                pendingCount++;
+            }
+        });
+
+        const highEl    = document.getElementById('riskHighCount');
+        const modEl     = document.getElementById('riskModCount');
+        const lowEl     = document.getElementById('riskLowCount');
+        const pendingEl = document.getElementById('riskPendingCount');
+        if (highEl)    highEl.textContent    = highCount;
+        if (modEl)     modEl.textContent     = modCount;
+        if (lowEl)     lowEl.textContent     = lowCount;
+        if (pendingEl) pendingEl.textContent = pendingCount;
+
+        const totalHighStat = document.getElementById('totalHighRisk');
+        if (totalHighStat) {
+            totalHighStat.textContent = highCount;
+            totalHighStat.style.color = highCount > 0 ? '#dc2626' : '#10b981';
+        }
+
+        const badge = document.getElementById('predHighBadge');
+        if (badge) {
+            badge.textContent = highCount;
+            badge.style.display = highCount > 0 ? 'inline-block' : 'none';
+        }
+
+        // Draw risk doughnut chart
+        const riskCtx = document.getElementById('riskChart');
+        if (riskCtx) {
+            if (riskChartInstance) riskChartInstance.destroy();
+            riskChartInstance = new Chart(riskCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['High Risk', 'Moderate Risk', 'Low Risk', 'Not Analyzed'],
+                    datasets: [{
+                        data: [highCount, modCount, lowCount, pendingCount],
+                        backgroundColor: ['#ef4444', '#f59e0b', '#10b981', '#9ca3af'],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    cutout: '65%'
+                }
+            });
+        }
     },
 
     drawMonthlyChart: (reports) => {
@@ -5105,6 +5139,14 @@ async function initApp() {
         const riskJson = await riskResp.json();
         if (riskJson.success && Array.isArray(riskJson.data)) {
             PredictionEngine.results = riskJson.data;
+            const predHighCount = riskJson.data.filter(r => r.riskLevel === 'HIGH').length;
+            const badge = document.getElementById('predHighBadge');
+            if (badge) { badge.textContent = predHighCount; badge.style.display = predHighCount > 0 ? 'inline-block' : 'none'; }
+            const totalHighStat = document.getElementById('totalHighRisk');
+            if (totalHighStat) {
+                totalHighStat.textContent = predHighCount;
+                totalHighStat.style.color = predHighCount > 0 ? '#dc2626' : '#10b981';
+            }
         }
     } catch(e) {
         console.warn('Could not pre-fetch risk data:', e);
@@ -8066,9 +8108,14 @@ const PredictionEngine = {
             const badge = document.getElementById('predHighBadge');
             if (badge) { badge.textContent = highCount; badge.style.display = highCount > 0 ? 'inline-block' : 'none'; }
 
-            // Keep Dashboard high risk widget in sync
-            if (typeof Dashboard !== 'undefined' && Dashboard.renderHighRiskEstablishments) {
-                Dashboard.renderHighRiskEstablishments();
+            // Keep Dashboard high risk widget & risk chart in sync
+            if (typeof Dashboard !== 'undefined') {
+                if (Dashboard.renderHighRiskEstablishments) {
+                    Dashboard.renderHighRiskEstablishments();
+                }
+                if (Dashboard.renderRiskSummaryChart) {
+                    Dashboard.renderRiskSummaryChart(SanitaryManager.records || []);
+                }
             }
 
         } catch (err) {
