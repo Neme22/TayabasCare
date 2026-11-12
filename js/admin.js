@@ -5079,12 +5079,14 @@ async function initApp() {
     // Initialize concurrent login session guard
     SessionGuard.init();
 
-    // Update header with actual username
+    // Update header with actual username (capitalize 'admin' -> 'Admin') and load profile avatar
+    const rawSavedName = localStorage.getItem('adminDisplayName') || sessData?.data?.fullName || sessData?.data?.username || 'Admin';
+    const initialDisplayName = formatAdminDisplayName(rawSavedName);
     const usernameDisplay = document.getElementById('admin-username-display');
     if (usernameDisplay && sessData && sessData.data) {
-        const savedName = localStorage.getItem('adminDisplayName') || sessData.data.fullName || sessData.data.username || 'Admin';
-        usernameDisplay.textContent = savedName;
+        usernameDisplay.textContent = initialDisplayName;
     }
+    loadAdminProfileAvatar(initialDisplayName);
     
     // Pre-fetch inspection reports from DB BEFORE drawing dashboard charts
     try {
@@ -5668,10 +5670,154 @@ function handleLogout() {
 })();
 
 // Profile Modal Functions
+let _adminProfileAvatarUrl = null;
+
+function formatAdminDisplayName(raw) {
+    const s = String(raw || '').trim();
+    if (!s || s.toLowerCase() === 'admin') return 'Admin';
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function buildAdminFallbackAvatar(name) {
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Admin')}&background=1e40af&color=fff&size=200`;
+}
+
+function showAdminProfileError(msg) {
+    const box = document.getElementById('admin-profile-error');
+    if (!box) return;
+    if (!msg) {
+        box.style.display = 'none';
+        box.innerHTML = '';
+        return;
+    }
+    box.style.display = 'flex';
+    box.innerHTML = `<i class="bi bi-exclamation-triangle-fill"></i><span>${Utils.esc(msg)}</span>`;
+}
+
+function applyAdminAvatarUI(avatarUrl, displayName) {
+    const fallback = buildAdminFallbackAvatar(displayName);
+    const resolved = avatarUrl || fallback;
+    ['profile-avatar', 'admin-navbar-avatar'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.onerror = function() {
+            this.onerror = null;
+            this.src = fallback;
+        };
+        el.src = resolved;
+    });
+    const removeBtn = document.getElementById('admin-avatar-remove-btn');
+    if (removeBtn) {
+        removeBtn.classList.toggle('hidden', !avatarUrl);
+    }
+}
+
+async function loadAdminProfileAvatar(displayNameFallback) {
+    try {
+        const resp = await fetch(`${API_BASE_URL}/profile.php?action=me`);
+        const json = await resp.json();
+        if (json.success && json.data) {
+            const d = json.data;
+            _adminProfileAvatarUrl = d.hasAvatar ? d.avatarUrl : null;
+            const resolvedName = formatAdminDisplayName(localStorage.getItem('adminDisplayName') || d.fullName || d.username || displayNameFallback || 'Admin');
+            const usernameDisplay = document.getElementById('admin-username-display');
+            if (usernameDisplay) usernameDisplay.textContent = resolvedName;
+            applyAdminAvatarUI(_adminProfileAvatarUrl, resolvedName);
+            return d;
+        }
+    } catch (e) {
+        applyAdminAvatarUI(null, displayNameFallback || 'Admin');
+    }
+    return null;
+}
+
+async function handleAdminAvatarSelect(event) {
+    const input = event?.target;
+    const file = input?.files?.[0];
+    if (!file) return;
+    showAdminProfileError('');
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+        showAdminProfileError('Unsupported image format. Please choose JPG, PNG, WebP, or GIF.');
+        input.value = '';
+        return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+        showAdminProfileError('Image size must be 2 MB or less.');
+        input.value = '';
+        return;
+    }
+
+    const uploadBtn = document.getElementById('admin-avatar-cam-btn');
+    const origHTML = uploadBtn ? uploadBtn.innerHTML : '';
+    if (uploadBtn) {
+        uploadBtn.disabled = true;
+        uploadBtn.innerHTML = '<span class="loading loading-spinner loading-xs"></span>';
+    }
+
+    try {
+        const fd = new FormData();
+        fd.append('action', 'upload_avatar');
+        fd.append('avatar', file);
+        const resp = await fetch(`${API_BASE_URL}/profile.php`, {
+            method: 'POST',
+            body: fd
+        });
+        const json = await resp.json();
+        if (!json.success) {
+            showAdminProfileError(json.message || 'Failed to upload profile picture.');
+            return;
+        }
+        _adminProfileAvatarUrl = json.data?.avatarUrl || null;
+        const name = formatAdminDisplayName(document.getElementById('profile-fullname')?.value || 'Admin');
+        applyAdminAvatarUI(_adminProfileAvatarUrl, name);
+        Utils.showToast('Profile picture updated successfully.', 'success');
+    } catch (e) {
+        showAdminProfileError('Network error while uploading profile picture.');
+    } finally {
+        if (input) input.value = '';
+        if (uploadBtn) {
+            uploadBtn.disabled = false;
+            uploadBtn.innerHTML = origHTML;
+        }
+    }
+}
+
+async function handleAdminAvatarRemove() {
+    showAdminProfileError('');
+    const removeBtn = document.getElementById('admin-avatar-remove-btn');
+    if (removeBtn) removeBtn.disabled = true;
+    try {
+        const resp = await fetch(`${API_BASE_URL}/profile.php`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'remove_avatar' })
+        });
+        const json = await resp.json();
+        if (!json.success) {
+            showAdminProfileError(json.message || 'Failed to remove profile picture.');
+            return;
+        }
+        _adminProfileAvatarUrl = null;
+        const name = formatAdminDisplayName(document.getElementById('profile-fullname')?.value || 'Admin');
+        applyAdminAvatarUI(null, name);
+        Utils.showToast('Profile picture removed.', 'success');
+    } catch (e) {
+        showAdminProfileError('Network error while removing profile picture.');
+    } finally {
+        if (removeBtn) removeBtn.disabled = false;
+    }
+}
+
 async function openProfileModal() {
     const modal = document.getElementById('profile-modal');
+    showAdminProfileError('');
+    const fileInput = document.getElementById('admin-avatar-input');
+    if (fileInput) fileInput.value = '';
+
     try {
-        const resp = await fetch(`${API_BASE_URL}/auth.php`);
+        const resp = await fetch(`${API_BASE_URL}/profile.php?action=me`);
         const json = await resp.json();
         if (json.success && json.data) {
             const d = json.data;
@@ -5679,16 +5825,13 @@ async function openProfileModal() {
             const usernameEl = document.getElementById('profile-username');
             const roleEl     = document.getElementById('profile-role');
             const emailEl    = document.getElementById('profile-email');
-            const avatarEl   = document.getElementById('profile-avatar');
-            // Use saved display name or session data
-            const savedName = localStorage.getItem('adminDisplayName') || d.fullName || d.username || 'Admin';
+            const savedName  = formatAdminDisplayName(localStorage.getItem('adminDisplayName') || d.fullName || d.username || 'Admin');
             if (fullnameEl) fullnameEl.value = savedName;
             if (usernameEl) usernameEl.value = d.username || 'admin';
             if (roleEl)     roleEl.value = d.role === 'admin' ? 'System Administrator' : d.role;
             if (emailEl)    emailEl.value = d.email || '';
-            if (avatarEl) {
-                avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(savedName)}&background=1e40af&color=fff&size=200`;
-            }
+            _adminProfileAvatarUrl = d.hasAvatar ? d.avatarUrl : null;
+            applyAdminAvatarUI(_adminProfileAvatarUrl, savedName);
         }
     } catch (e) {
         // Show defaults if fetch fails
@@ -5702,17 +5845,21 @@ function closeProfileModal() {
 }
 
 async function handleSaveProfile() {
+    showAdminProfileError('');
     const fullnameEl = document.getElementById('profile-fullname');
     const emailEl    = document.getElementById('profile-email');
-    const name  = (fullnameEl?.value || '').trim();
-    const email = (emailEl?.value || '').trim();
+    const rawName = (fullnameEl?.value || '').trim();
+    const email   = (emailEl?.value || '').trim();
 
-    if (!name) {
-        Utils.showToast('Display name cannot be empty.', 'error');
+    if (!rawName) {
+        showAdminProfileError('Display name cannot be empty.');
         return;
     }
+    const name = formatAdminDisplayName(rawName);
+    if (fullnameEl) fullnameEl.value = name;
+
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        Utils.showToast('Please enter a valid email address.', 'error');
+        showAdminProfileError('Please enter a valid email address.');
         return;
     }
 
@@ -5723,11 +5870,8 @@ async function handleSaveProfile() {
     const usernameDisplay = document.getElementById('admin-username-display');
     if (usernameDisplay) usernameDisplay.textContent = name;
 
-    // Update avatar
-    const avatarEl = document.getElementById('profile-avatar');
-    if (avatarEl) {
-        avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=1e40af&color=fff&size=200`;
-    }
+    // Preserve uploaded photo; otherwise refresh fallback initials
+    applyAdminAvatarUI(_adminProfileAvatarUrl, name);
 
     // Save email if changed
     if (email) {
@@ -5739,11 +5883,11 @@ async function handleSaveProfile() {
             });
             const json = await resp.json();
             if (!json.success) {
-                Utils.showToast(json.message || 'Failed to update email.', 'error');
+                showAdminProfileError(json.message || 'Failed to update email.');
                 return;
             }
         } catch (e) {
-            Utils.showToast('Failed to update email.', 'error');
+            showAdminProfileError('Failed to update email.');
             return;
         }
     }
@@ -5775,11 +5919,71 @@ function closeBackupModal() {
 }
 
 const BackupManager = {
+    _dueTimer: null,
+    _dueBusy: false,
+
+    _idbOpen: () => new Promise((resolve, reject) => {
+        if (!window.indexedDB) { reject(new Error('No IndexedDB')); return; }
+        const req = indexedDB.open('TayabasCareBackupDB', 1);
+        req.onupgradeneeded = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains('handles')) db.createObjectStore('handles');
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    }),
+
+    _idbGetHandle: async () => {
+        try {
+            const db = await BackupManager._idbOpen();
+            return await new Promise((resolve, reject) => {
+                const tx = db.transaction('handles', 'readonly');
+                const req = tx.objectStore('handles').get('backupFileHandle');
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = () => reject(req.error);
+            });
+        } catch (_) {
+            return null;
+        }
+    },
+
+    _idbSaveHandle: async (handle) => {
+        try {
+            const db = await BackupManager._idbOpen();
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction('handles', 'readwrite');
+                const req = tx.objectStore('handles').put(handle, 'backupFileHandle');
+                req.onsuccess = () => resolve();
+                req.onerror = () => reject(req.error);
+            });
+        } catch (_) {}
+    },
+
+    refreshDownloadTargetLabel: async () => {
+        const labelEl = document.getElementById('backup-target-file');
+        const changeBtn = document.getElementById('btnChangeBackupTarget');
+        if (!labelEl) return;
+        if (!('showSaveFilePicker' in window)) {
+            labelEl.textContent = 'Downloads save as tayabascare_db_backup.sql (replace existing file when prompted by browser).';
+            if (changeBtn) changeBtn.style.display = 'none';
+            return;
+        }
+        const handle = await BackupManager._idbGetHandle();
+        if (handle && handle.name) {
+            labelEl.innerHTML = `Linked file: <strong>${Utils.esc(handle.name)}</strong> (future downloads overwrite this file — no duplicates)`;
+            if (changeBtn) changeBtn.style.display = 'inline';
+        } else {
+            labelEl.textContent = 'Local file: Pick a file on first download — future downloads overwrite it automatically.';
+            if (changeBtn) changeBtn.style.display = 'none';
+        }
+    },
+
     load: async () => {
         const tbody = document.getElementById('backupTableBody');
         const status = document.getElementById('backup-status');
         if (status) status.textContent = 'Loading…';
         if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Loading…</td></tr>';
+        BackupManager.refreshDownloadTargetLabel();
         try {
             const r = await fetch(`${API_BASE_URL}/backup.php?action=list`, { credentials: 'include' });
             const j = await r.json();
@@ -5799,6 +6003,7 @@ const BackupManager = {
 
     renderScheduleSummary: () => {
         const sched = (BackupManager._data && BackupManager._data.schedule) || {};
+        const cfg = sched.config || {};
         const fmt = (entry, fallbackKeep) => {
             if (!entry) return `Stored: 0/${fallbackKeep} • Last run: None yet`;
             const count = entry.count || 0;
@@ -5808,10 +6013,120 @@ const BackupManager = {
                 : 'None yet';
             return `Stored: ${count}/${keep} • Last run: ${when}`;
         };
+
+        const wEnabled = document.getElementById('sched-weekly-enabled');
+        const wDay = document.getElementById('sched-weekly-day');
+        const wTime = document.getElementById('sched-weekly-time');
+        const mEnabled = document.getElementById('sched-monthly-enabled');
+        const mDay = document.getElementById('sched-monthly-day');
+        const mTime = document.getElementById('sched-monthly-time');
+
+        if (wEnabled) wEnabled.checked = sched.weekly?.enabled ?? cfg.weeklyEnabled ?? true;
+        if (wDay) wDay.value = String(sched.weekly?.day ?? cfg.weeklyDay ?? 0);
+        if (wTime) wTime.value = sched.weekly?.time ?? cfg.weeklyTime ?? '02:00';
+        if (mEnabled) mEnabled.checked = sched.monthly?.enabled ?? cfg.monthlyEnabled ?? true;
+        if (mDay) mDay.value = String(sched.monthly?.day ?? cfg.monthlyDay ?? 1);
+        if (mTime) mTime.value = sched.monthly?.time ?? cfg.monthlyTime ?? '03:00';
+
+        const wLabelEl = document.getElementById('backup-weekly-label');
+        const mLabelEl = document.getElementById('backup-monthly-label');
+        if (wLabelEl && sched.weekly?.label) wLabelEl.textContent = `${sched.weekly.label} (keeps last ${sched.weekly.keep || 8})`;
+        if (mLabelEl && sched.monthly?.label) mLabelEl.textContent = `${sched.monthly.label} (keeps last ${sched.monthly.keep || 12})`;
+
         const wEl = document.getElementById('backup-weekly-meta');
         const mEl = document.getElementById('backup-monthly-meta');
         if (wEl) wEl.textContent = fmt(sched.weekly, 8);
         if (mEl) mEl.textContent = fmt(sched.monthly, 12);
+    },
+
+    saveSchedule: async () => {
+        const btn = document.getElementById('btnSaveBackupSchedule');
+        const status = document.getElementById('backup-status');
+        const origHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass-split mr-1"></i>Saving…';
+        }
+        try {
+            const token = _csrfToken || await _fetchCsrfToken();
+            const body = new URLSearchParams({
+                action: 'save_schedule',
+                weekly_enabled: document.getElementById('sched-weekly-enabled')?.checked ? '1' : '0',
+                weekly_day: document.getElementById('sched-weekly-day')?.value || '0',
+                weekly_time: document.getElementById('sched-weekly-time')?.value || '02:00',
+                monthly_enabled: document.getElementById('sched-monthly-enabled')?.checked ? '1' : '0',
+                monthly_day: document.getElementById('sched-monthly-day')?.value || '1',
+                monthly_time: document.getElementById('sched-monthly-time')?.value || '03:00'
+            });
+            const r = await fetch(`${API_BASE_URL}/backup.php`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-Token': token || ''
+                },
+                body: body.toString()
+            });
+            const j = await r.json();
+            if (!j.success) throw new Error(j.message || 'Failed to save schedule');
+            BackupManager._data = { ...(BackupManager._data || {}), ...(j.data || {}) };
+            BackupManager.renderScheduleSummary();
+            if (status) status.textContent = 'Auto-backup schedule saved.';
+            Utils.showToast(j.message || 'Auto-backup schedule saved', 'success');
+        } catch (e) {
+            if (status) status.textContent = e.message || 'Failed to save schedule';
+            Utils.showToast(e.message || 'Failed to save schedule', 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+            }
+        }
+    },
+
+    checkDueNow: async () => {
+        if (BackupManager._dueBusy) return;
+        if (!localStorage.getItem('username')) return;
+        BackupManager._dueBusy = true;
+        try {
+            const token = _csrfToken || await _fetchCsrfToken();
+            if (!token) return;
+            const body = new URLSearchParams({ action: 'check_due' });
+            const r = await fetch(`${API_BASE_URL}/backup.php`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-Token': token
+                },
+                body: body.toString()
+            });
+            if (!r.ok) return;
+            const j = await r.json();
+            if (j.success && j.data && Array.isArray(j.data.ran) && j.data.ran.length > 0) {
+                const okItems = j.data.ran.filter(x => !x.error);
+                if (okItems.length > 0) {
+                    const labels = okItems.map(x => x.type).join(' & ');
+                    Utils.showToast(`Scheduled ${labels} database backup completed`, 'success');
+                    const modal = document.getElementById('backup-modal');
+                    if (modal && modal.open) {
+                        BackupManager._data = { ...(BackupManager._data || {}), ...j.data };
+                        BackupManager.renderScheduleSummary();
+                        BackupManager.render();
+                    }
+                }
+            }
+        } catch (_) {
+            // silent background check
+        } finally {
+            BackupManager._dueBusy = false;
+        }
+    },
+
+    startDueWatcher: () => {
+        if (BackupManager._dueTimer) return;
+        setTimeout(() => BackupManager.checkDueNow(), 4000);
+        BackupManager._dueTimer = setInterval(() => BackupManager.checkDueNow(), 60000);
     },
 
     _typeBadgeHtml: (type) => {
@@ -5840,17 +6155,19 @@ const BackupManager = {
                 : Math.max(1, Math.round(d.size / 1024)) + ' KB';
             const type = d.type || (d.file && d.file.includes('_weekly_') ? 'weekly' : (d.file && d.file.includes('_monthly_') ? 'monthly' : 'manual'));
             return `<tr>
-                <td style="font-family:monospace;font-size:12px;word-break:break-all;">${Utils.esc(d.file)}</td>
-                <td>${BackupManager._typeBadgeHtml(type)}</td>
-                <td>${size}</td>
-                <td>${Utils.esc(when)}</td>
-                <td style="white-space:nowrap;">
-                    <button class="btn btn-secondary btn-small" onclick="BackupManager.download('${Utils.esc(d.file)}')" data-testid="download-backup-btn">
-                        <i class="bi bi-download"></i> Download
-                    </button>
-                    <button class="btn btn-danger btn-small" onclick="BackupManager.restore('${Utils.esc(d.file)}')" data-testid="restore-backup-btn">
-                        <i class="bi bi-arrow-counterclockwise"></i> Restore
-                    </button>
+                <td style="font-family:monospace;font-size:12px;white-space:nowrap;">${Utils.esc(d.file)}</td>
+                <td style="white-space:nowrap;">${BackupManager._typeBadgeHtml(type)}</td>
+                <td style="white-space:nowrap;">${size}</td>
+                <td style="white-space:nowrap;font-size:12px;">${Utils.esc(when)}</td>
+                <td style="white-space:nowrap;text-align:right;">
+                    <div style="display:inline-flex;align-items:center;gap:6px;">
+                        <button type="button" class="backup-btn backup-btn--neutral" onclick="BackupManager.download('${Utils.esc(d.file)}')" data-testid="download-backup-btn">
+                            <i class="bi bi-download"></i> Download
+                        </button>
+                        <button type="button" class="backup-btn backup-btn--danger" onclick="BackupManager.restore('${Utils.esc(d.file)}')" data-testid="restore-backup-btn">
+                            <i class="bi bi-arrow-counterclockwise"></i> Restore
+                        </button>
+                    </div>
                 </td>
             </tr>`;
         }).join('');
@@ -5885,15 +6202,95 @@ const BackupManager = {
             if (status) status.textContent = '';
         } finally {
             btnIds.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
-            if (btn) btn.innerHTML = '<i class="bi bi-plus-circle mr-1"></i>Create Backup Now';
+            if (btn) btn.innerHTML = '<i class="bi bi-plus-circle"></i>Create Backup Now';
         }
     },
 
-    download: (file) => {
-        // Browser download (CSRF not required for GET download of own file)
+    _pickTargetHandle: async () => {
+        const handle = await window.showSaveFilePicker({
+            id: 'tayabascare-backup',
+            suggestedName: 'tayabascare_db_backup.sql',
+            types: [{
+                description: 'SQL Database Backup',
+                accept: { 'application/sql': ['.sql'] }
+            }]
+        });
+        await BackupManager._idbSaveHandle(handle);
+        await BackupManager.refreshDownloadTargetLabel();
+        return handle;
+    },
+
+    changeDownloadTarget: async () => {
+        if (!('showSaveFilePicker' in window)) return;
+        try {
+            const handle = await BackupManager._pickTargetHandle();
+            if (handle) Utils.showToast(`Download target set to ${handle.name}`, 'info');
+        } catch (err) {
+            if (err && err.name === 'AbortError') return;
+            Utils.showToast('Could not change download file location', 'error');
+        }
+    },
+
+    downloadLatest: () => {
+        const dumps = (BackupManager._data && BackupManager._data.dumps) || [];
+        if (!dumps.length || !dumps[0].file) {
+            Utils.showToast('No backups available yet — create one first.', 'warning');
+            return;
+        }
+        BackupManager.download(dumps[0].file);
+    },
+
+    download: async (file) => {
+        const status = document.getElementById('backup-status');
+        if ('showSaveFilePicker' in window) {
+            try {
+                let handle = await BackupManager._idbGetHandle();
+                let isUpdate = false;
+                if (handle) {
+                    try {
+                        let perm = await handle.queryPermission({ mode: 'readwrite' });
+                        if (perm !== 'granted') {
+                            perm = await handle.requestPermission({ mode: 'readwrite' });
+                        }
+                        if (perm === 'granted') {
+                            isUpdate = true;
+                        } else {
+                            handle = null;
+                        }
+                    } catch (_) {
+                        handle = null;
+                    }
+                }
+                if (!handle) {
+                    handle = await BackupManager._pickTargetHandle();
+                }
+
+                if (status) status.textContent = `Downloading ${file}…`;
+                const resp = await fetch(`${API_BASE_URL}/backup.php?action=download&file=${encodeURIComponent(file)}`, { credentials: 'include' });
+                if (!resp.ok) throw new Error('Download failed');
+                const blob = await resp.blob();
+
+                const writable = await handle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+
+                await BackupManager.refreshDownloadTargetLabel();
+                const doneMsg = isUpdate
+                    ? `Updated ${handle.name} cleanly (no duplicate file created)`
+                    : `Saved backup to ${handle.name}`;
+                if (status) status.textContent = doneMsg;
+                Utils.showToast(doneMsg, 'success');
+                return;
+            } catch (err) {
+                if (err && err.name === 'AbortError') return;
+                console.warn('File System Access download fallback:', err);
+            }
+        }
+
+        // Standard download fallback using a fixed filename
         const a = document.createElement('a');
-        a.href = `${API_BASE_URL}/backup.php?action=download&file=${encodeURIComponent(file)}`;
-        a.download = file;
+        a.href = `${API_BASE_URL}/backup.php?action=download&file=${encodeURIComponent(file)}&consistent=1`;
+        a.download = 'tayabascare_db_backup.sql';
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -5934,6 +6331,11 @@ const BackupManager = {
         }
     }
 };
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => BackupManager.startDueWatcher());
+} else {
+    BackupManager.startDueWatcher();
+}
 
 // ==================== THEME TOGGLE ====================
 function toggleTheme() {

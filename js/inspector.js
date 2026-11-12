@@ -1009,14 +1009,17 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.getElementById('burial-form').addEventListener('submit', handleBurialSubmit);
     document.getElementById('inspection-form').onsubmit = handleInspectionSubmit;
 
-    // Set welcome name in navbar
+    // Set welcome name in navbar and load profile avatar
     const inspNameDisplay = document.getElementById('insp-username-display');
+    const initialInspName = formatInspDisplayName(
+        localStorage.getItem('inspectorDisplayName') ||
+        localStorage.getItem('inspectorFullName') ||
+        localStorage.getItem('username') || 'Inspector'
+    );
     if (inspNameDisplay) {
-        const savedName = localStorage.getItem('inspectorDisplayName') ||
-            localStorage.getItem('inspectorFullName') ||
-            localStorage.getItem('username') || 'Inspector';
-        inspNameDisplay.textContent = savedName;
+        inspNameDisplay.textContent = initialInspName;
     }
+    loadInspProfileAvatar(initialInspName);
 });
 
 // ==================== MODULE NAVIGATION ====================
@@ -5925,11 +5928,163 @@ window.addEventListener('beforeunload', stopBurialRealtimeClock);
 
 // ==================== PROFILE & SETTINGS FUNCTIONS ====================
 
+let _inspProfileAvatarUrl = null;
+
+function formatInspDisplayName(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return 'Inspector';
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function buildInspFallbackAvatar(name) {
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Sanitary Inspector')}&background=10b981&color=fff&size=200`;
+}
+
+function showInspProfileError(msg) {
+    const box = document.getElementById('profile-form-error');
+    if (!box) return;
+    if (!msg) {
+        box.style.display = 'none';
+        box.innerHTML = '';
+        return;
+    }
+    const safeMsg = typeof esc === 'function' ? esc(msg) : String(msg).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    box.style.display = 'flex';
+    box.innerHTML = `<i class="bi bi-exclamation-triangle-fill"></i><span>${safeMsg}</span>`;
+}
+
+function applyInspAvatarUI(avatarUrl, displayName) {
+    const fallback = buildInspFallbackAvatar(displayName);
+    const resolved = avatarUrl || fallback;
+    ['insp-profile-avatar', 'insp-navbar-avatar'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.onerror = function() {
+            this.onerror = null;
+            this.src = fallback;
+        };
+        el.src = resolved;
+    });
+    const removeBtn = document.getElementById('insp-avatar-remove-btn');
+    if (removeBtn) {
+        removeBtn.classList.toggle('hidden', !avatarUrl);
+    }
+}
+
+async function loadInspProfileAvatar(displayNameFallback) {
+    try {
+        const resp = await fetch(`${API_BASE_URL}/profile.php?action=me`);
+        const json = await resp.json();
+        if (json.success && json.data) {
+            const d = json.data;
+            _inspProfileAvatarUrl = d.hasAvatar ? d.avatarUrl : null;
+            const resolvedName = formatInspDisplayName(
+                localStorage.getItem('inspectorDisplayName') ||
+                d.fullName ||
+                localStorage.getItem('inspectorFullName') ||
+                d.username ||
+                displayNameFallback ||
+                'Inspector'
+            );
+            const nameDisplay = document.getElementById('insp-username-display');
+            if (nameDisplay) nameDisplay.textContent = resolvedName;
+            applyInspAvatarUI(_inspProfileAvatarUrl, resolvedName);
+            return d;
+        }
+    } catch (e) {
+        applyInspAvatarUI(null, displayNameFallback || 'Sanitary Inspector');
+    }
+    return null;
+}
+
+async function handleInspAvatarSelect(event) {
+    const input = event?.target;
+    const file = input?.files?.[0];
+    if (!file) return;
+    showInspProfileError('');
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+        showInspProfileError('Unsupported image format. Please choose JPG, PNG, WebP, or GIF.');
+        input.value = '';
+        return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+        showInspProfileError('Image size must be 2 MB or less.');
+        input.value = '';
+        return;
+    }
+
+    const uploadBtn = document.getElementById('insp-avatar-cam-btn');
+    const origHTML = uploadBtn ? uploadBtn.innerHTML : '';
+    if (uploadBtn) {
+        uploadBtn.disabled = true;
+        uploadBtn.innerHTML = '<span class="loading loading-spinner loading-xs"></span>';
+    }
+
+    try {
+        const fd = new FormData();
+        fd.append('action', 'upload_avatar');
+        fd.append('avatar', file);
+        const resp = await fetch(`${API_BASE_URL}/profile.php`, {
+            method: 'POST',
+            body: fd
+        });
+        const json = await resp.json();
+        if (!json.success) {
+            showInspProfileError(json.message || 'Failed to upload profile picture.');
+            return;
+        }
+        _inspProfileAvatarUrl = json.data?.avatarUrl || null;
+        const name = formatInspDisplayName(document.getElementById('insp-profile-fullname')?.value || 'Sanitary Inspector');
+        applyInspAvatarUI(_inspProfileAvatarUrl, name);
+        showNotification('Profile picture updated successfully.', 'success');
+    } catch (e) {
+        showInspProfileError('Network error while uploading profile picture.');
+    } finally {
+        if (input) input.value = '';
+        if (uploadBtn) {
+            uploadBtn.disabled = false;
+            uploadBtn.innerHTML = origHTML;
+        }
+    }
+}
+
+async function handleInspAvatarRemove() {
+    showInspProfileError('');
+    const removeBtn = document.getElementById('insp-avatar-remove-btn');
+    if (removeBtn) removeBtn.disabled = true;
+    try {
+        const resp = await fetch(`${API_BASE_URL}/profile.php`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'remove_avatar' })
+        });
+        const json = await resp.json();
+        if (!json.success) {
+            showInspProfileError(json.message || 'Failed to remove profile picture.');
+            return;
+        }
+        _inspProfileAvatarUrl = null;
+        const name = formatInspDisplayName(document.getElementById('insp-profile-fullname')?.value || 'Sanitary Inspector');
+        applyInspAvatarUI(null, name);
+        showNotification('Profile picture removed.', 'success');
+    } catch (e) {
+        showInspProfileError('Network error while removing profile picture.');
+    } finally {
+        if (removeBtn) removeBtn.disabled = false;
+    }
+}
+
 // Open Profile Modal
 async function openProfileModal() {
     const modal = document.getElementById('profile-modal');
+    showInspProfileError('');
+    const fileInput = document.getElementById('insp-avatar-input');
+    if (fileInput) fileInput.value = '';
+
     try {
-        const resp = await fetch(`${API_BASE_URL}/auth.php`);
+        const resp = await fetch(`${API_BASE_URL}/profile.php?action=me`);
         const json = await resp.json();
         if (json.success && json.data) {
             const d = json.data;
@@ -5937,31 +6092,28 @@ async function openProfileModal() {
             const usernameEl = document.getElementById('insp-profile-username');
             const emailEl    = document.getElementById('insp-profile-email');
             const roleEl     = document.getElementById('insp-profile-role');
-            const avatarEl   = document.getElementById('insp-profile-avatar');
             if (usernameEl) usernameEl.value = d.username || '';
             if (roleEl)     roleEl.value = 'Sanitary Inspector';
-            // Get full name from session or localStorage
-            let displayName = localStorage.getItem('inspectorDisplayName') || d.fullName || '';
+            if (emailEl && d.email) emailEl.value = d.email;
+            let displayName = formatInspDisplayName(localStorage.getItem('inspectorDisplayName') || d.fullName || '');
             if (fullnameEl) fullnameEl.value = displayName;
-            if (avatarEl && displayName) {
-                avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=10b981&color=fff&size=200`;
-            }
-            // Fetch email from inspector_accounts
-            try {
-                const inspResp = await fetch(`${API_BASE_URL}/inspector.php`);
-                const inspJson = await inspResp.json();
-                if (inspJson.success && Array.isArray(inspJson.data)) {
-                    const me = inspJson.data.find(i => i.username === d.username);
-                    if (me && emailEl) emailEl.value = me.email || '';
-                    // Use server name if no saved display name
-                    if (me && me.fullName && !localStorage.getItem('inspectorDisplayName')) {
-                        if (fullnameEl) fullnameEl.value = me.fullName;
-                        if (avatarEl) {
-                            avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(me.fullName)}&background=10b981&color=fff&size=200`;
+            _inspProfileAvatarUrl = d.hasAvatar ? d.avatarUrl : null;
+            applyInspAvatarUI(_inspProfileAvatarUrl, displayName);
+            // Fetch email fallback from inspector_accounts if still blank
+            if (emailEl && !emailEl.value) {
+                try {
+                    const inspResp = await fetch(`${API_BASE_URL}/inspector.php`);
+                    const inspJson = await inspResp.json();
+                    if (inspJson.success && Array.isArray(inspJson.data)) {
+                        const me = inspJson.data.find(i => i.username === d.username);
+                        if (me && me.email) emailEl.value = me.email;
+                        if (me && me.fullName && !localStorage.getItem('inspectorDisplayName')) {
+                            if (fullnameEl) fullnameEl.value = me.fullName;
+                            applyInspAvatarUI(_inspProfileAvatarUrl, me.fullName);
                         }
                     }
-                }
-            } catch (e2) {}
+                } catch (e2) {}
+            }
         }
     } catch (e) {
         // Show defaults if fetch fails
@@ -5971,13 +6123,16 @@ async function openProfileModal() {
 
 // Save Inspector Profile
 function handleInspSaveProfile() {
+    showInspProfileError('');
     const fullnameEl = document.getElementById('insp-profile-fullname');
-    const name = (fullnameEl?.value || '').trim();
+    const rawName = (fullnameEl?.value || '').trim();
 
-    if (!name) {
-        showNotification('Display name cannot be empty.', 'error');
+    if (!rawName) {
+        showInspProfileError('Display name cannot be empty.');
         return;
     }
+    const name = formatInspDisplayName(rawName);
+    if (fullnameEl) fullnameEl.value = name;
 
     // Save display name to localStorage
     localStorage.setItem('inspectorDisplayName', name);
@@ -5987,11 +6142,8 @@ function handleInspSaveProfile() {
     const nameDisplay = document.getElementById('insp-username-display');
     if (nameDisplay) nameDisplay.textContent = name;
 
-    // Update avatar
-    const avatarEl = document.getElementById('insp-profile-avatar');
-    if (avatarEl) {
-        avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=10b981&color=fff&size=200`;
-    }
+    // Preserve uploaded photo; otherwise refresh fallback initials
+    applyInspAvatarUI(_inspProfileAvatarUrl, name);
 
     showNotification('Profile updated successfully.', 'success');
 }

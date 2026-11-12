@@ -3546,3 +3546,226 @@ body:has(#estabTrendModal) .toast-notification {
         width: 100%;
     }
 }
+
+/* ==================== DATABASE BACKUP MODAL ==================== */
+#backup-modal .modal-box {
+    width: 95% !important;
+    max-width: 940px !important;
+    max-height: 90vh;
+    padding: 0 !important;
+    overflow-y: auto;
+}
+
+#backup-modal .backup-modal-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 9999px;
+    border: none;
+    background: transparent;
+    color: #6b7280;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 15px;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+#backup-modal .backup-modal-close:hover {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+#backup-modal .backup-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    line-height: 1.25;
+    white-space: nowrap;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+#backup-modal .backup-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+#backup-modal .backup-btn--primary {
+    background: #1d4ed8;
+    color: #ffffff;
+}
+#backup-modal .backup-btn--primary:hover:not(:disabled) {
+    background: #1e40af;
+}
+
+#backup-modal .backup-btn--success {
+    background: #059669;
+    color: #ffffff;
+}
+#backup-modal .backup-btn--success:hover:not(:disabled) {
+    background: #047857;
+}
+
+#backup-modal .backup-btn--neutral {
+    background: #ffffff;
+    border-color: #d1d5db;
+    color: #374151;
+}
+#backup-modal .backup-btn--neutral:hover:not(:disabled) {
+    background: #f3f4f6;
+}
+
+#backup-modal .backup-btn--danger {
+    background: #dc2626;
+    color: #ffffff;
+}
+#backup-modal .backup-btn--danger:hover:not(:disabled) {
+    background: #b91c1c;
+}
+
+#backup-modal .backup-table-wrap {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    max-height: 290px;
+    overflow: auto;
+    background: #ffffff;
+}
+
+#backup-modal .data-table th {
+    padding: 10px 12px;
+    font-size: 11px;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    background: #f9fafb;
+    z-index: 1;
+}
+
+#backup-modal .data-table td {
+    padding: 10px 12px;
+    font-size: 13px;
+}
+
+/* ==================== MY PROFILE AVATAR CONTROLS ==================== */
+#profile-modal .profile-avatar-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+#profile-modal .profile-avatar-frame {
+    position: relative;
+    width: 96px;
+    height: 96px;
+}
+
+#profile-modal .profile-avatar-circle {
+    width: 96px;
+    height: 96px;
+    border-radius: 9999px;
+    overflow: hidden;
+    border: 3px solid #1e40af;
+    box-shadow: 0 4px 12px rgba(30, 64, 175, 0.16);
+    background: #eff6ff;
+}
+
+#profile-modal .profile-avatar-circle img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#profile-modal .profile-avatar-cam {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 30px;
+    height: 30px;
+    border-radius: 9999px;
+    background: #1e40af;
+    color: #ffffff;
+    border: 2px solid #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
+    transition: background-color 0.15s ease, transform 0.15s ease;
+    padding: 0;
+}
+
+#profile-modal .profile-avatar-cam:hover {
+    background: #1d4ed8;
+    transform: scale(1.06);
+}
+
+#profile-modal .profile-photo-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+#profile-modal .profile-photo-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #1e293b;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+#profile-modal .profile-photo-btn:hover:not(:disabled) {
+    background: #eff6ff;
+    border-color: #1e40af;
+    color: #1e40af;
+}
+
+#profile-modal .profile-photo-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+#profile-modal .profile-photo-remove-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+    color: #dc2626;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+#profile-modal .profile-photo-remove-btn.hidden {
+    display: none;
+}
+
+#profile-modal .profile-photo-remove-btn:hover:not(:disabled) {
+    background: #fee2e2;
+    border-color: #fca5a5;
+}

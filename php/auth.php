@@ -217,11 +217,18 @@ function checkSession() {
         }
     }
 
+    $sessUsername = (string)($_SESSION['username'] ?? '');
+    $sessRole = (string)($_SESSION['role'] ?? '');
+    $defaultFullName = ($sessRole === 'admin' && strtolower($sessUsername) === 'admin')
+        ? 'Admin'
+        : ($sessUsername !== '' ? ucfirst($sessUsername) : '');
+
     $respData = [
         'user_id'    => $_SESSION['user_id'],
-        'username'   => $_SESSION['username'],
+        'username'   => $sessUsername,
         'email'      => $_SESSION['email'] ?? '',
-        'role'       => $_SESSION['role'],
+        'role'       => $sessRole,
+        'fullName'   => $defaultFullName,
         'csrf_token' => csrfToken()
     ];
     // Release PHP session lock immediately so frequent heartbeat polling never blocks UI or other requests

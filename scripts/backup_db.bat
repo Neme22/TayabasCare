@@ -7,6 +7,10 @@ if "%MODE%"=="" set "MODE=manual"
 set "PHP_BIN=%ROOT%\..\..\php\php.exe"
 if not exist "%PHP_BIN%" set "PHP_BIN=C:\xampp\php\php.exe"
 if exist "%PHP_BIN%" (
+    if /I "%MODE%"=="check" (
+        "%PHP_BIN%" "%ROOT%\php\cron_cli.php" backup check_due
+        exit /b %errorlevel%
+    )
     if /I "%MODE%"=="weekly" (
         "%PHP_BIN%" "%ROOT%\php\cron_cli.php" backup run_weekly
         exit /b %errorlevel%

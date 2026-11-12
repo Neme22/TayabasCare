@@ -2,21 +2,16 @@
 setlocal EnableExtensions
 set "ROOT=%~dp0.."
 
-REM Remove legacy daily task name if present
+REM Remove legacy fixed-time tasks if present
 schtasks /Delete /TN "TayabasCare_DB_Backup" /F >nul 2>&1
+schtasks /Delete /TN "TayabasCare_DB_Backup_Weekly" /F >nul 2>&1
+schtasks /Delete /TN "TayabasCare_DB_Backup_Monthly" /F >nul 2>&1
 
-schtasks /Create /TN "TayabasCare_DB_Backup_Weekly" /TR "\"%ROOT%\scripts\backup_db.bat\" weekly" /SC WEEKLY /D SUN /ST 02:00 /F
+schtasks /Create /TN "TayabasCare_DB_Backup_Schedule" /TR "\"%ROOT%\scripts\backup_db.bat\" check" /SC MINUTE /MO 1 /F
 if errorlevel 1 (
-  echo [FAIL] Run as Administrator to schedule weekly backups.
+  echo [FAIL] Run as Administrator to install the automated backup watcher.
   exit /b 1
 )
 
-schtasks /Create /TN "TayabasCare_DB_Backup_Monthly" /TR "\"%ROOT%\scripts\backup_db.bat\" monthly" /SC MONTHLY /D 1 /ST 03:00 /F
-if errorlevel 1 (
-  echo [FAIL] Run as Administrator to schedule monthly backups.
-  exit /b 1
-)
-
-echo [OK] Weekly backup scheduled: Sundays at 02:00 AM
-echo [OK] Monthly backup scheduled: 1st of every month at 03:00 AM
+echo [OK] Automated backup watcher scheduled (every 1 minute checks your Weekly & Monthly settings in Admin -> Database Backup).
 exit /b 0
