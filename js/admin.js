@@ -7313,11 +7313,9 @@ const ScheduleManager = {
     getStatus: (dueDateStr, markedDone, dutyType = '') => {
         const today = new Date(); today.setHours(0,0,0,0);
         const due   = new Date(String(dueDateStr).slice(0, 10) + 'T00:00:00'); due.setHours(0,0,0,0);
-        if (dutyType) {
-            return due < today ? 'Done' : 'Pending';
-        }
         if (markedDone) return 'Done';
-        return due < today ? 'Overdue' : 'Pending';
+        if (due < today) return 'Done';
+        return 'Pending';
     },
 
     markDone: async (id) => {

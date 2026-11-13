@@ -231,7 +231,7 @@ if ($method === 'GET') {
             $db->prepare(
                 "UPDATE inspection_schedules
                  SET done = 1
-                 WHERE done = 0 AND duty_type IS NOT NULL AND duty_type <> '' AND schedDate < ?"
+                 WHERE done = 0 AND schedDate < ?"
             )->execute([$todayPh]);
             $db->prepare(
                 "UPDATE inspection_schedules
@@ -278,11 +278,7 @@ if ($method === 'GET') {
                 $clusterRule = "establishment IN (SELECT business_name FROM sanitary_records WHERE barangay IN ($ph))";
                 if ($variants) {
                     $namePh = implode(',', array_fill(0, count($variants), '?'));
-                    $where[] = "($clusterRule OR (
-                        (establishment IS NULL OR establishment = '' OR establishment NOT IN
-                            (SELECT business_name FROM sanitary_records WHERE business_name IS NOT NULL AND business_name <> ''))
-                        AND LOWER(inspector_name) IN ($namePh)
-                    ))";
+                    $where[] = "($clusterRule OR LOWER(inspector_name) IN ($namePh))";
                     array_push($params, ...$myBarangays, ...$variants);
                 } else {
                     $where[] = "($clusterRule)";

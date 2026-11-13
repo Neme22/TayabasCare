@@ -125,16 +125,38 @@ switch($method) {
 function getReports() {
     global $db;
     try {
-        // Inspectors only receive reports from their assigned cluster's barangays
+        // Inspectors receive reports from their assigned cluster's barangays OR where they are the inspector
         if (($_SESSION['role'] ?? '') === 'inspector') {
             ensureClusterTables($db);
             $barangays = clusterBarangaysForSession($db);
-            if (!$barangays) {
+            $fullName = sessionInspectorFullName($db);
+            $username = trim($_SESSION['username'] ?? '');
+
+            $whereParts = [];
+            $params = [];
+
+            if (!empty($barangays)) {
+                $ph = implode(',', array_fill(0, count($barangays), '?'));
+                $whereParts[] = "location IN ($ph)";
+                $params = array_merge($params, $barangays);
+            }
+            if ($fullName !== '') {
+                $whereParts[] = "(inspector_name = ? OR inspector_name LIKE ?)";
+                $params[] = $fullName;
+                $params[] = '%' . $fullName . '%';
+            }
+            if ($username !== '' && strcasecmp($username, $fullName) !== 0) {
+                $whereParts[] = "(inspector_name = ? OR inspector_name LIKE ?)";
+                $params[] = $username;
+                $params[] = '%' . $username . '%';
+            }
+
+            if (empty($whereParts)) {
                 $reports = [];
             } else {
-                $ph = implode(',', array_fill(0, count($barangays), '?'));
-                $stmt = $db->prepare("SELECT * FROM inspection_reports WHERE location IN ($ph) ORDER BY created_at DESC");
-                $stmt->execute($barangays);
+                $sql = "SELECT * FROM inspection_reports WHERE (" . implode(' OR ', $whereParts) . ") ORDER BY created_at DESC";
+                $stmt = $db->prepare($sql);
+                $stmt->execute($params);
                 $reports = $stmt->fetchAll();
             }
         } else {

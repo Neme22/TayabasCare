@@ -937,6 +937,16 @@ function isInMyCluster(b) {
     return _myBarangays.has(String(b || '').trim().toLowerCase());
 }
 
+function isMyReport(r) {
+    if (!r) return false;
+    if (isInMyCluster(r.location)) return true;
+    const myName = (localStorage.getItem('inspectorFullName') || localStorage.getItem('inspectorDisplayName') || localStorage.getItem('username') || '').toLowerCase().trim();
+    if (!myName) return true;
+    const rInsp = String(r.inspector || r.inspector_name || '').toLowerCase().trim();
+    if (!rInsp) return false;
+    return rInsp.includes(myName) || myName.includes(rInsp);
+}
+
 async function loadMyCluster() {
     try {
         const resp = await fetch(`${API_BASE_URL}/cluster_api.php`);
@@ -1260,7 +1270,7 @@ const InspSchedule = {
             html += scheds.map(s => {
                 const due   = new Date(String(s.schedDate).slice(0, 10) + 'T00:00:00'); due.setHours(0,0,0,0);
                 const duty = s.duty_type || s.dutyType || '';
-                const status = duty ? (due < today ? 'Done' : 'Pending') : (s.done ? 'Done' : (due < today ? 'Overdue' : 'Pending'));
+                const status = (s.done || due < today) ? 'Done' : 'Pending';
                 const statusClass = status.toLowerCase();
                 const riskBadgeClass = s.riskLevel === 'HIGH' ? 'risk-high' : s.riskLevel === 'MODERATE' ? 'risk-moderate' : 'risk-low';
                 const heading = String(s.establishment || '').trim() || (duty ? `${duty} Duty` : 'General Inspection Duty');
@@ -3956,7 +3966,7 @@ function filterInspectionReports() {
             permitNo: record.permitNo || record.permit_no || 'N/A'
         }));
     } else {
-        filtered = reports.filter(r => isInMyCluster(r.location));
+        filtered = reports.filter(r => isMyReport(r));
     }
     const scopedTotal = filtered.length;
     if (searchTerm) {
@@ -7197,8 +7207,8 @@ async function loadIHEstablishments() {
         _ihAllReports = cachedInspectionReports.length > 0 ? cachedInspectionReports : (window._inspectionReports || []);
     }
 
-    // Cluster scope: history follows this inspector's assigned barangays
-    _ihAllReports = _ihAllReports.filter(r => isInMyCluster(r.location));
+    // Cluster scope: history follows this inspector's assigned barangays or own reports
+    _ihAllReports = _ihAllReports.filter(r => isMyReport(r));
 
     // Build unique establishment list
     const estabMap = {};
