@@ -1190,7 +1190,7 @@ const InspSchedule = {
                         const badgeClass = isDone ? 'done' : 'scheduled';
                         const raw = String(s.establishment || '').trim() || (duty ? `${duty} Duty` : 'General inspection');
                         const label = raw.length > 18 ? raw.slice(0, 18) + '…' : raw;
-                        const chipBg = (duty && dutyColors[duty]) ? dutyColors[duty] : '';
+                        const chipBg = (duty && dutyColors[duty]) ? dutyColors[duty] : (s.riskLevel === 'HIGH' ? '#ef4444' : (s.riskLevel === 'MODERATE' ? '#f59e0b' : ''));
                         const inlineBg = chipBg ? `background:${chipBg};color:#fff;` : '';
                         const tip = `${esc(raw)}${duty && s.establishment ? '\\n📋 Duty: ' + esc(duty) : ''}${s.riskLevel ? '\\n⚠️ Risk: ' + s.riskLevel : ''}${s.notes ? '\\n📝 ' + esc(s.notes) : ''}${isDone ? '\\n✓ Done' : ''}`;
                         return `<span class="cal-tooltip schedule-status-badge cal-estab-chip ${badgeClass}" style="${inlineBg}">${esc(label)}<span class="cal-tooltip-text">${tip.replace(/\\n/g, '<br>')}</span></span>`;
